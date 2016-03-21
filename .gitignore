@@ -1,8 +1,12 @@
+.DS_Store
+*.zip
+
 # Object files
 *.o
 *.ko
 *.obj
 *.elf
+*.d
 
 # Precompiled Headers
 *.gch
@@ -27,6 +31,12 @@
 *.i*86
 *.x86_64
 *.hex
+
+# Atmel binary artifacts
+*.bin
+*.lss
+*.sym
+*.map
 
 # Debug files
 *.dSYM/
