@@ -14,9 +14,25 @@ no analog input
 1x mode/boot/nmi
 2x LED near mode
 
+
+---
+
+in TT slave mode
+	map TRs/CVs sequentially
+	inputs?
+
 ---
 
 ## mode depends on USB device present
+
+short press - change operation per USB type
+
+long (1s) - enter "preset mode"
+
+longer (3s) - enter TT slave mode (also can be activated via TT)
+	also escape TT mode and resume previous mode
+
+very long (5) - enter TT slave mode and set i2c address based on key1+key2
 
 ### ARC
 
@@ -27,55 +43,57 @@ no analog input
 	output pulse trains
 
 key 1: alt.
-	hold: recall (segment), next (segment), slew, pulse-base-speed
+	hold: recall (segment), save-to (segment), slew, segments
 	fast: next
 in 1: next
 
-key 2: reset to segment zero (or set individual slews multipliers?)
+key 2: 
+	hold:quantize mode: free vs. semitones with scale setup (mode, offset, octave)
+	fast: reset to seg zero
 in 2: reset to segment zero
 
-#### mode 1 - MORPH
+#### mode 1 - PLAY/CYCLE uses LEVELS data
 
-each knob drives own pattern: show "cycle" position and current segment. trigger on axis (4x per rev)
-trig sync per on each segment change
+cycle edit modes:
+	- speed
+	- length
+	- start
+
+each knob drives own pattern: show "cycle" position and current segment.
+tr pulse vs. trigger on at zero (north) segment change, and off at 180 (south)
+can go in reverse.
 
 key 1: alt
 	hold: changes config
-		1: scrub/cycle toggle
-		2: sync all on/off
-		3: trig pulse width
-		4:
-	fast: sync? 
-in 1: (sync?)
+		1: sync: all, relative, free --- int sync all on/off left-to-right slaving
+			all = speed/length/start
+			relative = left-to-right speed w/ multiples, free length/start
+			free = fully free
+		2: trig pulse width + mode
+		3: force (sensitivity)
+		4: friction
+	fast: edit mode (speed/length/start)
+in 1: jack present: ext sync mode on. measure tr period. speeds are multiples.
 
 key 2: reset
 in 2: reset
 
-#### mode 2 - PHYSICS
 
-outputs
-1: speed
-2: acc
-3: x
-4: y
-
-digitals: ?? quadrants?
-
-1: speed
-2: friction
-3: gravity
-4: gravity direction
-
-key 1: toggle views output vs. param (dim switch)
-in 1: push left
-
-key 2: momentary brake
-in 2: push right
 
 
 ### GRID
 
-kria rework, with modes and integrate switches
+#### mode 0: kria
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -83,9 +101,61 @@ kria rework, with modes and integrate switches
 
 converter. modes. arpy. tt.
 
+#### mode 0: voice allocator / mono out
 
-#### NONE?
+key 1: panic
+in 1: panic
 
-cycle between other modes with mode key? + noise gen?
+key 2: change data
+in 2:
+
+data 0: poly
+	cv/tr rotating outputs
+
+data 1: mono
+	cv 1: pitch
+	cv 2: velocity
+	cv 3:
+	cv 4: 
+	tr 1: gate
+
+data 2: cc+trigs
+	fixed cc map + note trigs
+
+#### mode 1: arpeggiator
+
+tr 1-4: different width gates
+cv 1-4: different arp modes (up, down, tri, random)
+		or different speed multiples??
+
+key 1: tap tempo
+in 1: sync
+
+key 2: arp mode (cycle entire bank)
+in 2: reset
+
+cc control for internal speed with no jack
+cc control for pulse length multiplier
+cc control for speed mult?
+
+
+
+
+
+### USB mass storage (not a real "mode")
+
+mode white: read all presets
+mode orange: write all presets
+key 1: go
+key 2: cancel
+
+
+
+
+
+### NONE?
+
+resume previous mode
+long hold for TT
 
 
