@@ -34,6 +34,8 @@ longer (3s) - enter TT slave mode (also can be activated via TT)
 
 very long (5) - enter TT slave mode and set i2c address based on key1+key2
 
+
+
 ### ARC
 
 #### mode 0 - LEVELS
@@ -85,6 +87,46 @@ in 2: reset
 
 #### mode 0: kria
 
+key 1: tempo (grid mode: tap, push, jump, halve/double)
+in 1: clock
+
+key 2: config
+	a: four voice, two voice, disconnected
+	b: sync: all (note+tr in voice mode, loops), independent
+in 2: reset
+
+voice(1-4)
+
+trigger
+	4voice: 64 steps (? in unsync mode only? how does probability work then?)
+	2voice: 16 step + accent
+	ind: 16 steps
+gate time
+note
+octave
+
+loop length
+speed multiple
+	fullscreen squares?
+probability
+	four levels
+
+scale
+
+pattern
+	(indicate blank vs. not)
+
+alt
+	(voice: mute)
+
+
+
+
+
+
+
+#### mode 1: meadowphysics
+
 
 
 
@@ -106,6 +148,8 @@ converter. modes. arpy. tt.
 key 1: panic
 in 1: panic
 
+(alt: jack present, quantize mode. release new note on pulse up)
+
 key 2: change data
 in 2:
 
@@ -115,16 +159,19 @@ data 0: poly
 data 1: mono
 	cv 1: pitch
 	cv 2: velocity
-	cv 3:
-	cv 4: 
+	cv 3: mod
+	cv 4: bend?
 	tr 1: gate
+	tr 2: damper/sustain (cc64)
+	tr 3: generic (cc80)
+	tr 4: sync?
 
 data 2: cc+trigs
-	fixed cc map + note trigs
+	fixed cc map (16-19) + note trigs
 
 #### mode 1: arpeggiator
 
-tr 1-4: different width gates
+tr 1-4: different width gates, or speed mults?
 cv 1-4: different arp modes (up, down, tri, random)
 		or different speed multiples??
 
@@ -138,6 +185,8 @@ cc control for internal speed with no jack
 cc control for pulse length multiplier
 cc control for speed mult?
 
+send midi sync to midi out port?
+
 
 
 
@@ -148,6 +197,8 @@ mode white: read all presets
 mode orange: write all presets
 key 1: go
 key 2: cancel
+
+(blink during read/write, off when ready for eject)
 
 
 
