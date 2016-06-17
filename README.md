@@ -17,22 +17,62 @@ no analog input
 
 ---
 
+handlers:
+	arc enc
+	grid key
+	monome refresh
+	key
+	tr
+	tr-norm
+	(front/preset)
+
+
+
+
+
+
+
+
+
+
+
+---
+
 in TT slave mode
 	map TRs/CVs sequentially
-	inputs?
+	inputs
+		poll state. pulse counters? period measurement
 
 ---
 
 ## mode depends on USB device present
 
-short press - change operation per USB type
+arc/grid:
 
-long (1s) - enter "preset mode"
+long - toggle modes
+short - preset mode
 
-longer (3s) - enter TT slave mode (also can be activated via TT)
+midi:
+
+long - toggle modes
+
+none:
+
+short - toggle to tt
+long - set i2c
+
+flash:
+
+short - cancel/eject
+
+---
+
+
+with NO USB:
+long (1s) - enter TT slave mode (also can be activated via TT)
 	also escape TT mode and resume previous mode
 
-very long (5) - enter TT slave mode and set i2c address based on key1+key2
+very long (5) - set i2c address based on key1+key2
 
 
 
