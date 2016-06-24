@@ -1,3 +1,5 @@
+#pragma once
+
 void set_mode_midi(void);
 
 void handler_MidiFrontShort(s32 data);

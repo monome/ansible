@@ -18,18 +18,9 @@ b10 in1-detect
 nmi
 
 
-
-
-
-generalized CV out system with ramping
-
 usb flash
 
 */
-
-
-
-
 
 
 #include <stdio.h>
@@ -73,32 +64,18 @@ usb flash
 
 #define FIRSTRUN_KEY 0x22
 
-u16 cv;
-
-
-
 uint8_t front_timer;
 
 uint8_t preset_mode;
 uint8_t preset_select;
 
-
-// NVRAM data structure located in the flash array.
-typedef const struct {
-	u8 fresh;
-	u8 preset_select;
-	ansible_state_t state;
-} nvram_data_t;
-
 __attribute__((__section__(".flash_nvram")))
-static nvram_data_t flashy;
-
-
+nvram_data_t f;
 
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
 
-static void clock_null(u8 phase);
+void clock_null(u8 phase);
 
 // start/stop monome polling/refresh timers
 extern void timers_set_monome(void);
@@ -117,7 +94,7 @@ static void handler_MidiConnect(s32 data);
 static void handler_MidiDisconnect(s32 data);
 static void handler_MidiPacket(s32 data);
 
-static void ansible_process_ii(uint8_t i, int d);
+static void ii_null(uint8_t i, int d);
 
 u8 flash_is_fresh(void);
 void flash_unfresh(void);
@@ -125,45 +102,6 @@ void flash_write(void);
 void flash_read(void);
 void state_write(void);
 void state_read(void);
-
-void set_mode(void);
-
-
-////////////////////////////////////////////////////////////////////////////////
-// functions
-
-void update_dacs(uint16_t *d) {
-	spi_selectChip(SPI,DAC_SPI);
-	spi_write(SPI,0x31);
-	spi_write(SPI,d[2]>>4); // 2
-	spi_write(SPI,d[2]<<4);
-	spi_write(SPI,0x31);
-	spi_write(SPI,d[0]>>4); // 0
-	spi_write(SPI,d[0]<<4);
-	spi_unselectChip(SPI,DAC_SPI);
-	
-	spi_selectChip(SPI,DAC_SPI);
-	spi_write(SPI,0x38);
-	spi_write(SPI,d[3]>>4); // 3
-	spi_write(SPI,d[3]<<4);
-	spi_write(SPI,0x38);
-	spi_write(SPI,d[1]>>4); // 1
-	spi_write(SPI,d[1]<<4);
-	spi_unselectChip(SPI,DAC_SPI);
-}
-
-void update_leds(uint8_t m) {
-	if(m & 1)
-		gpio_set_gpio_pin(B00);
-	else
-		gpio_clr_gpio_pin(B00);
-
-
-	if(m & 2)
-		gpio_set_gpio_pin(B01);
-	else
-		gpio_clr_gpio_pin(B01);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -220,8 +158,12 @@ void timers_unset_monome(void) {
 	timer_remove( &monomeRefreshTimer );
 }
 
-void set_mode(void) {
-	switch (ansible_state.mode) {
+void set_mode(ansible_mode_t m) {
+	print_dbg("\r\nset mode ");
+	flashc_memset32((void*)&(f.state.mode), m, 4, true);
+	print_dbg_ulong(f.state.mode);
+
+	switch (m) {
 	case mGridKria:
 	case mGridMP:
 		set_mode_grid();
@@ -250,10 +192,8 @@ static void handler_FtdiDisconnect(s32 data) {
 	timers_unset_monome();
 	app_event_handlers[ kEventFrontShort ]	= &handler_FrontShort;
 	app_event_handlers[ kEventFrontLong ]	= &handler_FrontLong;
-	ansible_state.connected = conNONE;
-	ansible_state.none_mode = ansible_state.mode;
-	set_mode();
-	state_write();
+	connected = conNONE;
+	set_mode(f.state.mode);
 }
 
 static void handler_MonomeConnect(s32 data) {
@@ -262,17 +202,13 @@ static void handler_MonomeConnect(s32 data) {
 	switch (monome_device()) {
 	case eDeviceGrid:
 		print_dbg("GRID");
-		ansible_state.connected = conGRID;
-		ansible_state.mode = ansible_state.grid_mode;
-		set_mode();
-		state_write();
+		connected = conGRID;
+		set_mode(f.state.grid_mode);
 		break;
 	case eDeviceArc:
 		print_dbg("ARC");
-		ansible_state.connected = conARC;
-		ansible_state.mode = ansible_state.arc_mode;
-		set_mode();
-		state_write();
+		connected = conARC;
+		set_mode(f.state.arc_mode);
 		break;
 	default:
 		break;
@@ -287,10 +223,10 @@ static void handler_MonomePoll(s32 data) {
 static void handler_MidiConnect(s32 data) {
 	print_dbg("\r\n> midi connect");
 	timer_add(&midiPollTimer, 13, &midi_poll_timer_callback, NULL);
-	ansible_state.connected = conMIDI;
-	ansible_state.mode = ansible_state.midi_mode;
-	set_mode();
-	state_write();
+	connected = conMIDI;
+	flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
+	// ansible_state.mode = ansible_state.midi_mode;
+	set_mode(f.state.midi_mode);
 }
 
 static void handler_MidiDisconnect(s32 data) {
@@ -298,11 +234,8 @@ static void handler_MidiDisconnect(s32 data) {
 	timer_remove(&midiPollTimer);
 	app_event_handlers[ kEventFrontShort ]	= &handler_FrontShort;
 	app_event_handlers[ kEventFrontLong ]	= &handler_FrontLong;
-	ansible_state.connected = conNONE;
-	ansible_state.mode = mTT;
-	ansible_state.none_mode = ansible_state.mode;
-	set_mode();
-	state_write();
+	connected = conNONE;
+	set_mode(mTT);
 }
 
 static void handler_MidiPacket(s32 data) {
@@ -328,23 +261,20 @@ static void handler_Front(s32 data) {
 }
 
 static void handler_FrontShort(s32 data) {
-	if(ansible_state.mode == mTT)
-		ansible_state.mode = ansible_state.none_mode;
+	if(f.state.mode == mTT)
+		set_mode(f.state.none_mode);
 	else
-		ansible_state.mode = mTT;
-
-	set_mode();
-	state_write();
+		set_mode(mTT);
 }
 
 static void handler_FrontLong(s32 data) {
 	print_dbg("\r\n+ front long");
- 	ansible_state.i2c_addr = 100 + (!gpio_get_pin_value(B07) * 2) + (!gpio_get_pin_value(B06) * 4);
+ 	uint8_t addr = 100 + (!gpio_get_pin_value(B07) * 2) + (!gpio_get_pin_value(B06) * 4);
+ 	flashc_memset8((void*)&(f.state.i2c_addr), addr, 1, true);
  	print_dbg("\r\n+ i2c address: ");
- 	print_dbg_ulong(ansible_state.i2c_addr);
- 	state_write();
+ 	print_dbg_ulong(f.state.i2c_addr);
  	// TEST
- 	init_i2c_slave(ansible_state.i2c_addr);
+ 	init_i2c_slave(f.state.i2c_addr);
 }
 
 static void handler_SaveFlash(s32 data) {
@@ -439,84 +369,86 @@ void check_events(void) {
 // flash
 
 u8 flash_is_fresh(void) {
-  return (flashy.fresh != FIRSTRUN_KEY);
+  return (f.fresh != FIRSTRUN_KEY);
 }
 
 void flash_unfresh(void) {
-  flashc_memset8((void*)&(flashy.fresh), FIRSTRUN_KEY, 4, true);
+  flashc_memset8((void*)&(f.fresh), FIRSTRUN_KEY, 4, true);
 }
 
 void flash_write(void) {
 	print_dbg("\r\n> write preset ");
 	print_dbg_ulong(preset_select);
-	flashc_memset8((void*)&(flashy.preset_select), preset_select, 4, true);
+	flashc_memset8((void*)&(f.preset_select), preset_select, 4, true);
 
-	flashc_memcpy((void *)&(flashy.state), &ansible_state, sizeof(ansible_state), true);
+	// flashc_memcpy((void *)&(f.state), &ansible_state, sizeof(ansible_state), true);
 }
 
 void flash_read(void) {
 	print_dbg("\r\n> read preset ");
 	print_dbg_ulong(preset_select);
 
-	preset_select = flashy.preset_select;
+	preset_select = f.preset_select;
 
-	// memcpy(&ansible_state, &flashy.state, sizeof(ansible_state));
+	// memcpy(&ansible_state, &f.state, sizeof(ansible_state));
 
 	// ...
 }
 
-void state_read(void) {
-	print_dbg("\r\n> read state");
-	memcpy(&ansible_state, &flashy.state, sizeof(ansible_state));
+
+////////////////////////////////////////////////////////////////////////////////
+// functions
+
+void clock_null(u8 phase) { ;; }
+
+void update_dacs(uint16_t *d) {
+	spi_selectChip(SPI,DAC_SPI);
+	spi_write(SPI,0x31);
+	spi_write(SPI,d[2]>>4); // 2
+	spi_write(SPI,d[2]<<4);
+	spi_write(SPI,0x31);
+	spi_write(SPI,d[0]>>4); // 0
+	spi_write(SPI,d[0]<<4);
+	spi_unselectChip(SPI,DAC_SPI);
+	
+	spi_selectChip(SPI,DAC_SPI);
+	spi_write(SPI,0x38);
+	spi_write(SPI,d[3]>>4); // 3
+	spi_write(SPI,d[3]<<4);
+	spi_write(SPI,0x38);
+	spi_write(SPI,d[1]>>4); // 1
+	spi_write(SPI,d[1]<<4);
+	spi_unselectChip(SPI,DAC_SPI);
 }
 
-void state_write(void) {
-	print_dbg("\r\n> write state");
-	flashc_memcpy((void *)&(flashy.state), &ansible_state, sizeof(ansible_state), true);
+void update_leds(uint8_t m) {
+	if(m & 1)
+		gpio_set_gpio_pin(B00);
+	else
+		gpio_clr_gpio_pin(B00);
+
+
+	if(m & 2)
+		gpio_set_gpio_pin(B01);
+	else
+		gpio_clr_gpio_pin(B01);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-// application clock code
-
-void clock_null(u8 phase) {
-	static uint16_t d[4];
-	cv += 0xff;
-	cv &= 4095;
-
-	d[0] = cv;
-	d[1] = 4095 - cv;
-
-	update_dacs(d);
-
-	if(cv & 0x0010) {
-		gpio_set_gpio_pin(B04);
-		gpio_set_gpio_pin(B05);
-		gpio_set_gpio_pin(B02);
-		gpio_set_gpio_pin(B03);
-	}
-	else {
-		gpio_clr_gpio_pin(B04);
-		gpio_clr_gpio_pin(B05);
-		gpio_clr_gpio_pin(B02);
-		gpio_clr_gpio_pin(B03);
-	}
+void set_tr(uint8_t n) {
+	gpio_set_gpio_pin(n);
 }
 
+void clr_tr(uint8_t n) {
+	gpio_clr_gpio_pin(n);
+}
 
+void clock_set(uint32_t n) {
+	timer_set(&clockTimer, n);
+}
 
-
-////////////////////////////////////////////////////////////////////////////////
-// ii
-static void ansible_process_ii(uint8_t i, int d) {
+static void ii_null(uint8_t i, int d) {
 	print_dbg("\r\n ii");
 }
-
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -541,57 +473,62 @@ int main(void)
 	register_interrupts();
 	cpu_irq_enable();
 
-	print_dbg("\r\n\n// ansible //////////////////////////////// ");
-	print_dbg_ulong(sizeof(flashy));
-
-	if(flash_is_fresh()) {
-		// store flash defaults
-		print_dbg("\r\nfirst run.");
-		flash_unfresh();
-		preset_select = 0;
-		ansible_state.grid_mode = mGridKria;
-		ansible_state.arc_mode = mArcLevels;
-		ansible_state.midi_mode = mMidiStandard;
-		ansible_state.none_mode = mTT;
-		ansible_state.mode = mTT;
-		ansible_state.i2c_addr = 100;
-		state_write();
-		flash_write();
-	}
-	else {
-		// load from flash at startup
-		preset_select = flashy.preset_select;
-		flash_read();
-		state_read();
-	}
-
-	ansible_state.connected = conNONE;
-	set_mode();
-
-	init_usb_host();
-	init_monome();
-
-	print_dbg("\r\ni2c addr: ");
-	print_dbg_ulong(ansible_state.i2c_addr);
-	init_i2c_slave(ansible_state.i2c_addr);
-
-	process_ii = &ansible_process_ii;
-
-	// clock_pulse = &clock;
-	// clock_pulse = &clock_null;
-	// clock_external = 0;
-
-	clock = &clock_null;
-
-	timer_add(&clockTimer,40,&clockTimer_callback, NULL);
-	timer_add(&keyTimer,50,&keyTimer_callback, NULL);
-
 	// setup daisy chain for two dacs
 	spi_selectChip(SPI,DAC_SPI);
 	spi_write(SPI,0x80);
 	spi_write(SPI,0xff);
 	spi_write(SPI,0xff);
 	spi_unselectChip(SPI,DAC_SPI);
+
+	print_dbg("\r\n\n// ansible //////////////////////////////// ");
+	// print_dbg_ulong(sizeof(f));
+	print_dbg_ulong(sizeof(f.state.mode));
+
+	if(flash_is_fresh()) {
+		// store flash defaults
+		print_dbg("\r\nfirst run. ");
+		flash_unfresh();
+		preset_select = 0;
+		flashc_memset32((void*)&(f.state.mode), mTT, 4, true);
+		flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
+		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
+		flashc_memset32((void*)&(f.state.arc_mode), mArcLevels, 4, true);
+		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
+		flashc_memset8((void*)&(f.state.i2c_addr), 100, 1, true);
+		// flash_write();
+		default_kria();
+	}
+	else {
+		// load from flash at startup
+		preset_select = f.preset_select;
+		flash_read();
+	}
+
+	print_dbg("\r\ni2c addr: ");
+	print_dbg_ulong(f.state.i2c_addr);
+	init_i2c_slave(f.state.i2c_addr);
+
+	process_ii = &ii_null;
+
+	// clock_pulse = &clock;
+	// clock_pulse = &clock_null;
+	// clock_external = 0;
+
+	clr_tr(TR1);
+	clr_tr(TR2);
+	clr_tr(TR3);
+	clr_tr(TR4);
+
+	clock = &clock_null;
+
+	timer_add(&clockTimer,1000,&clockTimer_callback, NULL);
+	timer_add(&keyTimer,50,&keyTimer_callback, NULL);
+
+	connected = conNONE;
+	set_mode(f.state.mode);
+
+	init_usb_host();
+	init_monome();
 
 	while (true) {
 		check_events();

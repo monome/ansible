@@ -6,7 +6,7 @@
 
 
 void set_mode_arc(void) {
-	switch(ansible_state.mode) {
+	switch(f.state.mode) {
 	case mArcLevels:
 		print_dbg("\r\n> mode arc levels");
 		app_event_handlers[kEventKey] = &handler_LevelsKey;
@@ -29,7 +29,7 @@ void set_mode_arc(void) {
 		break;
 	}
 	
-	if(ansible_state.connected == conARC) {
+	if(connected == conARC) {
 		app_event_handlers[kEventFrontShort] = &handler_ArcFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
 	}
@@ -41,14 +41,10 @@ void handler_ArcFrontShort(s32 data) {
 }
 
 void handler_ArcFrontLong(s32 data) {
-	if(ansible_state.mode == mArcLevels)
-		ansible_state.mode = mArcCycles;
+	if(f.state.mode == mArcLevels)
+		set_mode(mArcCycles);
 	else
-		ansible_state.mode = mArcLevels;
-
-	ansible_state.arc_mode = ansible_state.mode;
-
-	set_mode_arc();
+		set_mode(mArcLevels);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

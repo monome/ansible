@@ -7,7 +7,7 @@
 
 
 void set_mode_midi(void) {
-	switch(ansible_state.mode) {
+	switch(f.state.mode) {
 	case mMidiStandard:
 		print_dbg("\r\n> mode midi standard");
 		app_event_handlers[kEventKey] = &handler_StandardKey;
@@ -26,7 +26,7 @@ void set_mode_midi(void) {
 		break;
 	}
 	
-	if(ansible_state.connected == conMIDI) {
+	if(connected == conMIDI) {
 		app_event_handlers[kEventFrontShort] = &handler_MidiFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_MidiFrontLong;
 	}
@@ -38,14 +38,10 @@ void handler_MidiFrontShort(s32 data) {
 }
 
 void handler_MidiFrontLong(s32 data) {
-	if(ansible_state.mode == mMidiStandard)
-		ansible_state.mode = mMidiArp;
+	if(f.state.mode == mMidiStandard)
+		set_mode(mMidiArp);
 	else
-		ansible_state.mode = mMidiStandard;
-
-	ansible_state.midi_mode = ansible_state.mode;
-
-	set_mode_midi();
+		set_mode(mMidiStandard);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

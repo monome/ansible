@@ -1,24 +1,15 @@
 #include "print_funcs.h"
+#include "flashc.h"
 
 #include "monome.h"
+#include "i2c.h"
 
 #include "main.h"
 #include "ansible_grid.h"
 
 
-
-
-// handle grid keys
-// handle key and tr inputs
-// clock
-// refresh grid
-// ii
-
-// dynamically change redraw/key handlers per screen and sub-mode
-
-
-void set_mode_grid(void) {
-	switch(ansible_state.mode) {
+void set_mode_grid() {
+	switch(f.state.mode) {
 	case mGridKria:
 		print_dbg("\r\n> mode grid kria");
 		app_event_handlers[kEventKey] = &handler_KriaKey;
@@ -26,6 +17,9 @@ void set_mode_grid(void) {
 		app_event_handlers[kEventTrNormal] = &handler_KriaTrNormal;
 		app_event_handlers[kEventMonomeGridKey] = &handler_KriaGridKey;
 		app_event_handlers[kEventMonomeRefresh] = &handler_KriaRefresh;
+		clock = &clock_kria;
+		clock_set(f.kria_state.clock_period);
+		process_ii = &ii_kria;
 		update_leds(1);
 		break;
 	case mGridMP:
@@ -35,16 +29,21 @@ void set_mode_grid(void) {
 		app_event_handlers[kEventTrNormal] = &handler_MPTrNormal;
 		app_event_handlers[kEventMonomeGridKey] = &handler_MPGridKey;
 		app_event_handlers[kEventMonomeRefresh] = &handler_MPRefresh;
+		clock = &clock_mp;
+		process_ii = &ii_mp;
 		update_leds(2);
 		break;
 	default:
 		break;
 	}
 	
-	if(ansible_state.connected == conGRID) {
+	if(connected == conGRID) {
 		app_event_handlers[kEventFrontShort] = &handler_GridFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_GridFrontLong;
 	}
+
+	flashc_memset32((void*)&(f.state.none_mode), f.state.mode, 4, true);
+	flashc_memset32((void*)&(f.state.grid_mode), f.state.mode, 4, true);
 }
 
 
@@ -53,17 +52,29 @@ void handler_GridFrontShort(s32 data) {
 }
 
 void handler_GridFrontLong(s32 data) {
-	if(ansible_state.mode == mGridKria)
-		ansible_state.mode = mGridMP;
+	if(f.state.mode == mGridKria)
+		set_mode(mGridMP);
 	else
-		ansible_state.mode = mGridKria;
-
-	ansible_state.grid_mode = ansible_state.mode;
-
-	set_mode_grid();
+		set_mode(mGridKria);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+void default_kria() {
+	flashc_memset32((void*)&(f.kria_state.clock_period), 100, 4, true);
+}
+
+void clock_kria(uint8_t phase) {
+	if(phase)
+		set_tr(TR1);
+	else
+		clr_tr(TR1);
+}
+
+void ii_kria(uint8_t i, int d) {
+	;;
+}
+
 
 void handler_KriaGridKey(s32 data) { 
 	u8 x, y, z;
@@ -116,6 +127,17 @@ void handler_KriaTrNormal(s32 data) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+
+void clock_mp(uint8_t phase) {
+	if(phase)
+		set_tr(TR4);
+	else
+		clr_tr(TR4);
+}
+
+void ii_mp(uint8_t i, int d) {
+	;;
+}
 
 void handler_MPGridKey(s32 data) { 
 	u8 x, y, z;
