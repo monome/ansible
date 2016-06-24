@@ -30,6 +30,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeGridKey] = &handler_MPGridKey;
 		app_event_handlers[kEventMonomeRefresh] = &handler_MPRefresh;
 		clock = &clock_mp;
+		clock_set(f.mp_state.clock_period);
 		process_ii = &ii_mp;
 		update_leds(2);
 		break;
@@ -87,7 +88,7 @@ void handler_KriaGridKey(s32 data) {
 	print_dbg("\t z: "); 
 	print_dbg_ulong(z);
 
-	// monomeFrameDirty++;
+	monomeFrameDirty++;
 }
 
 void handler_KriaRefresh(s32 data) { 
@@ -127,6 +128,10 @@ void handler_KriaTrNormal(s32 data) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+
+void default_mp() {
+	flashc_memset32((void*)&(f.mp_state.clock_period), 200, 4, true);
+}
 
 void clock_mp(uint8_t phase) {
 	if(phase)

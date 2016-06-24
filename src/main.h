@@ -1,4 +1,8 @@
 #pragma once
+#include "ansible_grid.h"
+#include "ansible_arc.h"
+#include "ansible_midi.h"
+#include "ansible_tt.h"
 
 #define TR1 B02
 #define TR2 B03
@@ -25,7 +29,6 @@ typedef enum {
 	mTT
 } ansible_mode_t;
 
-
 typedef struct {
 	connected_t connected;
 	ansible_mode_t mode;
@@ -36,20 +39,6 @@ typedef struct {
 	uint8_t i2c_addr;
 } ansible_state_t;
 
-typedef struct {
-	uint32_t clock_period;
-	uint8_t pattern;
-} kria_state_t;
-
-typedef struct {
-	uint8_t gate[16];
-} kria_data_t;
-
-
-typedef struct {
-	uint32_t clock;
-} mp_state_t;
-
 
 // NVRAM data structure located in the flash array.
 typedef const struct {
@@ -57,6 +46,7 @@ typedef const struct {
 	u8 preset_select;
 	ansible_state_t state;
 	kria_state_t kria_state;
+	mp_state_t mp_state;
 } nvram_data_t;
 
 extern nvram_data_t f;

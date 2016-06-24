@@ -159,9 +159,9 @@ void timers_unset_monome(void) {
 }
 
 void set_mode(ansible_mode_t m) {
-	print_dbg("\r\nset mode ");
 	flashc_memset32((void*)&(f.state.mode), m, 4, true);
-	print_dbg_ulong(f.state.mode);
+	// print_dbg("\r\nset mode ");
+	// print_dbg_ulong(f.state.mode);
 
 	switch (m) {
 	case mGridKria:
@@ -481,8 +481,7 @@ int main(void)
 	spi_unselectChip(SPI,DAC_SPI);
 
 	print_dbg("\r\n\n// ansible //////////////////////////////// ");
-	// print_dbg_ulong(sizeof(f));
-	print_dbg_ulong(sizeof(f.state.mode));
+	print_dbg_ulong(sizeof(f));
 
 	if(flash_is_fresh()) {
 		// store flash defaults
@@ -497,6 +496,7 @@ int main(void)
 		flashc_memset8((void*)&(f.state.i2c_addr), 100, 1, true);
 		// flash_write();
 		default_kria();
+		default_mp();
 	}
 	else {
 		// load from flash at startup
@@ -507,12 +507,7 @@ int main(void)
 	print_dbg("\r\ni2c addr: ");
 	print_dbg_ulong(f.state.i2c_addr);
 	init_i2c_slave(f.state.i2c_addr);
-
 	process_ii = &ii_null;
-
-	// clock_pulse = &clock;
-	// clock_pulse = &clock_null;
-	// clock_external = 0;
 
 	clr_tr(TR1);
 	clr_tr(TR2);
