@@ -45,34 +45,28 @@ in TT slave mode
 
 ---
 
-## mode depends on USB device present
+## mode key function depends on USB device present
 
-arc/grid:
+### arc/grid
 
 long - toggle modes
 short - preset mode
 
-midi:
+### midi
 
 long - toggle modes
 
-none:
+### none 
 
-short - toggle to tt
+short - toggle to tt (and back)
 long - set i2c
 
-flash:
+### flash
 
 short - cancel/eject
 
 ---
 
-
-with NO USB:
-long (1s) - enter TT slave mode (also can be activated via TT)
-	also escape TT mode and resume previous mode
-
-very long (5) - set i2c address based on key1+key2
 
 
 
@@ -167,7 +161,8 @@ alt
 
 #### mode 1: meadowphysics
 
-
+scale modes
+voice shift register vs allocate
 
 
 
