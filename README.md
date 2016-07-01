@@ -30,7 +30,7 @@ handlers:
 
 
 
-
+I2C protocol map
 
 
 
@@ -121,37 +121,40 @@ in 2: reset
 
 #### mode 0: kria
 
-key 1: tempo (grid mode: tap, push, jump, halve/double)
+toggle vs hold key modes?
+
+key 1: tempo (grid mode: tap, push, jump, halve/double) / (tt clock)
 in 1: clock
 
-key 2: config
+key 2: config (graphic selector)
 	a: four voice, two voice, disconnected
 	b: sync: all (note+tr in voice mode, loops), independent
 in 2: reset
 
-voice(1-4)
+grid layout:
+	voice(1-4)
 
-trigger
-	4voice: 64 steps (? in unsync mode only? how does probability work then?)
-	2voice: 16 step + accent
-	ind: 16 steps
-gate time
-note
-octave
+	trigger
+		4voice: 64 steps (? in unsync mode only? how does probability work then?)
+		2voice: 16 step + accent
+		ind: 16 steps
+	gate time
+	note
+	octave
 
-loop length
-speed multiple
-	fullscreen squares?
-probability
-	four levels
+	loop length
+	speed multiple
+		fullscreen squares?
+	probability
+		four levels
 
-scale
+	scale
 
-pattern
-	(indicate blank vs. not)
+	pattern
+		(indicate blank vs. not)
 
-alt
-	(voice: mute)
+	alt
+		(voice: mute)
 
 
 
@@ -161,14 +164,19 @@ alt
 
 #### mode 1: meadowphysics
 
-scale modes
-voice shift register vs allocate
+toggle vs hold key modes?
 
+key 1: tempo (grid mode: tap, push, jump, halve/double) / (tt clock)
+in 1: clock
 
+key 2: config
+	a: scale modes (shared with kria?)
+	b: voice shift register vs allocate (steal vs. not) vs fixed four
+in 2: reset
 
+> tt param read for trigger/gate states mapped overriding to tt tr inputs
 
-
-
+identical mp layout
 
 
 

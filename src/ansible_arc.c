@@ -1,9 +1,11 @@
 #include "print_funcs.h"
+#include "flashc.h"
+
 #include "monome.h"
 #include "i2c.h"
 
-#include "ansible_arc.h"
 #include "main.h"
+#include "ansible_arc.h"
 
 
 void set_mode_arc(void) {
@@ -15,6 +17,9 @@ void set_mode_arc(void) {
 		app_event_handlers[kEventTrNormal] = &handler_LevelsTrNormal;
 		app_event_handlers[kEventMonomeRingEnc] = &handler_LevelsEnc;
 		app_event_handlers[kEventMonomeRefresh] = &handler_LevelsRefresh;
+		clock = &clock_levels;
+		clock_set(f.levels_state.clock_period);
+		process_ii = &ii_levels;
 		update_leds(1);
 		break;
 	case mArcCycles:
@@ -24,6 +29,9 @@ void set_mode_arc(void) {
 		app_event_handlers[kEventTrNormal] = &handler_CyclesTrNormal;
 		app_event_handlers[kEventMonomeRingEnc] = &handler_CyclesEnc;
 		app_event_handlers[kEventMonomeRefresh] = &handler_CyclesRefresh;
+		clock = &clock_cycles;
+		clock_set(f.cycles_state.clock_period);
+		process_ii = &ii_cycles;
 		update_leds(2);
 		break;
 	default:
@@ -34,6 +42,9 @@ void set_mode_arc(void) {
 		app_event_handlers[kEventFrontShort] = &handler_ArcFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
 	}
+
+	flashc_memset32((void*)&(f.state.none_mode), f.state.mode, 4, true);
+	flashc_memset32((void*)&(f.state.arc_mode), f.state.mode, 4, true);
 }
 
 
@@ -49,6 +60,22 @@ void handler_ArcFrontLong(s32 data) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+
+void default_levels() {
+	flashc_memset32((void*)&(f.levels_state.clock_period), 100, 4, true);
+}
+
+void clock_levels(uint8_t phase) {
+	if(phase)
+		set_tr(TR1);
+	else
+		clr_tr(TR1);
+}
+
+void ii_levels(uint8_t *d, uint8_t l) {
+	;;
+}
 
 void handler_LevelsEnc(s32 data) { 
 	uint8_t n;
@@ -99,6 +126,21 @@ void handler_LevelsTrNormal(s32 data) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+
+void default_cycles() {
+	flashc_memset32((void*)&(f.cycles_state.clock_period), 50, 4, true);
+}
+
+void clock_cycles(uint8_t phase) {
+	if(phase)
+		set_tr(TR1);
+	else
+		clr_tr(TR1);
+}
+
+void ii_cycles(uint8_t *d, uint8_t l) {
+	;;
+}
 
 void handler_CyclesEnc(s32 data) { 
 	uint8_t n;

@@ -1,8 +1,5 @@
 #pragma once
 
-#include "main.h"
-
-
 typedef struct {
 	uint32_t clock_period;
 	uint8_t pattern;

@@ -112,7 +112,6 @@ static softTimer_t keyTimer = { .next = NULL, .prev = NULL };
 static softTimer_t monomePollTimer = { .next = NULL, .prev = NULL };
 static softTimer_t monomeRefreshTimer  = { .next = NULL, .prev = NULL };
 static softTimer_t midiPollTimer = { .next = NULL, .prev = NULL };
-// static softTimer_t midiPollTimer = { .next = NULL, .prev = NULL };
 
 
 
@@ -120,8 +119,8 @@ static void clockTimer_callback(void* o) {
 	static uint8_t clock_phase;
 
 	clock_phase++;
-	if(clock_phase > 1) clock_phase = 0;
-	// (*clock_pulse)(clock_phase);
+	if(clock_phase > 1)
+		clock_phase = 0;
 	clock(clock_phase);
 }
 
@@ -225,7 +224,6 @@ static void handler_MidiConnect(s32 data) {
 	timer_add(&midiPollTimer, 13, &midi_poll_timer_callback, NULL);
 	connected = conMIDI;
 	flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
-	// ansible_state.mode = ansible_state.midi_mode;
 	set_mode(f.state.midi_mode);
 }
 
@@ -503,6 +501,11 @@ int main(void)
 		flashc_memset8((void*)&(f.preset_select), 0, 1, true);
 		default_kria();
 		default_mp();
+		default_levels();
+		default_cycles();
+		default_midi_standard();
+		default_midi_arp();
+		default_tt();
 	}
 	else {
 		// load from flash at startup

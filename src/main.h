@@ -1,4 +1,5 @@
 #pragma once
+
 #include "ansible_grid.h"
 #include "ansible_arc.h"
 #include "ansible_midi.h"
@@ -47,6 +48,11 @@ typedef const struct {
 	ansible_state_t state;
 	kria_state_t kria_state;
 	mp_state_t mp_state;
+	levels_state_t levels_state;
+	cycles_state_t cycles_state;
+	midi_standard_state_t midi_standard_state;
+	midi_arp_state_t midi_arp_state;
+	tt_state_t tt_state;
 } nvram_data_t;
 
 extern nvram_data_t f;

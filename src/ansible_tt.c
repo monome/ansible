@@ -1,4 +1,5 @@
 #include "print_funcs.h"
+#include "flashc.h"
 
 #include "monome.h"
 #include "i2c.h"
@@ -16,6 +17,10 @@ void set_mode_tt(void) {
 	clock_set(50);
 	process_ii = &ii_tt;
 	update_leds(0);
+}
+
+void default_tt() {
+	flashc_memset32((void*)&(f.tt_state.clock_period), 200, 4, true);
 }
 
 void clock_tt(uint8_t phase) {
