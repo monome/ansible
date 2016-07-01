@@ -94,7 +94,7 @@ static void handler_MidiConnect(s32 data);
 static void handler_MidiDisconnect(s32 data);
 static void handler_MidiPacket(s32 data);
 
-static void ii_null(uint8_t i, int d);
+static void ii_null(uint8_t *d, uint8_t l);
 
 u8 flash_is_fresh(void);
 void flash_unfresh(void);
@@ -269,10 +269,10 @@ static void handler_FrontShort(s32 data) {
 
 static void handler_FrontLong(s32 data) {
 	print_dbg("\r\n+ front long");
- 	uint8_t addr = 100 + (!gpio_get_pin_value(B07) * 2) + (!gpio_get_pin_value(B06) * 4);
+ 	uint8_t addr = 0xA0 + (!gpio_get_pin_value(B07) * 2) + (!gpio_get_pin_value(B06) * 4);
  	flashc_memset8((void*)&(f.state.i2c_addr), addr, 1, true);
  	print_dbg("\r\n+ i2c address: ");
- 	print_dbg_ulong(f.state.i2c_addr);
+ 	print_dbg_hex(f.state.i2c_addr);
  	// TEST
  	init_i2c_slave(f.state.i2c_addr);
 }
@@ -442,12 +442,16 @@ void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
 }
 
+uint8_t get_tr(uint8_t n) {
+	return gpio_get_pin_value(n);
+}
+
 void clock_set(uint32_t n) {
 	timer_set(&clockTimer, n);
 }
 
-static void ii_null(uint8_t i, int d) {
-	print_dbg("\r\n ii");
+static void ii_null(uint8_t *d, uint8_t l) {
+	print_dbg("\r\nii/null");
 }
 
 
@@ -493,8 +497,10 @@ int main(void)
 		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
 		flashc_memset32((void*)&(f.state.arc_mode), mArcLevels, 4, true);
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
-		flashc_memset8((void*)&(f.state.i2c_addr), 100, 1, true);
+		// flashc_memset8((void*)&(f.state.i2c_addr), 100, 1, true);
+		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		// flash_write();
+		flashc_memset8((void*)&(f.preset_select), 0, 1, true);
 		default_kria();
 		default_mp();
 	}
@@ -505,7 +511,7 @@ int main(void)
 	}
 
 	print_dbg("\r\ni2c addr: ");
-	print_dbg_ulong(f.state.i2c_addr);
+	print_dbg_hex(f.state.i2c_addr);
 	init_i2c_slave(f.state.i2c_addr);
 	process_ii = &ii_null;
 

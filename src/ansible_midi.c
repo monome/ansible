@@ -1,6 +1,7 @@
 #include "print_funcs.h"
 
 #include "monome.h"
+#include "i2c.h"
 
 #include "main.h"
 #include "ansible_midi.h"

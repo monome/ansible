@@ -242,6 +242,6 @@ key 2: cancel
 ### NONE?
 
 resume previous mode
-long hold for TT
+tap for TT toggle
 
 

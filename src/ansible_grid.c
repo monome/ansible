@@ -72,7 +72,7 @@ void clock_kria(uint8_t phase) {
 		clr_tr(TR1);
 }
 
-void ii_kria(uint8_t i, int d) {
+void ii_kria(uint8_t *d, uint8_t l) {
 	;;
 }
 
@@ -140,7 +140,7 @@ void clock_mp(uint8_t phase) {
 		clr_tr(TR4);
 }
 
-void ii_mp(uint8_t i, int d) {
+void ii_mp(uint8_t *d, uint8_t l) {
 	;;
 }
 

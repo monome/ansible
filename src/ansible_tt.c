@@ -1,6 +1,7 @@
 #include "print_funcs.h"
 
 #include "monome.h"
+#include "i2c.h"
 
 #include "main.h"
 #include "ansible_tt.h"
@@ -13,6 +14,7 @@ void set_mode_tt(void) {
 	app_event_handlers[kEventTrNormal] = &handler_TTTrNormal;
 	clock = &clock_tt;
 	clock_set(50);
+	process_ii = &ii_tt;
 	update_leds(0);
 }
 
@@ -28,8 +30,27 @@ void clock_tt(uint8_t phase) {
 	update_dacs(d);
 }
 
-void ii_tt(uint8_t i, int d) {
-	;;
+void ii_tt(uint8_t *d, uint8_t l) {
+	print_dbg("\r\nii/tele (");
+	print_dbg_ulong(l);
+	print_dbg(") ");
+	for(int i=0;i<l;i++) {
+		print_dbg_ulong(d[i]);
+		print_dbg(" ");
+	}
+
+	if(l) {
+		if(d[0] == 1) {
+			if(d[2]) 
+				set_tr(TR1 + d[1]);
+			else
+				clr_tr(TR1 + d[1]);
+		}
+
+		else if(d[0] == 128) {
+			ii_tx_queue(get_tr(TR1 + d[1]));
+		}
+	}
 }
 
 
