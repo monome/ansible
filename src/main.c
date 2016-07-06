@@ -495,7 +495,6 @@ int main(void)
 		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
 		flashc_memset32((void*)&(f.state.arc_mode), mArcLevels, 4, true);
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
-		// flashc_memset8((void*)&(f.state.i2c_addr), 100, 1, true);
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		// flash_write();
 		flashc_memset8((void*)&(f.preset_select), 0, 1, true);
@@ -508,6 +507,7 @@ int main(void)
 		default_tt();
 	}
 	else {
+		init_mp();
 		// load from flash at startup
 		preset_select = f.preset_select;
 		flash_read();

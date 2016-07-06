@@ -167,6 +167,7 @@ grid layout:
 toggle vs hold key modes?
 
 key 1: tempo (grid mode: tap, push, jump, halve/double) / (tt clock)
+	if in1 jack present: division/mult
 in 1: clock
 
 key 2: config

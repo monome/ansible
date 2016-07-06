@@ -3,10 +3,16 @@
 
 #include "monome.h"
 #include "i2c.h"
+#include "util.h" // rnd
 
 #include "main.h"
 #include "ansible_grid.h"
 
+#define L2 12
+#define L1 8
+#define L0 4
+
+uint8_t preset_mode, preset_select;
 
 void set_mode_grid() {
 	switch(f.state.mode) {
@@ -128,16 +134,224 @@ void handler_KriaTrNormal(s32 data) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// MP
+
+mp_set m;
+
+u8 held_keys[32], key_times[128];
+
+u8 edit_row, key_count = 0, mode = 0, prev_mode = 0;
+s8 kcount = 0;
+s8 scount[8] = {0,0,0,0,0,0,0,0};
+
+const u8 sign[8][8] = {{0,0,0,0,0,0,0,0},       // o
+       {0,24,24,126,126,24,24,0},     			// +
+       {0,0,0,126,126,0,0,0},       			// -
+       {0,96,96,126,126,96,96,0},     			// >
+       {0,6,6,126,126,6,6,0},       			// <
+       {0,102,102,24,24,102,102,0},   			// * rnd
+       {0,120,120,102,102,30,30,0},   			// <> up/down
+       {0,126,126,102,102,126,126,0}};  		// [] sync
+
+u8 state[8] = {0,0,0,0,0,0,0,0};
+u8 clear[8] = {0,0,0,0,0,0,0,0};
+
 
 void default_mp() {
-	flashc_memset32((void*)&(f.mp_state.clock_period), 200, 4, true);
+	flashc_memset32((void*)&(f.mp_state.clock_period), 50, 4, true);
+
+	for(uint8_t i1=0;i1<8;i1++) {
+		m.count[i1] = 7+i1;
+		m.position[i1] = 7+i1;
+		m.speed[i1] = 0;
+		m.tick[i1] = 0;
+		m.min[i1] = 7+i1;
+		m.max[i1] = 7+i1;
+		m.trigger[i1] = (1<<i1);
+		m.toggle[i1] = 0;
+		m.rules[i1] = 1;
+		m.rule_dests[i1] = i1;
+		m.sync[i1] = (1<<i1);
+		m.rule_dest_targets[i1] = 3;
+		m.smin[i1] = 0;
+		m.smax[i1] = 0;
+	}
+
+	flashc_memcpy((void *)&f.mp_state.m, &m, sizeof(m), true);
+}
+
+void init_mp() {
+	for(uint8_t i1=0;i1<8;i1++) {
+		m.count[i1] = f.mp_state.m.count[i1];
+		m.position[i1] = f.mp_state.m.position[i1];
+		m.speed[i1] = f.mp_state.m.speed[i1];
+		m.tick[i1] = f.mp_state.m.tick[i1];
+		m.min[i1] = f.mp_state.m.min[i1];
+		m.max[i1] = f.mp_state.m.max[i1];
+		m.trigger[i1] = f.mp_state.m.trigger[i1];
+		m.toggle[i1] = f.mp_state.m.toggle[i1];
+		m.rules[i1] = f.mp_state.m.rules[i1];
+		m.rule_dests[i1] = f.mp_state.m.rule_dests[i1];
+		m.sync[i1] = f.mp_state.m.sync[i1];
+		m.rule_dest_targets[i1] = f.mp_state.m.rule_dest_targets[i1];
+		m.smin[i1] = f.mp_state.m.smin[i1];
+		m.smax[i1] = f.mp_state.m.smax[i1];
+	}
 }
 
 void clock_mp(uint8_t phase) {
-	if(phase)
-		set_tr(TR4);
-	else
-		clr_tr(TR4);
+	// if(phase)
+	// 	set_tr(TR4);
+	// else
+	// 	clr_tr(TR4);
+
+	static u8 i;
+
+	if(phase) {
+		// gpio_set_gpio_pin(B10);
+
+		for(i=0;i<8;i++) {
+			if(m.pushed[i]) {
+				for(int n=0;n<8;n++) {
+					if(m.sync[i] & (1<<n)) {
+						m.position[n] = m.count[n];
+						m.tick[n] = m.speed[n];
+					}
+
+					if(m.trigger[i] & (1<<n)) {
+						state[n] = 1;
+						clear[n] = 1;
+					}
+					else if(m.toggle[i] & (1<<n)) {
+						state[n] ^= 1;
+					}
+				}
+
+				m.pushed[i] = 0;
+			}
+
+			if(m.tick[i] == 0) {
+				m.tick[i] = m.speed[i];
+				if(m.position[i] == 0) {
+					// RULES
+				    if(m.rules[i] == 1) {     // inc
+				    	if(m.rule_dest_targets[i] & 1) {
+					    	m.count[m.rule_dests[i]]++;
+					    	if(m.count[m.rule_dests[i]] > m.max[m.rule_dests[i]]) {
+					    		m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
+					    	}
+					    }
+					    if(m.rule_dest_targets[i] & 2) {
+					    	m.speed[m.rule_dests[i]]++;
+					    	if(m.speed[m.rule_dests[i]] > m.smax[m.rule_dests[i]]) {
+					    		m.speed[m.rule_dests[i]] = m.smin[m.rule_dests[i]];
+					    	}
+					    }
+				    }
+				    else if(m.rules[i] == 2) {  // dec
+				    	if(m.rule_dest_targets[i] & 1) {
+				    		m.count[m.rule_dests[i]]--;
+					    	if(m.count[m.rule_dests[i]] < m.min[m.rule_dests[i]]) {
+					    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
+					    	}
+					    }
+					    if(m.rule_dest_targets[i] & 2) {
+					    	m.speed[m.rule_dests[i]]--;
+					    	if(m.speed[m.rule_dests[i]] < m.smin[m.rule_dests[i]]) {
+					    		m.speed[m.rule_dests[i]] = m.smax[m.rule_dests[i]];
+					    	}
+					    }
+				    }
+				    else if(m.rules[i] == 3) {  // max
+				    	if(m.rule_dest_targets[i] & 1)
+				    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
+				    	if(m.rule_dest_targets[i] & 2)
+				    		m.speed[m.rule_dests[i]] = m.smax[m.rule_dests[i]];
+				    }
+				    else if(m.rules[i] == 4) {  // min
+				    	if(m.rule_dest_targets[i] & 1)
+					    	m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
+					    if(m.rule_dest_targets[i] & 2)
+					    	m.speed[m.rule_dests[i]] = m.smin[m.rule_dests[i]];
+				    }
+				    else if(m.rules[i] == 5) {  // rnd
+				    	if(m.rule_dest_targets[i] & 1)
+				    		m.count[m.rule_dests[i]] = 
+				    			(rnd() % (m.max[m.rule_dests[i]] - m.min[m.rule_dests[i]] + 1)) + m.min[m.rule_dests[i]];
+				    	if(m.rule_dest_targets[i] & 2)
+				    		m.speed[m.rule_dests[i]] = 
+				    			(rnd() % (m.smax[m.rule_dests[i]] - m.smin[m.rule_dests[i]] + 1)) + m.smin[m.rule_dests[i]];
+				    					
+				      // print_dbg("\r\n RANDOM: ");
+				      // print_dbg_hex(m.count[m.rule_dests[i]]);
+				      // print_dbg_hex(rnd() % 11);
+				    }
+				    else if(m.rules[i] == 6) {  // pole
+				    	if(m.rule_dest_targets[i] & 1) {
+					    	if(abs(m.count[m.rule_dests[i]] - m.min[m.rule_dests[i]]) < 
+					    		abs(m.count[m.rule_dests[i]] - m.max[m.rule_dests[i]]) ) {
+					    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
+					    	}
+					    	else {
+					    		m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
+					    	}
+					    }
+					    if(m.rule_dest_targets[i] & 2) {
+					    	if(abs(m.speed[m.rule_dests[i]] - m.smin[m.rule_dests[i]]) < 
+					    		abs(m.speed[m.rule_dests[i]] - m.smax[m.rule_dests[i]]) ) {
+					    		m.speed[m.rule_dests[i]] = m.smax[m.rule_dests[i]];
+					    	}
+					    	else {
+					    		m.speed[m.rule_dests[i]] = m.smin[m.rule_dests[i]];
+					    	}
+					    }
+				    }
+				    else if(m.rules[i] == 7) {  // stop
+				    	if(m.rule_dest_targets[i] & 1)
+				    		m.position[m.rule_dests[i]] = -1;
+				    }
+
+					m.position[i]--;
+
+					for(int n=0;n<8;n++) {
+						if(m.sync[i] & (1<<n)) {
+							m.position[n] = m.count[n];
+							m.tick[n] = m.speed[n];
+						}
+
+						if(m.trigger[i] & (1<<n)) {
+							state[n] = 1;
+							clear[n] = 1;
+						}
+						else if(m.toggle[i] & (1<<n)) {
+							state[n] ^= 1;
+						}
+					}
+				}
+				else if(m.position[i] > 0) m.position[i]--;
+			}
+			else m.tick[i]--;
+		}
+
+		// for(i=0;i<8;i++)
+		// 	if(state[i])
+		// 		gpio_set_gpio_pin(outs[i]);
+		// 	else
+		// 		gpio_clr_gpio_pin(outs[i]);
+
+		monomeFrameDirty++;
+	}
+	else {
+		// gpio_clr_gpio_pin(B10);
+
+		for(i=0;i<8;i++) {
+			if(clear[i]) {
+				// gpio_clr_gpio_pin(outs[i]);
+				state[i] = 0;
+			}
+			clear[i] = 0;
+		}
+ 	}
 }
 
 void ii_mp(uint8_t *d, uint8_t l) {
@@ -145,25 +359,287 @@ void ii_mp(uint8_t *d, uint8_t l) {
 }
 
 void handler_MPGridKey(s32 data) { 
-	u8 x, y, z;
+	// u8 x, y, z, i;
+	// monome_grid_key_parse_event_data(data, &x, &y, &z);
+
+	// i = f.mp_state.lit[y*16+x] ^ 15;
+	// if(z)
+	// 	flashc_memset8((void*)&(f.mp_state.lit[y*16+x]), i, 1, true);
+
+	// // print_dbg("\r\n MP grid key");
+
+ // 	monomeFrameDirty++;
+
+	u8 x, y, z, index, i1, found;
 	monome_grid_key_parse_event_data(data, &x, &y, &z);
+	// print_dbg("\r\n monome event; x: "); 
+	// print_dbg_hex(x); 
+	// print_dbg("; y: 0x"); 
+	// print_dbg_hex(y); 
+	// print_dbg("; z: 0x"); 
+	// print_dbg_hex(z);
 
-	print_dbg("\r\n MP grid key");
+	//// TRACK LONG PRESSES
+	index = y*16 + x;
+	if(z) {
+		held_keys[key_count] = index;
+		key_count++;
+		key_times[index] = 10;		//// THRESHOLD key hold time
+	} else {
+		found = 0; // "found"
+		for(i1 = 0; i1<key_count; i1++) {
+			if(held_keys[i1] == index) 
+				found++;
+			if(found) 
+				held_keys[i1] = held_keys[i1+1];
+		}
+		key_count--;
 
-	// monomeFrameDirty++;
+		// FAST PRESS
+		if(key_times[index] > 0) {
+			// if(preset_mode == 1) {
+			// 	if(x == 0 && y != preset_select) {
+			// 		preset_select = y;
+			// 		for(i1=0;i1<8;i1++)
+			// 			glyph[i1] = flashy.glyph[preset_select][i1];
+			// 	}
+ 		// 		else if(x==0 && y == preset_select) {
+			// 		flash_read();
+
+			// 		preset_mode = 0;
+			// 	}
+
+			// 	monomeFrameDirty++;	
+			// }
+			// print_dbg("\r\nfast press: ");
+			// print_dbg_ulong(index);
+			// print_dbg(": ");
+			// print_dbg_ulong(key_times[index]);
+		}
+	}
+
+	// PRESET SCREEN
+	if(preset_mode) {
+		// glyph magic
+		// if(z && x>7) {
+		// 	glyph[y] ^= 1<<(x-8);
+		// }
+
+		// monomeFrameDirty++;	
+	}
+	// NOT PRESET
+	else {
+		prev_mode = mode;
+
+		// mode check
+		if(x == 0) {
+			kcount += (z<<1)-1;
+
+			if(kcount < 0)
+				kcount = 0;
+
+			// print_dbg("\r\nkey count: ");
+			// print_dbg_ulong(kcount);
+
+			if(kcount == 1 && z == 1)
+				mode = 1; 
+			else if(kcount == 0) {
+				mode = 0;
+				scount[y] = 0;	
+			}
+
+			if(z == 1 && mode == 1) {
+				edit_row = y;
+			}
+		}
+		else if(x == 1 && mode != 0) {
+			if(mode == 1 && z == 1) {
+				mode = 2;
+				edit_row = y;
+			}
+			else if(mode == 2 && z == 0)
+				mode = 1;
+		}
+		// set position / minmax / stop
+		else if(mode == 0) {
+			scount[y] += (z<<1)-1;
+			if(scount[y]<0) scount[y] = 0;		// in case of grid glitch?
+
+			if(z == 1 && scount[y] == 1) {
+				m.position[y] = x;
+				m.count[y] = x;
+				m.min[y] = x;
+				m.max[y] = x;
+				m.tick[y] = m.speed[y];
+
+				if(m.sound) {
+					m.pushed[y] = 1;
+				}
+			}
+			else if(z == 1 && scount[y] == 2) {
+				if(x < m.count[y]) {
+					m.min[y] = x;
+					m.max[y] = m.count[y];
+				}
+				else {
+					m.max[y] = x;
+					m.min[y] = m.count[y];
+				}
+			}
+		}
+		// set speeds and trig/tog
+		else if(mode == 1) {
+			scount[y] += (z<<1)-1;
+			if(scount[y]<0) scount[y] = 0;
+
+			if(z==1) {
+				if(x > 7) {
+					if(scount[y] == 1) {
+						m.smin[y] = x-8;
+						m.smax[y] = x-8;
+						m.speed[y] = x-8;
+						m.tick[y] = m.speed[y];
+					}
+					else if(scount[y] == 2) {
+						if(x-8 < m.smin[y]) {
+							m.smax[y] = m.smin[y];
+							m.smin[y] = x-8;
+						}
+						else
+							m.smax[y] = x-8;
+					}
+				}
+				else if(x == 5) {
+					m.toggle[edit_row] ^= 1<<y;
+					m.trigger[edit_row] &= ~(1<<y);
+				}
+				else if(x == 6) {
+					m.trigger[edit_row] ^= 1<<y;
+					m.toggle[edit_row] &= ~(1<<y);
+				}
+				else if(x == 4) {
+					m.sound ^= 1;
+				}
+				else if(x == 2) {
+					if(m.position[y] == -1) {
+						m.position[y] = m.count[y];
+					}
+					else {
+						m.position[y] = -1;
+					}
+				}
+				else if(x == 3) {
+					m.sync[edit_row] ^= (1<<y);
+				}
+			}
+		}
+		else if(mode == 2 && z == 1) {
+			if(x > 3 && x < 7) {
+				m.rule_dests[edit_row] = y;
+				m.rule_dest_targets[edit_row] = x-3;
+			  // post("\nrule_dests", edit_row, ":", rule_dests[edit_row]);
+			}
+			else if(x > 6) {
+				m.rules[edit_row] = y;
+			  // post("\nrules", edit_row, ":", rules[edit_row]);
+			}
+		}
+
+		monomeFrameDirty++;
+	}
 }
 
 void handler_MPRefresh(s32 data) { 
 	if(monomeFrameDirty) {
-		////
-		for(uint8_t i1=0;i1<16;i1++) {
-			monomeLedBuffer[i1] = 0;
-			monomeLedBuffer[16+i1] = 0;
-			monomeLedBuffer[32+i1] = 4;
-			monomeLedBuffer[48+i1] = 0;
-		}
+			u8 i1, i2, i3;
 
-		monomeLedBuffer[0] = 15;
+		// clear grid
+		for(i1=0;i1<128;i1++)
+			monomeLedBuffer[i1] = 0;
+
+		// SHOW POSITIONS
+		if(mode == 0) {
+			for(i1=0;i1<8;i1++) {
+				for(i2=m.min[i1];i2<=m.max[i1];i2++)
+					monomeLedBuffer[i1*16 + i2] = L0;
+				monomeLedBuffer[i1*16 + m.count[i1]] = L1;
+				if(m.position[i1] >= 0) {
+					monomeLedBuffer[i1*16 + m.position[i1]] = L2;
+				}
+			}
+		}
+		// SHOW SPEED
+		else if(mode == 1) {
+			for(i1=0;i1<8;i1++) {
+				if(m.position[i1] >= 0)
+					monomeLedBuffer[i1*16 + m.position[i1]] = L0;
+
+				if(m.position[i1] != -1)
+					monomeLedBuffer[i1*16 + 2] = 2;
+
+				for(i2=m.smin[i1];i2<=m.smax[i1];i2++)
+					monomeLedBuffer[i1*16 + i2+8] = L0;
+
+				monomeLedBuffer[i1*16 + m.speed[i1]+8] = L1;
+
+				if(m.sound)
+					monomeLedBuffer[i1*16 + 4] = 2;
+
+				if(m.toggle[edit_row] & (1 << i1))
+					monomeLedBuffer[i1*16 + 5] = L2;
+				else
+					monomeLedBuffer[i1*16 + 5] = L0;
+
+				if(m.trigger[edit_row] & (1 << i1))
+					monomeLedBuffer[i1*16 + 6] = L2;
+				else
+					monomeLedBuffer[i1*16 + 6] = L0;
+
+				if(m.sync[edit_row] & (1<<i1))
+					monomeLedBuffer[i1*16 + 3] = L1;
+				else  
+					monomeLedBuffer[i1*16 + 3] = L0;
+			}
+
+			monomeLedBuffer[edit_row * 16] = L2;
+		}
+		// SHOW RULES
+		else if(mode == 2) {
+			for(i1=0;i1<8;i1++) 
+				if(m.position[i1] >= 0)
+					monomeLedBuffer[i1*16 + m.position[i1]] = L0;
+
+			monomeLedBuffer[edit_row * 16] = L1;
+			monomeLedBuffer[edit_row * 16 + 1] = L1;
+
+			if(m.rule_dest_targets[edit_row] == 1) {
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L0;
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+			}
+			else if (m.rule_dest_targets[edit_row] == 2) {
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L0;
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+			}
+			else {
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
+				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+			}
+
+			for(i1=8;i1<16;i1++)
+				monomeLedBuffer[m.rules[edit_row] * 16 + i1] = L0;
+
+
+			for(i1=0;i1<8;i1++) {
+				i3 = sign[m.rules[edit_row]][i1];
+				for(i2=0;i2<8;i2++) {
+					if((i3 & (1<<i2)) != 0)
+						monomeLedBuffer[i1*16 + 8 + i2] = L2;
+				}
+			}
+		}
 
 		////
 		monome_set_quadrant_flag(0);
