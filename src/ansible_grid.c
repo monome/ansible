@@ -1,5 +1,6 @@
 #include "print_funcs.h"
 #include "flashc.h"
+#include "gpio.h"
 
 #include "monome.h"
 #include "i2c.h"
@@ -8,11 +9,26 @@
 #include "main.h"
 #include "ansible_grid.h"
 
+
 #define L2 12
 #define L1 8
 #define L0 4
 
-uint8_t preset_mode, preset_select;
+bool preset_mode;
+uint8_t preset_select;
+
+u8 held_keys[32];
+u8 key_times[128];
+
+bool clock_external;
+bool view_clock;
+bool view_config;
+
+uint8_t time_rough;
+uint8_t time_fine;
+
+void (*grid_refresh)(void);
+
 
 void set_mode_grid() {
 	switch(f.state.mode) {
@@ -38,6 +54,7 @@ void set_mode_grid() {
 		clock = &clock_mp;
 		clock_set(f.mp_state.clock_period);
 		process_ii = &ii_mp;
+		resume_mp();
 		update_leds(2);
 		break;
 	default:
@@ -66,6 +83,7 @@ void handler_GridFrontLong(s32 data) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// KRIA
 
 void default_kria() {
 	flashc_memset32((void*)&(f.kria_state.clock_period), 100, 4, true);
@@ -138,11 +156,17 @@ void handler_KriaTrNormal(s32 data) {
 
 mp_set m;
 
-u8 held_keys[32], key_times[128];
-
-u8 edit_row, key_count = 0, mode = 0, prev_mode = 0;
+u8 edit_row;
+u8 key_count = 0;
+u8 mode = 0;
+u8 prev_mode = 0;
 s8 kcount = 0;
-s8 scount[8] = {0,0,0,0,0,0,0,0};
+s8 scount[8];
+u8 state[8];
+u8 clear[8]; 
+s8 position[8];		// current position in cycle
+u8 tick[8]; 		// position in speed countdown
+u8 pushed[8];		// manual key reset
 
 const u8 sign[8][8] = {{0,0,0,0,0,0,0,0},       // o
        {0,24,24,126,126,24,24,0},     			// +
@@ -153,18 +177,15 @@ const u8 sign[8][8] = {{0,0,0,0,0,0,0,0},       // o
        {0,120,120,102,102,30,30,0},   			// <> up/down
        {0,126,126,102,102,126,126,0}};  		// [] sync
 
-u8 state[8] = {0,0,0,0,0,0,0,0};
-u8 clear[8] = {0,0,0,0,0,0,0,0};
+
 
 
 void default_mp() {
-	flashc_memset32((void*)&(f.mp_state.clock_period), 50, 4, true);
+	flashc_memset32((void*)&(f.mp_state.clock_period), 55, 4, true);
 
 	for(uint8_t i1=0;i1<8;i1++) {
 		m.count[i1] = 7+i1;
-		m.position[i1] = 7+i1;
 		m.speed[i1] = 0;
-		m.tick[i1] = 0;
 		m.min[i1] = 7+i1;
 		m.max[i1] = 7+i1;
 		m.trigger[i1] = (1<<i1);
@@ -183,9 +204,7 @@ void default_mp() {
 void init_mp() {
 	for(uint8_t i1=0;i1<8;i1++) {
 		m.count[i1] = f.mp_state.m.count[i1];
-		m.position[i1] = f.mp_state.m.position[i1];
 		m.speed[i1] = f.mp_state.m.speed[i1];
-		m.tick[i1] = f.mp_state.m.tick[i1];
 		m.min[i1] = f.mp_state.m.min[i1];
 		m.max[i1] = f.mp_state.m.max[i1];
 		m.trigger[i1] = f.mp_state.m.trigger[i1];
@@ -196,26 +215,45 @@ void init_mp() {
 		m.rule_dest_targets[i1] = f.mp_state.m.rule_dest_targets[i1];
 		m.smin[i1] = f.mp_state.m.smin[i1];
 		m.smax[i1] = f.mp_state.m.smax[i1];
+
+		position[i1] = f.mp_state.m.count[i1];
+		tick[i1] = 0;
+		pushed[i1] = 0;
+		scount[i1] = 0;
+		clear[i1] = 0;
+		state[i1] = 0;
 	}
+
+	time_rough = (f.mp_state.clock_period - 20) / 16;
+	time_fine = (f.mp_state.clock_period - 20) % 16;
+}
+
+void resume_mp() {
+	grid_refresh = &refresh_mp;
+	view_clock = false;
+	view_config = false;
+
+	// re-check clock jack
+	clock_external = !gpio_get_pin_value(B10);
+
+	if(clock_external)
+		clock = &clock_null;
+	else
+		clock = &clock_mp;
 }
 
 void clock_mp(uint8_t phase) {
-	// if(phase)
-	// 	set_tr(TR4);
-	// else
-	// 	clr_tr(TR4);
-
 	static u8 i;
 
 	if(phase) {
 		// gpio_set_gpio_pin(B10);
 
 		for(i=0;i<8;i++) {
-			if(m.pushed[i]) {
+			if(pushed[i]) {
 				for(int n=0;n<8;n++) {
 					if(m.sync[i] & (1<<n)) {
-						m.position[n] = m.count[n];
-						m.tick[n] = m.speed[n];
+						position[n] = m.count[n];
+						tick[n] = m.speed[n];
 					}
 
 					if(m.trigger[i] & (1<<n)) {
@@ -227,12 +265,12 @@ void clock_mp(uint8_t phase) {
 					}
 				}
 
-				m.pushed[i] = 0;
+				pushed[i] = 0;
 			}
 
-			if(m.tick[i] == 0) {
-				m.tick[i] = m.speed[i];
-				if(m.position[i] == 0) {
+			if(tick[i] == 0) {
+				tick[i] = m.speed[i];
+				if(position[i] == 0) {
 					// RULES
 				    if(m.rules[i] == 1) {     // inc
 				    	if(m.rule_dest_targets[i] & 1) {
@@ -308,15 +346,15 @@ void clock_mp(uint8_t phase) {
 				    }
 				    else if(m.rules[i] == 7) {  // stop
 				    	if(m.rule_dest_targets[i] & 1)
-				    		m.position[m.rule_dests[i]] = -1;
+				    		position[m.rule_dests[i]] = -1;
 				    }
 
-					m.position[i]--;
+					position[i]--;
 
 					for(int n=0;n<8;n++) {
 						if(m.sync[i] & (1<<n)) {
-							m.position[n] = m.count[n];
-							m.tick[n] = m.speed[n];
+							position[n] = m.count[n];
+							tick[n] = m.speed[n];
 						}
 
 						if(m.trigger[i] & (1<<n)) {
@@ -328,9 +366,9 @@ void clock_mp(uint8_t phase) {
 						}
 					}
 				}
-				else if(m.position[i] > 0) m.position[i]--;
+				else if(position[i] > 0) position[i]--;
 			}
-			else m.tick[i]--;
+			else tick[i]--;
 		}
 
 		// for(i=0;i<8;i++)
@@ -359,18 +397,7 @@ void ii_mp(uint8_t *d, uint8_t l) {
 }
 
 void handler_MPGridKey(s32 data) { 
-	// u8 x, y, z, i;
-	// monome_grid_key_parse_event_data(data, &x, &y, &z);
-
-	// i = f.mp_state.lit[y*16+x] ^ 15;
-	// if(z)
-	// 	flashc_memset8((void*)&(f.mp_state.lit[y*16+x]), i, 1, true);
-
-	// // print_dbg("\r\n MP grid key");
-
- // 	monomeFrameDirty++;
-
-	u8 x, y, z, index, i1, found;
+ 	u8 x, y, z, index, i1, found;
 	monome_grid_key_parse_event_data(data, &x, &y, &z);
 	// print_dbg("\r\n monome event; x: "); 
 	// print_dbg_hex(x); 
@@ -466,14 +493,14 @@ void handler_MPGridKey(s32 data) {
 			if(scount[y]<0) scount[y] = 0;		// in case of grid glitch?
 
 			if(z == 1 && scount[y] == 1) {
-				m.position[y] = x;
+				position[y] = x;
 				m.count[y] = x;
 				m.min[y] = x;
 				m.max[y] = x;
-				m.tick[y] = m.speed[y];
+				tick[y] = m.speed[y];
 
 				if(m.sound) {
-					m.pushed[y] = 1;
+					pushed[y] = 1;
 				}
 			}
 			else if(z == 1 && scount[y] == 2) {
@@ -498,7 +525,7 @@ void handler_MPGridKey(s32 data) {
 						m.smin[y] = x-8;
 						m.smax[y] = x-8;
 						m.speed[y] = x-8;
-						m.tick[y] = m.speed[y];
+						tick[y] = m.speed[y];
 					}
 					else if(scount[y] == 2) {
 						if(x-8 < m.smin[y]) {
@@ -521,11 +548,11 @@ void handler_MPGridKey(s32 data) {
 					m.sound ^= 1;
 				}
 				else if(x == 2) {
-					if(m.position[y] == -1) {
-						m.position[y] = m.count[y];
+					if(position[y] == -1) {
+						position[y] = m.count[y];
 					}
 					else {
-						m.position[y] = -1;
+						position[y] = -1;
 					}
 				}
 				else if(x == 3) {
@@ -551,97 +578,8 @@ void handler_MPGridKey(s32 data) {
 
 void handler_MPRefresh(s32 data) { 
 	if(monomeFrameDirty) {
-			u8 i1, i2, i3;
+		grid_refresh();
 
-		// clear grid
-		for(i1=0;i1<128;i1++)
-			monomeLedBuffer[i1] = 0;
-
-		// SHOW POSITIONS
-		if(mode == 0) {
-			for(i1=0;i1<8;i1++) {
-				for(i2=m.min[i1];i2<=m.max[i1];i2++)
-					monomeLedBuffer[i1*16 + i2] = L0;
-				monomeLedBuffer[i1*16 + m.count[i1]] = L1;
-				if(m.position[i1] >= 0) {
-					monomeLedBuffer[i1*16 + m.position[i1]] = L2;
-				}
-			}
-		}
-		// SHOW SPEED
-		else if(mode == 1) {
-			for(i1=0;i1<8;i1++) {
-				if(m.position[i1] >= 0)
-					monomeLedBuffer[i1*16 + m.position[i1]] = L0;
-
-				if(m.position[i1] != -1)
-					monomeLedBuffer[i1*16 + 2] = 2;
-
-				for(i2=m.smin[i1];i2<=m.smax[i1];i2++)
-					monomeLedBuffer[i1*16 + i2+8] = L0;
-
-				monomeLedBuffer[i1*16 + m.speed[i1]+8] = L1;
-
-				if(m.sound)
-					monomeLedBuffer[i1*16 + 4] = 2;
-
-				if(m.toggle[edit_row] & (1 << i1))
-					monomeLedBuffer[i1*16 + 5] = L2;
-				else
-					monomeLedBuffer[i1*16 + 5] = L0;
-
-				if(m.trigger[edit_row] & (1 << i1))
-					monomeLedBuffer[i1*16 + 6] = L2;
-				else
-					monomeLedBuffer[i1*16 + 6] = L0;
-
-				if(m.sync[edit_row] & (1<<i1))
-					monomeLedBuffer[i1*16 + 3] = L1;
-				else  
-					monomeLedBuffer[i1*16 + 3] = L0;
-			}
-
-			monomeLedBuffer[edit_row * 16] = L2;
-		}
-		// SHOW RULES
-		else if(mode == 2) {
-			for(i1=0;i1<8;i1++) 
-				if(m.position[i1] >= 0)
-					monomeLedBuffer[i1*16 + m.position[i1]] = L0;
-
-			monomeLedBuffer[edit_row * 16] = L1;
-			monomeLedBuffer[edit_row * 16 + 1] = L1;
-
-			if(m.rule_dest_targets[edit_row] == 1) {
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L0;
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
-			}
-			else if (m.rule_dest_targets[edit_row] == 2) {
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L0;
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
-			}
-			else {
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
-				monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
-			}
-
-			for(i1=8;i1<16;i1++)
-				monomeLedBuffer[m.rules[edit_row] * 16 + i1] = L0;
-
-
-			for(i1=0;i1<8;i1++) {
-				i3 = sign[m.rules[edit_row]][i1];
-				for(i2=0;i2<8;i2++) {
-					if((i3 & (1<<i2)) != 0)
-						monomeLedBuffer[i1*16 + 8 + i2] = L2;
-				}
-			}
-		}
-
-		////
 		monome_set_quadrant_flag(0);
 		monome_set_quadrant_flag(1);
 		(*monome_refresh)();
@@ -651,14 +589,190 @@ void handler_MPRefresh(s32 data) {
 void handler_MPKey(s32 data) { 
 	print_dbg("\r\n> MP key ");
 	print_dbg_ulong(data);
+
+	switch(data) {
+	case 0:
+		grid_refresh = &refresh_mp;
+		view_clock = false;
+		break;
+	case 1:
+		grid_refresh = &refresh_clock;
+		print_dbg("\r\ntime: ");
+		print_dbg_ulong(time_fine);
+		print_dbg(" ");
+		print_dbg_ulong(time_rough);
+		view_clock = true;
+		view_config = false;
+		break;
+	case 2:
+		grid_refresh = &refresh_mp;
+		view_config = false;
+		break;
+	case 3:
+		grid_refresh = &refresh_mp_config;
+		view_config = true;
+		view_clock = false;
+		break;
+	default:
+		break;
+	}
+
+	monomeFrameDirty++;
 }
 
 void handler_MPTr(s32 data) { 
-	print_dbg("\r\n> MP tr ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> MP tr ");
+	// print_dbg_ulong(data);
+
+	switch(data) {
+	case 0:
+		clock_mp(0);
+		break;
+	case 1:
+		clock_mp(1);
+		break;
+	case 3:
+		// right jack upwards: RESET
+		for(int n=0;n<8;n++) {
+			position[n] = m.count[n];
+			tick[n] = m.speed[n];
+		}
+		break;
+	default:
+		break;
+	}
+
+	monomeFrameDirty++;
 }
 
 void handler_MPTrNormal(s32 data) { 
-	print_dbg("\r\n> MP tr normal ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> MP tr normal ");
+	// print_dbg_ulong(data);
+
+	clock_external = data;
+
+	if(clock_external)
+		clock = &clock_null;
+	else
+		clock = &clock_mp;
+
+	monomeFrameDirty++;
+}
+
+void refresh_clock(void) {
+	u8 i1, i2, i3;
+
+	// clear grid
+	for(i1=0;i1<128;i1++)
+		monomeLedBuffer[i1] = 0;
+
+	if(clock_external) {
+		monomeLedBuffer[127] = 7;
+	}
+	else {
+		monomeLedBuffer[R2 + time_fine] = L1;
+		monomeLedBuffer[R3 + time_rough] = L2;
+	}
+}
+
+void refresh_mp_config(void) {
+	u8 i1, i2, i3;
+
+	// clear grid
+	for(i1=0;i1<128;i1++)
+		monomeLedBuffer[i1] = 0;
+
+	monomeLedBuffer[0] = 15;
+}
+
+void refresh_mp(void) {
+	u8 i1, i2, i3;
+
+	// clear grid
+	for(i1=0;i1<128;i1++)
+		monomeLedBuffer[i1] = 0;
+
+	// SHOW POSITIONS
+	if(mode == 0) {
+		for(i1=0;i1<8;i1++) {
+			for(i2=m.min[i1];i2<=m.max[i1];i2++)
+				monomeLedBuffer[i1*16 + i2] = L0;
+			monomeLedBuffer[i1*16 + m.count[i1]] = L1;
+			if(position[i1] >= 0) {
+				monomeLedBuffer[i1*16 + position[i1]] = L2;
+			}
+		}
+	}
+	// SHOW SPEED
+	else if(mode == 1) {
+		for(i1=0;i1<8;i1++) {
+			if(position[i1] >= 0)
+				monomeLedBuffer[i1*16 + position[i1]] = L0;
+
+			if(position[i1] != -1)
+				monomeLedBuffer[i1*16 + 2] = 2;
+
+			for(i2=m.smin[i1];i2<=m.smax[i1];i2++)
+				monomeLedBuffer[i1*16 + i2+8] = L0;
+
+			monomeLedBuffer[i1*16 + m.speed[i1]+8] = L1;
+
+			if(m.sound)
+				monomeLedBuffer[i1*16 + 4] = 2;
+
+			if(m.toggle[edit_row] & (1 << i1))
+				monomeLedBuffer[i1*16 + 5] = L2;
+			else
+				monomeLedBuffer[i1*16 + 5] = L0;
+
+			if(m.trigger[edit_row] & (1 << i1))
+				monomeLedBuffer[i1*16 + 6] = L2;
+			else
+				monomeLedBuffer[i1*16 + 6] = L0;
+
+			if(m.sync[edit_row] & (1<<i1))
+				monomeLedBuffer[i1*16 + 3] = L1;
+			else  
+				monomeLedBuffer[i1*16 + 3] = L0;
+		}
+
+		monomeLedBuffer[edit_row * 16] = L2;
+	}
+	// SHOW RULES
+	else if(mode == 2) {
+		for(i1=0;i1<8;i1++) 
+			if(position[i1] >= 0)
+				monomeLedBuffer[i1*16 + position[i1]] = L0;
+
+		monomeLedBuffer[edit_row * 16] = L1;
+		monomeLedBuffer[edit_row * 16 + 1] = L1;
+
+		if(m.rule_dest_targets[edit_row] == 1) {
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L0;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+		}
+		else if (m.rule_dest_targets[edit_row] == 2) {
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L0;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+		}
+		else {
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+		}
+
+		for(i1=8;i1<16;i1++)
+			monomeLedBuffer[m.rules[edit_row] * 16 + i1] = L0;
+
+
+		for(i1=0;i1<8;i1++) {
+			i3 = sign[m.rules[edit_row]][i1];
+			for(i2=0;i2<8;i2++) {
+				if((i3 & (1<<i2)) != 0)
+					monomeLedBuffer[i1*16 + 8 + i2] = L2;
+			}
+		}
+	}
 }

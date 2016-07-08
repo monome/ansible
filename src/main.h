@@ -60,6 +60,8 @@ extern nvram_data_t f;
 
 void (*clock)(u8 phase);
 
+extern void handler_None(s32 data);
+extern void clock_null(u8 phase);
 
 void set_mode(ansible_mode_t m);
 void update_dacs(uint16_t *d);

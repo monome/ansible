@@ -172,10 +172,12 @@ in 1: clock
 
 key 2: config
 	a: scale modes (shared with kria?)
-	b: voice shift register vs allocate (steal vs. not) vs fixed four
+	b: voice shift register vs allocate (steal vs. not) vs fixed four vs tt driven
+	c: trig on position set
 in 2: reset
 
 > tt param read for trigger/gate states mapped overriding to tt tr inputs
+> driven on tt clock (must prevent self-clocking infinite loop)
 
 identical mp layout
 

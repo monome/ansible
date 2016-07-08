@@ -85,7 +85,6 @@ extern void timers_unset_monome(void);
 static void check_events(void);
 
 // handler protos
-static void handler_None(s32 data) { ;; }
 static void handler_KeyTimer(s32 data);
 static void handler_Front(s32 data);
 static void handler_FrontShort(s32 data);
@@ -113,7 +112,7 @@ static softTimer_t monomePollTimer = { .next = NULL, .prev = NULL };
 static softTimer_t monomeRefreshTimer  = { .next = NULL, .prev = NULL };
 static softTimer_t midiPollTimer = { .next = NULL, .prev = NULL };
 
-
+void handler_None(s32 data) { ;; }
 
 static void clockTimer_callback(void* o) {  
 	static uint8_t clock_phase;
@@ -507,11 +506,12 @@ int main(void)
 		default_tt();
 	}
 	else {
-		init_mp();
 		// load from flash at startup
 		preset_select = f.preset_select;
 		flash_read();
 	}
+	
+	init_mp();
 
 	print_dbg("\r\ni2c addr: ");
 	print_dbg_hex(f.state.i2c_addr);
