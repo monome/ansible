@@ -280,38 +280,40 @@ void default_mp() {
 		m.smax[i1] = 0;
 	}
 
-	for(uint8_t i1=0;i1<4;i1++) {
+	for(uint8_t i1=0;i1<4;i1++)
 		m.glyph[i1] = 0;
-	}
 
 	for(uint8_t i1=0;i1<GRID_PRESETS;i1++)
 		flashc_memcpy((void *)&f.mp_state.m[i1], &m, sizeof(m), true);
 }
 
 void init_mp() {
-	uint8_t p = f.mp_state.last_preset;
+	preset_select = f.mp_state.last_preset;
 
 	for(uint8_t i1=0;i1<8;i1++) {
-		m.count[i1] = f.mp_state.m[p].count[i1];
-		m.speed[i1] = f.mp_state.m[p].speed[i1];
-		m.min[i1] = f.mp_state.m[p].min[i1];
-		m.max[i1] = f.mp_state.m[p].max[i1];
-		m.trigger[i1] = f.mp_state.m[p].trigger[i1];
-		m.toggle[i1] = f.mp_state.m[p].toggle[i1];
-		m.rules[i1] = f.mp_state.m[p].rules[i1];
-		m.rule_dests[i1] = f.mp_state.m[p].rule_dests[i1];
-		m.sync[i1] = f.mp_state.m[p].sync[i1];
-		m.rule_dest_targets[i1] = f.mp_state.m[p].rule_dest_targets[i1];
-		m.smin[i1] = f.mp_state.m[p].smin[i1];
-		m.smax[i1] = f.mp_state.m[p].smax[i1];
+		m.count[i1] = f.mp_state.m[preset_select].count[i1];
+		m.speed[i1] = f.mp_state.m[preset_select].speed[i1];
+		m.min[i1] = f.mp_state.m[preset_select].min[i1];
+		m.max[i1] = f.mp_state.m[preset_select].max[i1];
+		m.trigger[i1] = f.mp_state.m[preset_select].trigger[i1];
+		m.toggle[i1] = f.mp_state.m[preset_select].toggle[i1];
+		m.rules[i1] = f.mp_state.m[preset_select].rules[i1];
+		m.rule_dests[i1] = f.mp_state.m[preset_select].rule_dests[i1];
+		m.sync[i1] = f.mp_state.m[preset_select].sync[i1];
+		m.rule_dest_targets[i1] = f.mp_state.m[preset_select].rule_dest_targets[i1];
+		m.smin[i1] = f.mp_state.m[preset_select].smin[i1];
+		m.smax[i1] = f.mp_state.m[preset_select].smax[i1];
 
-		position[i1] = f.mp_state.m[p].count[i1];
+		position[i1] = f.mp_state.m[preset_select].count[i1];
 		tick[i1] = 0;
 		pushed[i1] = 0;
 		scount[i1] = 0;
 		clear[i1] = 0;
 		state[i1] = 0;
 	}
+
+	for(uint8_t i1=0;i1<4;i1++)
+		m.glyph[i1] = f.mp_state.m[preset_select].glyph[i1];
 
 	time_rough = (f.mp_state.clock_period - 20) / 16;
 	time_fine = (f.mp_state.clock_period - 20) % 16;
