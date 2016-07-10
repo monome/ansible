@@ -9,6 +9,8 @@
 #define R6 96
 #define R7 112
 
+#define GRID_PRESETS 8
+
 typedef struct {
 	uint32_t clock_period;
 	uint8_t pattern;
@@ -38,11 +40,15 @@ typedef struct {
 	u8 smax[8];
 
 	u8 sound;
+
+	u8 glyph[4];
+
 } mp_set;
 
 typedef struct {
 	uint32_t clock_period;
-	mp_set m;	
+	uint8_t last_preset;
+	mp_set m[GRID_PRESETS];
 } mp_state_t;
 
 
@@ -51,8 +57,12 @@ void set_mode_grid(void);
 
 void handler_GridFrontShort(s32 data);
 void handler_GridFrontLong(s32 data);
+void refresh_preset(void);
+void grid_keytimer(void);
 
 void default_kria(void);
+void init_kria(void);
+void resume_kria(void);
 void clock_kria(uint8_t phase);
 void ii_kria(uint8_t *d, uint8_t l);
 void handler_KriaGridKey(s32 data);
@@ -60,6 +70,7 @@ void handler_KriaRefresh(s32 data);
 void handler_KriaKey(s32 data);
 void handler_KriaTr(s32 data);
 void handler_KriaTrNormal(s32 data);
+void refresh_kria(void);
 
 void default_mp(void);
 void init_mp(void);
@@ -71,7 +82,6 @@ void handler_MPRefresh(s32 data);
 void handler_MPKey(s32 data);
 void handler_MPTr(s32 data);
 void handler_MPTrNormal(s32 data);
-
 void refresh_mp(void);
 void refresh_mp_config(void);
 void refresh_clock(void);

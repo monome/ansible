@@ -325,6 +325,8 @@ static void handler_KeyTimer(s32 data) {
 		}
 		front_timer--;
 	}
+
+	grid_keytimer();
 }
 
 
@@ -510,7 +512,7 @@ int main(void)
 		preset_select = f.preset_select;
 		flash_read();
 	}
-	
+
 	init_mp();
 
 	print_dbg("\r\ni2c addr: ");

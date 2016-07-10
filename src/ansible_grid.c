@@ -17,6 +17,7 @@
 bool preset_mode;
 uint8_t preset_select;
 
+u8 key_count = 0;
 u8 held_keys[32];
 u8 key_times[128];
 
@@ -28,6 +29,9 @@ uint8_t time_rough;
 uint8_t time_fine;
 
 void (*grid_refresh)(void);
+
+
+mp_set m;
 
 
 void set_mode_grid() {
@@ -42,6 +46,7 @@ void set_mode_grid() {
 		clock = &clock_kria;
 		clock_set(f.kria_state.clock_period);
 		process_ii = &ii_kria;
+		resume_kria();
 		update_leds(1);
 		break;
 	case mGridMP:
@@ -72,7 +77,24 @@ void set_mode_grid() {
 
 
 void handler_GridFrontShort(s32 data) {
-	print_dbg("\r\n> PRESET");
+	if(preset_mode) {
+		print_dbg("\r\n> PRESET EXIT");
+		preset_mode = false;
+
+		if(f.state.mode == mGridMP)
+			grid_refresh = &refresh_mp;
+		else
+			grid_refresh = &refresh_kria;
+		view_config = false;
+		view_clock = false;
+	}
+	else {
+		print_dbg("\r\n> PRESET ENTER");
+		preset_mode = true;
+		grid_refresh = &refresh_preset;
+		view_config = false;
+		view_clock = false;
+	}
 }
 
 void handler_GridFrontLong(s32 data) {
@@ -82,11 +104,72 @@ void handler_GridFrontLong(s32 data) {
 		set_mode(mGridKria);
 }
 
+void refresh_preset(void) {
+	u8 i1, i2;//, i3;
+
+	// clear grid
+	for(i1=0;i1<128;i1++)
+		monomeLedBuffer[i1] = 0;
+
+	for(i1=0;i1<GRID_PRESETS;i1++)
+		monomeLedBuffer[R1 + 4 + i1] = L0;
+
+	for(i1=0;i1<4;i1++)
+		for(i2=0;i2<8;i2++)
+			monomeLedBuffer[R4 + (i1 * R1) + 11 - i2] = ((m.glyph[i1] >> i2) & 1) * L1 + L0;
+	
+
+ 	monomeLedBuffer[R1 + 4 + preset_select] = L2;
+}
+
+void grid_keytimer(void) {
+	for(uint8_t i1=0;i1<key_count;i1++) {
+		if(key_times[held_keys[i1]])
+		if(--key_times[held_keys[i1]]==0) {
+			if(preset_mode == 1) {
+				if(held_keys[i1] > 19 && held_keys[i1] < 28) {
+					preset_select = held_keys[i1] - 20;
+
+					if(f.state.mode == mGridMP) {
+						flashc_memset8((void*)&(f.mp_state.last_preset), preset_select, 1, true);
+						flashc_memcpy((void *)&f.mp_state.m[preset_select], &m, sizeof(m), true);
+						preset_mode = false;
+						grid_refresh = &refresh_mp;
+					}
+					
+				}
+			}
+
+			// print_dbg("\rlong press: "); 
+			// print_dbg_ulong(held_keys[i1]);
+		}
+	}
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // KRIA
 
 void default_kria() {
 	flashc_memset32((void*)&(f.kria_state.clock_period), 100, 4, true);
+}
+
+void init_kria() {
+	;;
+}
+
+void resume_kria() {
+	grid_refresh = &refresh_kria;
+	view_clock = false;
+	view_config = false;
+
+	// re-check clock jack
+	clock_external = !gpio_get_pin_value(B10);
+
+	if(clock_external)
+		clock = &clock_null;
+	else
+		clock = &clock_kria;
 }
 
 void clock_kria(uint8_t phase) {
@@ -117,17 +200,8 @@ void handler_KriaGridKey(s32 data) {
 
 void handler_KriaRefresh(s32 data) { 
 	if(monomeFrameDirty) {
-		////
-		for(uint8_t i1=0;i1<16;i1++) {
-			monomeLedBuffer[i1] = 0;
-			monomeLedBuffer[16+i1] = 0;
-			monomeLedBuffer[32+i1] = 4;
-			monomeLedBuffer[48+i1] = 0;
-		}
+		grid_refresh();
 
-		monomeLedBuffer[0] = 15;
-
-		////
 		monome_set_quadrant_flag(0);
 		monome_set_quadrant_flag(1);
 		(*monome_refresh)();
@@ -149,15 +223,22 @@ void handler_KriaTrNormal(s32 data) {
 	print_dbg_ulong(data);
 }
 
+void refresh_kria(void) {
+	for(uint8_t i1=0;i1<16;i1++) {
+		monomeLedBuffer[i1] = 0;
+		monomeLedBuffer[16+i1] = 0;
+		monomeLedBuffer[32+i1] = 4;
+		monomeLedBuffer[48+i1] = 0;
+	}
+
+	monomeLedBuffer[0] = 15;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // MP
 
-mp_set m;
-
 u8 edit_row;
-u8 key_count = 0;
 u8 mode = 0;
 u8 prev_mode = 0;
 s8 kcount = 0;
@@ -182,6 +263,7 @@ const u8 sign[8][8] = {{0,0,0,0,0,0,0,0},       // o
 
 void default_mp() {
 	flashc_memset32((void*)&(f.mp_state.clock_period), 55, 4, true);
+	flashc_memset8((void*)&(f.mp_state.last_preset), 0, 1, true);
 
 	for(uint8_t i1=0;i1<8;i1++) {
 		m.count[i1] = 7+i1;
@@ -198,25 +280,32 @@ void default_mp() {
 		m.smax[i1] = 0;
 	}
 
-	flashc_memcpy((void *)&f.mp_state.m, &m, sizeof(m), true);
+	for(uint8_t i1=0;i1<4;i1++) {
+		m.glyph[i1] = 0;
+	}
+
+	for(uint8_t i1=0;i1<GRID_PRESETS;i1++)
+		flashc_memcpy((void *)&f.mp_state.m[i1], &m, sizeof(m), true);
 }
 
 void init_mp() {
-	for(uint8_t i1=0;i1<8;i1++) {
-		m.count[i1] = f.mp_state.m.count[i1];
-		m.speed[i1] = f.mp_state.m.speed[i1];
-		m.min[i1] = f.mp_state.m.min[i1];
-		m.max[i1] = f.mp_state.m.max[i1];
-		m.trigger[i1] = f.mp_state.m.trigger[i1];
-		m.toggle[i1] = f.mp_state.m.toggle[i1];
-		m.rules[i1] = f.mp_state.m.rules[i1];
-		m.rule_dests[i1] = f.mp_state.m.rule_dests[i1];
-		m.sync[i1] = f.mp_state.m.sync[i1];
-		m.rule_dest_targets[i1] = f.mp_state.m.rule_dest_targets[i1];
-		m.smin[i1] = f.mp_state.m.smin[i1];
-		m.smax[i1] = f.mp_state.m.smax[i1];
+	uint8_t p = f.mp_state.last_preset;
 
-		position[i1] = f.mp_state.m.count[i1];
+	for(uint8_t i1=0;i1<8;i1++) {
+		m.count[i1] = f.mp_state.m[p].count[i1];
+		m.speed[i1] = f.mp_state.m[p].speed[i1];
+		m.min[i1] = f.mp_state.m[p].min[i1];
+		m.max[i1] = f.mp_state.m[p].max[i1];
+		m.trigger[i1] = f.mp_state.m[p].trigger[i1];
+		m.toggle[i1] = f.mp_state.m[p].toggle[i1];
+		m.rules[i1] = f.mp_state.m[p].rules[i1];
+		m.rule_dests[i1] = f.mp_state.m[p].rule_dests[i1];
+		m.sync[i1] = f.mp_state.m[p].sync[i1];
+		m.rule_dest_targets[i1] = f.mp_state.m[p].rule_dest_targets[i1];
+		m.smin[i1] = f.mp_state.m[p].smin[i1];
+		m.smax[i1] = f.mp_state.m[p].smax[i1];
+
+		position[i1] = f.mp_state.m[p].count[i1];
 		tick[i1] = 0;
 		pushed[i1] = 0;
 		scount[i1] = 0;
@@ -232,6 +321,7 @@ void resume_mp() {
 	grid_refresh = &refresh_mp;
 	view_clock = false;
 	view_config = false;
+	preset_mode = false;
 
 	// re-check clock jack
 	clock_external = !gpio_get_pin_value(B10);
@@ -424,20 +514,31 @@ void handler_MPGridKey(s32 data) {
 
 		// FAST PRESS
 		if(key_times[index] > 0) {
-			// if(preset_mode == 1) {
-			// 	if(x == 0 && y != preset_select) {
-			// 		preset_select = y;
-			// 		for(i1=0;i1<8;i1++)
-			// 			glyph[i1] = flashy.glyph[preset_select][i1];
-			// 	}
- 		// 		else if(x==0 && y == preset_select) {
-			// 		flash_read();
+			if(preset_mode) {
+				if(y == 1) {
+					if(x < 4 || x > 12) {
+						preset_mode = false;
+						grid_refresh = &refresh_mp;
+					}
+					else if(x - 4 != preset_select) {
+						preset_select = x - 4;
 
-			// 		preset_mode = 0;
-			// 	}
+						for(i1=0;i1<4;i1++)
+							m.glyph[i1] = f.mp_state.m[preset_select].glyph[i1];
+					}
+ 					else if(x - 4 == preset_select) {
+ 						// flash read
+						flashc_memset8((void*)&(f.mp_state.last_preset), preset_select, 1, true);
+						init_mp();
 
-			// 	monomeFrameDirty++;	
-			// }
+						preset_mode = false;
+						grid_refresh = &refresh_mp;
+
+					}
+				}
+
+				monomeFrameDirty++;	
+			}
 			// print_dbg("\r\nfast press: ");
 			// print_dbg_ulong(index);
 			// print_dbg(": ");
@@ -451,8 +552,17 @@ void handler_MPGridKey(s32 data) {
 		// if(z && x>7) {
 		// 	glyph[y] ^= 1<<(x-8);
 		// }
+		if(z && y > 3) {
+			if(x < 4 || x > 12) {
+				preset_mode = false;
+				grid_refresh = &refresh_mp;
+			}
+			else {
+				m.glyph[y-4] = m.glyph[y-4] ^ (1 << (11 - x));
+			}
+		}
 
-		// monomeFrameDirty++;	
+		monomeFrameDirty++;	
 	}
 	// NOT PRESET
 	else {
@@ -660,7 +770,7 @@ void handler_MPTrNormal(s32 data) {
 }
 
 void refresh_clock(void) {
-	u8 i1, i2, i3;
+	u8 i1;//, i2, i3;
 
 	// clear grid
 	for(i1=0;i1<128;i1++)
@@ -676,7 +786,7 @@ void refresh_clock(void) {
 }
 
 void refresh_mp_config(void) {
-	u8 i1, i2, i3;
+	u8 i1;//, i2, i3;
 
 	// clear grid
 	for(i1=0;i1<128;i1++)
