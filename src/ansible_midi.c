@@ -27,6 +27,8 @@ static void set_cv_pitch(uint16_t *cv, u8 num);
 static void set_cv_velocity(uint16_t *cv, u8 vel);
 static void set_cv_cc(uint16_t *cv, u8 value);
 
+static void set_voice_allocation(voicing_mode v);
+
 static void poly_note_on(u8 ch, u8 num, u8 vel);
 static void poly_note_off(u8 ch, u8 num, u8 vel);
 static void poly_pitch_bend(u8 ch, u16 bend);
@@ -79,6 +81,7 @@ static midi_behavior_t active_behavior = {
 	.control_change = NULL
 };
 
+static note_pool_t notes[4];
 static midi_voice_flags_t flags[4];
 static uint16_t aout[4];
 
@@ -95,10 +98,10 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTr] = &handler_StandardTr;
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
-		clock = &clock_midi_standard; //REMOVE?
-		clock_set(f.midi_standard_state.clock_period);
+
+		set_voice_allocation(standard_state.voicing);
+		clock_set(standard_state.clock_period);
 		process_ii = &ii_midi_standard;
-		notes_init();
 		update_leds(1);
 		break;
 	case mMidiArp:
@@ -156,13 +159,62 @@ static inline void set_cv_cc(uint16_t *cv, u8 value) {
 }
 
 
+static void set_voice_allocation(voicing_mode v) {
+	// start from a clean slate
+	for (int i = 0; i < 4; i++) {
+		midi_flags_init(&(flags[i]));
+		notes_init(&(notes[i]));
+		aout[i] = false;
+	}
+	update_dacs(aout);
+	clr_tr(TR1);
+	clr_tr(TR2);
+	clr_tr(TR3);
+	clr_tr(TR4);
 
-
-
-
-
-
-
+	// config behavior, clock, flags, etc.
+	switch (v) {
+	case eVoicePoly:
+		active_behavior.note_on = &poly_note_on;
+		active_behavior.note_off = &poly_note_off;
+		active_behavior.channel_pressure = NULL;
+		active_behavior.pitch_bend = &poly_pitch_bend;
+		active_behavior.control_change = &poly_control_change;
+		clock = &clock_null;
+		print_dbg("\r\n standard: voice poly");
+		break;
+	case eVoiceMono:
+		active_behavior.note_on = &mono_note_on;
+		active_behavior.note_off = &mono_note_off;
+		active_behavior.channel_pressure = NULL;
+		active_behavior.pitch_bend = &mono_pitch_bend;
+		active_behavior.control_change = &mono_control_change;
+		clock = &clock_midi_standard;
+		flags[0].legato = 1;
+		print_dbg("\r\n standard: voice mono");
+		break;
+	case eVoiceMulti:
+		active_behavior.note_on = &multi_note_on;
+		active_behavior.note_off = &multi_note_off;
+		active_behavior.channel_pressure = NULL;
+		active_behavior.pitch_bend = &multi_pitch_bend;
+		active_behavior.control_change = &multi_control_change;
+		clock = &clock_null;
+		print_dbg("\r\n standard: voice multi");
+		break;
+	case eVoiceFixed:
+		active_behavior.note_on = &fixed_note_on;
+		active_behavior.note_off = &fixed_note_off;
+		active_behavior.channel_pressure = NULL;
+		active_behavior.pitch_bend = NULL;
+		active_behavior.control_change = &fixed_control_change;
+		clock = &clock_null;
+		print_dbg("\r\n standard: voice fixed");
+		break;
+	default:
+		print_dbg("\r\n standard: bad voice mode");
+	}
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -197,60 +249,8 @@ void handler_StandardKey(s32 data) {
 		if (standard_state.voicing >= eVoiceMAX) {
 			standard_state.voicing = eVoicePoly;
 		}
-
-		switch (standard_state.voicing) {
-		case eVoicePoly:
-			active_behavior.note_on = &poly_note_on;
-			active_behavior.note_off = &poly_note_off;
-			active_behavior.channel_pressure = NULL;
-			active_behavior.pitch_bend = &poly_pitch_bend;
-			active_behavior.control_change = &poly_control_change;
-			clock = &clock_null;
-			print_dbg("\r\n standard: voice poly");
-			break;
-		case eVoiceMono:
-			active_behavior.note_on = &mono_note_on;
-			active_behavior.note_off = &mono_note_off;
-			active_behavior.channel_pressure = NULL;
-			active_behavior.pitch_bend = &mono_pitch_bend;
-			active_behavior.control_change = &mono_control_change;
-			clock = &clock_midi_standard;
-			print_dbg("\r\n standard: voice mono");
-			break;
-		case eVoiceMulti:
-			active_behavior.note_on = &multi_note_on;
-			active_behavior.note_off = &multi_note_off;
-			active_behavior.channel_pressure = NULL;
-			active_behavior.pitch_bend = &multi_pitch_bend;
-			active_behavior.control_change = &multi_control_change;
-			clock = &clock_null;
-			print_dbg("\r\n standard: voice multi");
-			break;
-		case eVoiceFixed:
-			active_behavior.note_on = &fixed_note_on;
-			active_behavior.note_off = &fixed_note_off;
-			active_behavior.channel_pressure = NULL;
-			active_behavior.pitch_bend = NULL;
-			active_behavior.control_change = &fixed_control_change;
-			clock = &clock_null;
-			print_dbg("\r\n standard: voice fixed");
-			break;
-		default:
-			print_dbg("\r\n standard: bad voice mode");
-		}
-		
-		// start from a clean slate
-		for (int i = 0; i < 4; i++) {
-			midi_flags_init(&(flags[i]));
-			aout[i] = false;
-		}
-		update_dacs(aout);
-		clr_tr(TR1);
-		clr_tr(TR2);
-		clr_tr(TR3);
-		clr_tr(TR4);
+		set_voice_allocation(standard_state.voicing);
 	}
-
 }
 
 void handler_StandardTr(s32 data) { 
@@ -296,7 +296,7 @@ static void mono_note_on(u8 ch, u8 num, u8 vel) {
 		return;
 
 	// keep track of held notes for legato
-	notes_hold(num, vel);
+	notes_hold(&notes[0], num, vel);
 	set_cv_pitch(MONO_PITCH_CV, num);
 	set_cv_velocity(MONO_VELOCITY_CV, vel);
 	update_dacs(aout);
@@ -311,8 +311,8 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 		return;
 
 	if (flags[0].sustain == 0) {
-		notes_release(num);
-		prior = notes_get(kNotePriorityLast);
+		notes_release(&notes[0], num);
+		prior = notes_get(&notes[0], kNotePriorityLast);
 		if (prior) {
 			set_cv_pitch(MONO_PITCH_CV, prior->num);
 			set_cv_velocity(MONO_VELOCITY_CV, prior->vel);
@@ -329,7 +329,7 @@ static void mono_pitch_bend(u8 ch, u16 bend) {
 
 static void mono_sustain(u8 ch, u8 val) {
 	if (val < 64) {
-		notes_init();
+		notes_init(&notes[0]);
 		clr_tr(TR1);
 		flags[0].sustain = 0;
 	}
