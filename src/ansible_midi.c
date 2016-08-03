@@ -19,6 +19,7 @@
 #define MONO_MOD_CV &(aout[2])
 #define MONO_BEND_CV &(aout[3])
 
+
 //------------------------------
 //------ prototypes
 
@@ -26,15 +27,27 @@ static void set_cv_pitch(uint16_t *cv, u8 num);
 static void set_cv_velocity(uint16_t *cv, u8 vel);
 static void set_cv_cc(uint16_t *cv, u8 value);
 
-static void standard_note_on(u8 ch, u8 num, u8 vel);
-static void standard_note_off(u8 ch, u8 num, u8 vel);
-static void standard_channel_pressure(u8 ch, u8 val);
-static void standard_pitch_bend(u8 ch, u16 bend);
-static void standard_sustain(u8 ch, u8 val);
-static void standard_control_change(u8 ch, u8 num, u8 val);
+static void poly_note_on(u8 ch, u8 num, u8 vel);
+static void poly_note_off(u8 ch, u8 num, u8 vel);
+static void poly_pitch_bend(u8 ch, u16 bend);
+static void poly_sustain(u8 ch, u8 val);
+static void poly_control_change(u8 ch, u8 num, u8 val);
 
-static void print_standard_state(midi_standard_state_t *s);
+static void mono_note_on(u8 ch, u8 num, u8 vel);
+static void mono_note_off(u8 ch, u8 num, u8 vel);
+static void mono_pitch_bend(u8 ch, u16 bend);
+static void mono_sustain(u8 ch, u8 val);
+static void mono_control_change(u8 ch, u8 num, u8 val);
 
+static void multi_note_on(u8 ch, u8 num, u8 vel);
+static void multi_note_off(u8 ch, u8 num, u8 vel);
+static void multi_pitch_bend(u8 ch, u16 bend);
+static void multi_sustain(u8 ch, u8 val);
+static void multi_control_change(u8 ch, u8 num, u8 val);
+
+static void fixed_note_on(u8 ch, u8 num, u8 vel);
+static void fixed_note_off(u8 ch, u8 num, u8 vel);
+static void fixed_control_change(u8 ch, u8 num, u8 val);
 
 
 //-----------------------------
@@ -56,16 +69,17 @@ const u16 SEMI[128] = {
 };
 
 static midi_standard_state_t standard_state;
-static midi_behavior_t standard_behavior = {
-	.note_on = &standard_note_on,
-	.note_off = &standard_note_off,
-	.channel_pressure = &standard_channel_pressure,
-	.pitch_bend = &standard_pitch_bend,
-	.control_change = &standard_control_change
+static midi_arp_state_t *arp_state = NULL;
+
+static midi_behavior_t active_behavior = {
+	.note_on = NULL,
+	.note_off = NULL,
+	.channel_pressure = NULL,
+	.pitch_bend = NULL,
+	.control_change = NULL
 };
 
-static midi_arp_state_t *arp_state = NULL;
-static midi_behavior_t behavior_arp;
+
 
 
 static u8 sustain_active = 0; // TODO
@@ -84,7 +98,7 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTr] = &handler_StandardTr;
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
-		clock = &clock_midi_standard;
+		clock = &clock_midi_standard; //REMOVE?
 		clock_set(f.midi_standard_state.clock_period);
 		process_ii = &ii_midi_standard;
 		notes_init();
@@ -189,15 +203,39 @@ void handler_StandardKey(s32 data) {
 
 		switch (standard_state.voicing) {
 		case eVoicePoly:
+			active_behavior.note_on = &poly_note_on;
+			active_behavior.note_off = &poly_note_off;
+			active_behavior.channel_pressure = NULL;
+			active_behavior.pitch_bend = &poly_pitch_bend;
+			active_behavior.control_change = &poly_control_change;
+			clock = &clock_null;
 			print_dbg("\r\n standard: voice poly");
 			break;
 		case eVoiceMono:
+			active_behavior.note_on = &mono_note_on;
+			active_behavior.note_off = &mono_note_off;
+			active_behavior.channel_pressure = NULL;
+			active_behavior.pitch_bend = &mono_pitch_bend;
+			active_behavior.control_change = &mono_control_change;
+			clock = &clock_midi_standard;
 			print_dbg("\r\n standard: voice mono");
 			break;
 		case eVoiceMulti:
+			active_behavior.note_on = &multi_note_on;
+			active_behavior.note_off = &multi_note_off;
+			active_behavior.channel_pressure = NULL;
+			active_behavior.pitch_bend = &multi_pitch_bend;
+			active_behavior.control_change = &multi_control_change;
+			clock = &clock_null;
 			print_dbg("\r\n standard: voice multi");
 			break;
 		case eVoiceFixed:
+			active_behavior.note_on = &fixed_note_on;
+			active_behavior.note_off = &fixed_note_off;
+			active_behavior.channel_pressure = NULL;
+			active_behavior.pitch_bend = NULL;
+			active_behavior.control_change = &fixed_control_change;
+			clock = &clock_null;
 			print_dbg("\r\n standard: voice fixed");
 			break;
 		default:
@@ -227,91 +265,170 @@ void handler_StandardTrNormal(s32 data) {
 
 void handler_StandardMidiPacket(s32 data) {
 	// print_dbg("\r\n> standard midi packet");
-	midi_packet_parse(&standard_behavior, (u32)data);
+	midi_packet_parse(&active_behavior, (u32)data);
 }
 
-static void standard_note_on(u8 ch, u8 num, u8 vel) {
+////////////////////////////////////////////////////////////////////////////////
+///// poly behavior (standard)
+
+static void poly_note_on(u8 ch, u8 num, u8 vel) {
+}
+
+static void poly_note_off(u8 ch, u8 num, u8 vel) {
+}
+
+static void poly_pitch_bend(u8 ch, u16 bend) {
+}
+
+static void poly_sustain(u8 ch, u8 val) {
+}
+
+static void poly_control_change(u8 ch, u8 num, u8 val) {
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+///// mono behavior (standard)
+
+static void mono_note_on(u8 ch, u8 num, u8 vel) {
 	if (num > MIDI_NOTE_MAX)
 		// drop notes outside CV range
 		// FIXME: update for ansible
 		return;
 
-	switch (standard_state.voicing) {
-	case eVoicePoly:
-		break;
-		
-	case eVoiceMono:
-		// keep track of held notes for legato
-		notes_hold(num, vel);
-		set_cv_pitch(MONO_PITCH_CV, num);
-		set_cv_velocity(MONO_VELOCITY_CV, vel);
-		update_dacs(aout);
-		set_tr(TR1);
-		break;
-		
-	case eVoiceMulti:
-		break;
-		
-	case eVoiceFixed:
-		break;
-	}
+	// keep track of held notes for legato
+	notes_hold(num, vel);
+	set_cv_pitch(MONO_PITCH_CV, num);
+	set_cv_velocity(MONO_VELOCITY_CV, vel);
+	update_dacs(aout);
+	set_tr(TR1);
 }
 
-static void standard_note_off(u8 ch, u8 num, u8 vel) {
+static void mono_note_off(u8 ch, u8 num, u8 vel) {
 	const held_note_t *prior;
 	
 	if (num > MIDI_NOTE_MAX)
 		// drop notes outside CV range
 		return;
 
-	switch (standard_state.voicing) {
-	case eVoicePoly:
-		break;
-		
-	case eVoiceMono:
-		if (sustain_active == 0) {
-			notes_release(num);
-			prior = notes_get(kNotePriorityLast);
-			if (prior) {
-				set_cv_pitch(MONO_PITCH_CV, prior->num);
-				set_cv_velocity(MONO_VELOCITY_CV, prior->vel);
-				update_dacs(aout);
-			}
-			else {
-				clr_tr(TR1);
-			}
+	if (sustain_active == 0) {
+		notes_release(num);
+		prior = notes_get(kNotePriorityLast);
+		if (prior) {
+			set_cv_pitch(MONO_PITCH_CV, prior->num);
+			set_cv_velocity(MONO_VELOCITY_CV, prior->vel);
+			update_dacs(aout);
 		}
-		break;
-		
-	case eVoiceMulti:
-		break;
-		
-	case eVoiceFixed:
-		break;
+		else {
+			clr_tr(TR1);
+		}
 	}
 }
 
-static void standard_channel_pressure(u8 ch, u8 val) {
+static void mono_pitch_bend(u8 ch, u16 bend) {
 }
 
-static void standard_pitch_bend(u8 ch, u16 bend) {
+static void mono_sustain(u8 ch, u8 val) {
 }
 
-static void standard_sustain(u8 ch, u8 val) {
-}
-
-static void standard_control_change(u8 ch, u8 num, u8 val) {
+static void mono_control_change(u8 ch, u8 num, u8 val) {
 		switch (num) {
 		case 1:  // mod wheel
 			set_cv_cc(MONO_MOD_CV, val);
 			update_dacs(aout);
 			break;
 		case 64:  // sustain pedal
-			standard_sustain(ch, val);
+			mono_sustain(ch, val);
 			break;
 		default:
 			break;
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///// multi behavior (standard)
+
+static void multi_note_on(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
+	// TODO: legato
+	
+	set_cv_cc(&(aout[ch]), num);
+	update_dacs(aout);
+	
+	switch (ch) {
+	case 0:
+		set_tr(TR1);
+		break;
+	case 1:
+		set_tr(TR2);
+		break;
+	case 2:
+		set_tr(TR3);
+		break;
+	case 3:
+		set_tr(TR4);
+		break;
+	}
+}
+
+static void multi_note_off(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
+	// TODO: legato and sustain
+	
+	switch (ch) {
+	case 0:
+		clr_tr(TR1);
+		break;
+	case 1:
+		clr_tr(TR2);
+		break;
+	case 2:
+		clr_tr(TR3);
+		break;
+	case 3:
+		clr_tr(TR4);
+		break;
+	}
+}
+
+static void multi_pitch_bend(u8 ch, u16 bend) {
+	if (ch > 3)
+		return;
+}
+
+static void multi_sustain(u8 ch, u8 val) {
+	if (ch > 3)
+		return;
+}
+
+static void multi_control_change(u8 ch, u8 num, u8 val) {
+	if (ch > 3)
+		return;
+
+	switch (num) {
+		case 64:  // sustain pedal
+			multi_sustain(ch, val);
+			break;
+		default:
+			break;
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+///// fixed behavior (standard)
+
+static void fixed_note_on(u8 ch, u8 num, u8 vel) {
+}
+
+static void fixed_note_off(u8 ch, u8 num, u8 vel) {
+}
+
+static void fixed_control_change(u8 ch, u8 num, u8 val) {
 }
 
 
