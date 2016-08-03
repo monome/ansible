@@ -91,7 +91,6 @@ static void handler_FrontShort(s32 data);
 static void handler_FrontLong(s32 data);
 static void handler_MidiConnect(s32 data);
 static void handler_MidiDisconnect(s32 data);
-static void handler_MidiPacket(s32 data);
 
 static void ii_null(uint8_t *d, uint8_t l);
 
@@ -235,10 +234,6 @@ static void handler_MidiDisconnect(s32 data) {
 	set_mode(mTT);
 }
 
-static void handler_MidiPacket(s32 data) {
-	print_dbg("\r\n> midi packet");
-}
-
 static void handler_Front(s32 data) {
 	// print_dbg("\r\n+ front ");
 	// print_dbg_ulong(data);
@@ -351,7 +346,7 @@ static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventKey ]	= &handler_None ;
 	app_event_handlers[ kEventMidiConnect ]	    = &handler_MidiConnect ;
 	app_event_handlers[ kEventMidiDisconnect ]  = &handler_MidiDisconnect ;
-	app_event_handlers[ kEventMidiPacket ]      = &handler_MidiPacket ;
+	app_event_handlers[ kEventMidiPacket ]      = &handler_None;
 }
 
 // app event loop
