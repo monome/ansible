@@ -79,10 +79,7 @@ static midi_behavior_t active_behavior = {
 	.control_change = NULL
 };
 
-
-
-
-static u8 sustain_active = 0; // TODO
+static midi_voice_flags_t flags[4];
 static uint16_t aout[4];
 
 
@@ -243,7 +240,10 @@ void handler_StandardKey(s32 data) {
 		}
 		
 		// start from a clean slate
-		aout[0] = aout[1] = aout[2] = aout[3] = 0;
+		for (int i = 0; i < 4; i++) {
+			midi_flags_init(&(flags[i]));
+			aout[i] = false;
+		}
 		update_dacs(aout);
 		clr_tr(TR1);
 		clr_tr(TR2);
@@ -264,7 +264,6 @@ void handler_StandardTrNormal(s32 data) {
 }
 
 void handler_StandardMidiPacket(s32 data) {
-	// print_dbg("\r\n> standard midi packet");
 	midi_packet_parse(&active_behavior, (u32)data);
 }
 
@@ -311,7 +310,7 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 		// drop notes outside CV range
 		return;
 
-	if (sustain_active == 0) {
+	if (flags[0].sustain == 0) {
 		notes_release(num);
 		prior = notes_get(kNotePriorityLast);
 		if (prior) {
@@ -329,6 +328,14 @@ static void mono_pitch_bend(u8 ch, u16 bend) {
 }
 
 static void mono_sustain(u8 ch, u8 val) {
+	if (val < 64) {
+		notes_init();
+		clr_tr(TR1);
+		flags[0].sustain = 0;
+	}
+	else {
+		flags[0].sustain = 1;
+	}
 }
 
 static void mono_control_change(u8 ch, u8 num, u8 val) {
@@ -348,15 +355,7 @@ static void mono_control_change(u8 ch, u8 num, u8 val) {
 ////////////////////////////////////////////////////////////////////////////////
 ///// multi behavior (standard)
 
-static void multi_note_on(u8 ch, u8 num, u8 vel) {
-	if (ch > 3 || num > MIDI_NOTE_MAX)
-		return;
-
-	// TODO: legato
-	
-	set_cv_cc(&(aout[ch]), num);
-	update_dacs(aout);
-	
+inline static void multi_tr_set(u8 ch) {
 	switch (ch) {
 	case 0:
 		set_tr(TR1);
@@ -373,12 +372,7 @@ static void multi_note_on(u8 ch, u8 num, u8 vel) {
 	}
 }
 
-static void multi_note_off(u8 ch, u8 num, u8 vel) {
-	if (ch > 3 || num > MIDI_NOTE_MAX)
-		return;
-
-	// TODO: legato and sustain
-	
+inline static void multi_tr_clr(u8 ch) {
 	switch (ch) {
 	case 0:
 		clr_tr(TR1);
@@ -395,6 +389,29 @@ static void multi_note_off(u8 ch, u8 num, u8 vel) {
 	}
 }
 
+
+static void multi_note_on(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
+	// TODO: legato
+
+	set_cv_cc(&(aout[ch]), num);
+	update_dacs(aout);
+	multi_tr_set(ch);
+}
+
+static void multi_note_off(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
+	// TODO: legato?
+
+	if (flags[ch].sustain == 0) {
+		multi_tr_clr(ch);
+	}
+}
+
 static void multi_pitch_bend(u8 ch, u16 bend) {
 	if (ch > 3)
 		return;
@@ -403,6 +420,14 @@ static void multi_pitch_bend(u8 ch, u16 bend) {
 static void multi_sustain(u8 ch, u8 val) {
 	if (ch > 3)
 		return;
+
+	if (val < 64) {
+		multi_tr_clr(ch);
+		flags[ch].sustain = 0;
+	}
+	else {
+		flags[ch].sustain = 1;
+	}
 }
 
 static void multi_control_change(u8 ch, u8 num, u8 val) {
