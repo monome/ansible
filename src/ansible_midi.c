@@ -50,6 +50,7 @@ static void multi_pitch_bend(u8 ch, u16 bend);
 static void multi_sustain(u8 ch, u8 val);
 static void multi_control_change(u8 ch, u8 num, u8 val);
 
+static void fixed_write_mapping(const fixed_mapping_t *dest, const fixed_mapping_t *src);
 static void fixed_start_learning(void);
 static bool fixed_finalize_learning(bool cancel);
 static void fixed_note_on(u8 ch, u8 num, u8 vel);
@@ -251,20 +252,22 @@ static void set_voice_allocation(voicing_mode v) {
 ///// handlers (standard)
 
 void default_midi_standard() {
+	fixed_mapping_t m;
+
 	flashc_memset32((void*)&(f.midi_standard_state.clock_period), 100, 4, true);
 	flashc_memset8((void*)&(f.midi_standard_state.voicing), eVoicePoly, 1, true);
 
-	// fixed note mapping
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[0]), 60, 1, true); // C4
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[1]), 62, 1, true); // D4
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[2]), 64, 1, true); // E4
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[3]), 65, 1, true); // F4
+	m.notes[0] = 60; // C4
+	m.notes[1] = 62; // D4
+	m.notes[2] = 64; // E4
+	m.notes[3] = 65; // F4
 
-	// fixed cc mapping
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[0]), 16, 1, true);
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[1]), 17, 1, true);
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[2]), 18, 1, true);
-	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[3]), 19, 1, true);
+	m.cc[0] = 16;
+	m.cc[1] = 17;
+	m.cc[2] = 18;
+	m.cc[3] = 19;
+
+	fixed_write_mapping(&(f.midi_standard_state.fixed), &m);
 }
 
 void clock_midi_standard(uint8_t phase) {
@@ -569,6 +572,13 @@ static void multi_control_change(u8 ch, u8 num, u8 val) {
 ////////////////////////////////////////////////////////////////////////////////
 ///// fixed behavior (standard)
 
+static void fixed_write_mapping(const fixed_mapping_t *dest, const fixed_mapping_t *src) {
+	for (u8 i = 0; i < 4; i++) {
+		flashc_memset8((void*)&(dest->notes[i]), src->notes[i], 1, true);
+		flashc_memset8((void*)&(dest->cc[i]), src->cc[i], 1, true);
+	}
+}
+
 static void fixed_start_learning(void) {
 	print_dbg("\r\n standard: start fixed mode learn");
 	fixed_learn.learning = 1;
@@ -597,7 +607,7 @@ static bool fixed_finalize_learning(bool cancel) {
 		update_dacs(aout);
 
 		if (!cancel) {
-			// TODO: save to nvram
+			fixed_write_mapping(&(f.midi_standard_state.fixed), &(standard_state.fixed));
 		}
 		return true;
 	}
