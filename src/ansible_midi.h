@@ -1,5 +1,6 @@
 #pragma once
 
+// standard midi modes
 typedef enum {
 	eVoicePoly = 0,
 	eVoiceMono,
@@ -9,9 +10,17 @@ typedef enum {
 	eVoiceMAX
 } voicing_mode;
 
+// note, cc mappings for fixed voice mode
+typedef struct {
+	u8 notes[4];
+	u8 cc[4];
+} fixed_mapping_t;
+
+// standard mode values saved to nvram
 typedef struct {
 	uint32_t clock_period;
 	u8 voicing;
+	fixed_mapping_t fixed;
 } midi_standard_state_t;
 
 typedef struct {

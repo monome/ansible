@@ -50,6 +50,8 @@ static void multi_pitch_bend(u8 ch, u16 bend);
 static void multi_sustain(u8 ch, u8 val);
 static void multi_control_change(u8 ch, u8 num, u8 val);
 
+static void fixed_start_learning(void);
+static bool fixed_finalize_learning(bool cancel);
 static void fixed_note_on(u8 ch, u8 num, u8 vel);
 static void fixed_note_off(u8 ch, u8 num, u8 vel);
 static void fixed_control_change(u8 ch, u8 num, u8 val);
@@ -73,6 +75,7 @@ const u16 SEMI[128] = {
 	4164, 4198, 4232, 4266, 4300, 4334
 };
 
+// copy of nvram state for editing
 static midi_standard_state_t standard_state;
 static midi_arp_state_t *arp_state = NULL;
 
@@ -84,11 +87,27 @@ static midi_behavior_t active_behavior = {
 	.control_change = NULL
 };
 
+typedef struct {
+	u8 learning : 1;
+	u8 note_idx : 3;
+	u8 cc_idx : 3;
+} fixed_learning_state_t;
+
+static fixed_learning_state_t fixed_learn;
 static note_pool_t notes[4];
 static voice_flags_t flags[4];
 static voice_state_t voice_state;
 static uint16_t aout[4];
 
+// TODO: move to main.c?
+typedef struct {
+	u8 key1 : 1;
+	u8 key2 : 1;
+	u8 front : 1;
+	u8 normaled : 1; // isn't this tracked elsewhere?
+} key_state_t;
+
+static key_state_t key_state;
 
 void set_mode_midi(void) {
 	switch(f.state.mode) {
@@ -128,13 +147,19 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventFrontLong] = &handler_MidiFrontLong;
 	}
 
+	key_state.key1 = key_state.key2 = key_state.front = 0;
+	
 	aout[0] = aout[1] = aout[2] = aout[3] = 0;
 	update_dacs(aout);
 }
 
 
 void handler_MidiFrontShort(s32 data) {
-	;;
+	print_dbg("\r\n midi front short: ");
+	print_dbg_ulong(data);
+	if (standard_state.voicing == eVoiceFixed && key_state.key2) {
+		fixed_start_learning();
+	}
 }
 
 void handler_MidiFrontLong(s32 data) {
@@ -228,6 +253,18 @@ static void set_voice_allocation(voicing_mode v) {
 void default_midi_standard() {
 	flashc_memset32((void*)&(f.midi_standard_state.clock_period), 100, 4, true);
 	flashc_memset8((void*)&(f.midi_standard_state.voicing), eVoicePoly, 1, true);
+
+	// fixed note mapping
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[0]), 60, 1, true); // C4
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[1]), 62, 1, true); // D4
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[2]), 64, 1, true); // E4
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.notes[3]), 65, 1, true); // F4
+
+	// fixed cc mapping
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[0]), 16, 1, true);
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[1]), 17, 1, true);
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[2]), 18, 1, true);
+	flashc_memset8((void*)&(f.midi_standard_state.fixed.cc[3]), 19, 1, true);
 }
 
 void clock_midi_standard(uint8_t phase) {
@@ -242,19 +279,52 @@ void ii_midi_standard(uint8_t *d, uint8_t l) {
 }
 
 void handler_StandardKey(s32 data) { 
-	// print_dbg("\r\n> standard key");
-	// print_dbg_ulong(data);
+	//print_dbg("\r\n> standard key");
+	//print_dbg_ulong(data);
 
-	if (data == 1) { // key 1 press
-		// TODO: panic, all notes off
-		print_dbg("\r\n standard: panic");
-	}
-	else if (data == 3) {   // key 2 press		
-		standard_state.voicing++;
-		if (standard_state.voicing >= eVoiceMAX) {
-			standard_state.voicing = eVoicePoly;
+	// 0 == key 1 release
+	// 1 == key 1 press
+	// 2 == key 2 release
+	// 3 == key 2 press
+
+	switch (data) {
+
+	case 0: // key 1 release
+		key_state.key1 = 0;
+		//print_dbg("\r\n standard key1: release");
+		if (fixed_learn.learning == 1 ) {
+			print_dbg("; canceling fixed mapping learning");
+			fixed_finalize_learning(true);
 		}
-		set_voice_allocation(standard_state.voicing);
+		else {
+			// TODO: panic, all notes off
+		}
+		break;
+
+	case 1:
+		key_state.key1 = 1;
+		break;
+
+	case 2: // key 2 release
+		key_state.key2 = 0;
+		//print_dbg("\r\n standard key2: release");
+		if (fixed_learn.learning == 1) {
+			// in learning mode; do nothing
+			print_dbg("; noop, in learning mode");
+		}
+		else {
+			// switch voicing mode
+			standard_state.voicing++;
+			if (standard_state.voicing >= eVoiceMAX) {
+				standard_state.voicing = eVoicePoly;
+			}
+			set_voice_allocation(standard_state.voicing);
+		}
+		break;
+
+	case 3:
+		key_state.key2 = 1;
+		break;
 	}
 }
 
@@ -442,7 +512,6 @@ inline static void multi_tr_clr(u8 ch) {
 	}
 }
 
-
 static void multi_note_on(u8 ch, u8 num, u8 vel) {
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
@@ -500,13 +569,151 @@ static void multi_control_change(u8 ch, u8 num, u8 val) {
 ////////////////////////////////////////////////////////////////////////////////
 ///// fixed behavior (standard)
 
+static void fixed_start_learning(void) {
+	print_dbg("\r\n standard: start fixed mode learn");
+	fixed_learn.learning = 1;
+	fixed_learn.note_idx = 0;
+	fixed_learn.cc_idx = 0;
+	for (u8 i = 0; i < 4; i++) {
+		multi_tr_clr(i);
+		aout[i] = 0;
+	}
+	update_dacs(aout);
+}
+
+static bool fixed_finalize_learning(bool cancel) {
+	if (cancel || (fixed_learn.note_idx == 4 && fixed_learn.cc_idx == 4)) {
+		print_dbg("\r\n standard: fixed learning complete");
+		fixed_learn.learning = 0;
+		// clear all tr and cv
+		for (u8 i = 0; i < 4; i++) {
+			multi_tr_clr(i);
+			aout[i] = 0;
+			print_dbg("\r\n n: ");
+			print_dbg_ulong(standard_state.fixed.notes[i]);
+			print_dbg(" cc: ");
+			print_dbg_ulong(standard_state.fixed.cc[i]);
+		}
+		update_dacs(aout);
+
+		if (!cancel) {
+			// TODO: save to nvram
+		}
+		return true;
+	}
+
+	// learning not finalized
+	return false;
+}
+
 static void fixed_note_on(u8 ch, u8 num, u8 vel) {
+	static bool initial_set = false;
+
+	if (fixed_learn.learning) {
+		if (fixed_learn.note_idx < 4) {
+			if (fixed_learn.note_idx == 0 && initial_set == false) {
+				initial_set = true;
+				standard_state.fixed.notes[fixed_learn.note_idx] = num;
+				multi_tr_set(fixed_learn.note_idx); // indicate mapping
+				//print_dbg("\n\r fln: ");
+				//print_dbg_ulong(fixed_learn.note_idx);
+			}
+
+			// different note; advance to next mapping
+			if (num != standard_state.fixed.notes[fixed_learn.note_idx]) {
+				fixed_learn.note_idx++;
+				if (fixed_learn.note_idx < 4) {
+					standard_state.fixed.notes[fixed_learn.note_idx] = num;
+					multi_tr_set(fixed_learn.note_idx); // indicate mapping
+					//print_dbg("\n\r fln: ");
+					//print_dbg_ulong(fixed_learn.note_idx);
+					if (fixed_learn.note_idx == 3) {
+						fixed_learn.note_idx++;
+					}
+				}
+			}
+		}
+
+		if (fixed_finalize_learning(false)) {
+			// prep for next learning pass
+			initial_set = false;
+		}
+	}
+	else {
+		for (u8 i = 0; i < 4; i++) {
+			if (standard_state.fixed.notes[i] == num) {
+				multi_tr_set(i);
+				// TODO: should these be gates or triggers?
+				break;
+			}
+		}
+	}
 }
 
 static void fixed_note_off(u8 ch, u8 num, u8 vel) {
+	if (!fixed_learn.learning) {
+		for (u8 i = 0; i < 4; i++) {
+			if (standard_state.fixed.notes[i] == num) {
+				multi_tr_clr(i);
+				break;
+			}
+		}
+	}
 }
 
 static void fixed_control_change(u8 ch, u8 num, u8 val) {
+	static bool initial_set = false;
+	
+	if (fixed_learn.learning) {
+		if (fixed_learn.cc_idx < 4) {
+			// initial state; first num always sets first channel
+			if (fixed_learn.cc_idx == 0 && initial_set == false) {
+				initial_set = true;
+				standard_state.fixed.cc[fixed_learn.cc_idx] = num;
+				//print_dbg("\n\r cc learn: assigned cc: ");
+				//print_dbg_ulong(num);
+				//print_dbg(" for ch: ");
+				//print_dbg_ulong(fixed_learn.cc_idx);
+			}
+
+			// different cc; advance to next mapping
+			if (num != standard_state.fixed.cc[fixed_learn.cc_idx]) {
+				fixed_learn.cc_idx++;
+				if (fixed_learn.cc_idx < 4) {
+					standard_state.fixed.cc[fixed_learn.cc_idx] = num;
+					//print_dbg("\n\r cc learn: assigned cc: ");
+					//print_dbg_ulong(num);
+					//print_dbg(" for ch: ");
+					//print_dbg_ulong(fixed_learn.cc_idx);
+					if (fixed_learn.cc_idx == 3) {
+						// immediately end learning instead of waiting around for
+						// a different cc to be sent..
+						fixed_learn.cc_idx++;
+					}
+				}
+			}
+			// update outputs to provide feedback
+			if (fixed_learn.cc_idx < 4) {
+				aout[fixed_learn.cc_idx] = val << 5;
+				update_dacs(aout);
+			}
+			//print_dbg("\n\r flcc: ");
+			//print_dbg_ulong(fixed_learn.cc_idx);
+		}
+		if (fixed_finalize_learning(false)) {
+			// prepare for next learning pass
+			initial_set = false;
+		}
+	}
+	else {
+		for (u8 i = 0; i < 4; i++) {
+			if (standard_state.fixed.cc[i] == num) {
+				aout[i] = val << 5;
+				update_dacs(aout);
+				break;
+			}
+		}
+	}
 }
 
 
