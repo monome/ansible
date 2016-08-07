@@ -41,6 +41,9 @@ static void mono_pitch_bend(u8 ch, u16 bend);
 static void mono_sustain(u8 ch, u8 val);
 static void mono_control_change(u8 ch, u8 num, u8 val);
 
+static void multi_tr_set(u8 ch);
+static void multi_tr_clr(u8 ch);
+
 static void multi_note_on(u8 ch, u8 num, u8 vel);
 static void multi_note_off(u8 ch, u8 num, u8 vel);
 static void multi_pitch_bend(u8 ch, u16 bend);
@@ -82,7 +85,8 @@ static midi_behavior_t active_behavior = {
 };
 
 static note_pool_t notes[4];
-static midi_voice_flags_t flags[4];
+static voice_flags_t flags[4];
+static voice_state_t voice_state;
 static uint16_t aout[4];
 
 
@@ -162,7 +166,7 @@ static inline void set_cv_cc(uint16_t *cv, u8 value) {
 static void set_voice_allocation(voicing_mode v) {
 	// start from a clean slate
 	for (int i = 0; i < 4; i++) {
-		midi_flags_init(&(flags[i]));
+		voice_flags_init(&(flags[i]));
 		notes_init(&(notes[i]));
 		aout[i] = false;
 	}
@@ -180,6 +184,7 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.channel_pressure = NULL;
 		active_behavior.pitch_bend = &poly_pitch_bend;
 		active_behavior.control_change = &poly_control_change;
+		voice_slot_init(&voice_state, kVoiceAllocRotate, 4); // TODO: count configurable?
 		clock = &clock_null;
 		print_dbg("\r\n standard: voice poly");
 		break;
@@ -271,18 +276,66 @@ void handler_StandardMidiPacket(s32 data) {
 ///// poly behavior (standard)
 
 static void poly_note_on(u8 ch, u8 num, u8 vel) {
+	u8 slot;
+	// get next slot
+	slot = voice_slot_next(&voice_state);
+	//ch = voice_slot_num(&voice_state, slot);
+	// if slot is active; steal slot, perform note off
+	if (voice_slot_active(&voice_state, slot)) {
+		// TODO: check for sustain
+		multi_tr_clr(slot);
+		// FIXME: here we clear tr but then immediately reset it for note
+		// on so the envelop wont retrigger. need some way to queue or
+		// pause long enough to have tr retrigger.
+		voice_slot_release(&voice_state, slot);
+	}
+	// preform note on for the slot's channel
+	multi_note_on(slot, num, vel);
+	// mark slot as active
+	voice_slot_activate(&voice_state, slot, num);
 }
 
 static void poly_note_off(u8 ch, u8 num, u8 vel) {
+	s8 slot;
+
+	// find slot allocated for note num (if any)
+	slot = voice_slot_find(&voice_state, num);
+	if (slot != -1) {
+		// TODO: check for sustain
+		multi_tr_clr(slot);
+		voice_slot_release(&voice_state, slot);
+	}
 }
 
 static void poly_pitch_bend(u8 ch, u16 bend) {
+	// bend all active slots/voices
 }
 
 static void poly_sustain(u8 ch, u8 val) {
+	u8 slot;
+
+	for (slot = 0; slot < MAX_VOICE_COUNT; slot++) {
+		ch = voice_state.voice[slot].num;
+		if (val < 64) {
+			// release active voices
+			if (voice_state.voice[slot].active) {
+				voice_state.voice[slot].active = 0;
+				multi_tr_clr(ch);
+			}
+			flags[ch].sustain = 0;
+		}
+		else {
+			flags[ch].sustain = 1;
+		}
+	}
 }
 
 static void poly_control_change(u8 ch, u8 num, u8 val) {
+	switch (num) {
+		case 64:  // sustain pedal
+			poly_sustain(ch, val);
+			break;
+	}
 }
 
 
