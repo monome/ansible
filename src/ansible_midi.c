@@ -194,7 +194,7 @@ static void set_voice_allocation(voicing_mode v) {
 	for (int i = 0; i < 4; i++) {
 		voice_flags_init(&(flags[i]));
 		notes_init(&(notes[i]));
-		aout[i] = false;
+		aout[i] = 0;
 	}
 	update_dacs(aout);
 	clr_tr(TR1);
@@ -222,6 +222,7 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.control_change = &mono_control_change;
 		clock = &clock_midi_standard;
 		flags[0].legato = 1;
+		mono_pitch_bend(0, MIDI_BEND_ZERO);
 		print_dbg("\r\n standard: voice mono");
 		break;
 	case eVoiceMulti:
@@ -331,7 +332,7 @@ void handler_StandardKey(s32 data) {
 	}
 }
 
-void handler_StandardTr(s32 data) { 
+void handler_StandardTr(s32 data) {
 	print_dbg("\r\n> standard tr => ");
 	print_dbg_ulong(data);
 }
@@ -381,7 +382,7 @@ static void poly_note_off(u8 ch, u8 num, u8 vel) {
 }
 
 static void poly_pitch_bend(u8 ch, u16 bend) {
-	// bend all active slots/voices
+	// TODO: bend all active slots/voices
 }
 
 static void poly_sustain(u8 ch, u8 val) {
@@ -451,17 +452,27 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 }
 
 static void mono_pitch_bend(u8 ch, u16 bend) {
+	// MAINT: assuming bend is always 14 bit; confirm 12-bit dac
+	aout[3] = bend >> 2;
+	update_dacs(aout);
 }
 
 static void mono_sustain(u8 ch, u8 val) {
 	if (val < 64) {
+		clr_tr(TR2);
+		flags[0].sustain = 0;
+		// release any held notes
 		notes_init(&notes[0]);
 		clr_tr(TR1);
-		flags[0].sustain = 0;
 	}
 	else {
+		set_tr(TR2);
 		flags[0].sustain = 1;
 	}
+}
+
+static void mono_generic(u8 ch, u8 val) {
+	(val < 64) ? clr_tr(TR3) : set_tr(TR3);
 }
 
 static void mono_control_change(u8 ch, u8 num, u8 val) {
@@ -473,6 +484,8 @@ static void mono_control_change(u8 ch, u8 num, u8 val) {
 		case 64:  // sustain pedal
 			mono_sustain(ch, val);
 			break;
+		case 80:  // generic
+			mono_generic(ch, val);
 		default:
 			break;
 	}
