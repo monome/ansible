@@ -232,6 +232,7 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.pitch_bend = &multi_pitch_bend;
 		active_behavior.control_change = &multi_control_change;
 		clock = &clock_null;
+		flags[0].legato = flags[1].legato = flags[2].legato = flags[3].legato = 1;
 		print_dbg("\r\n standard: voice multi");
 		break;
 	case eVoiceFixed:
@@ -532,27 +533,44 @@ static void multi_note_on(u8 ch, u8 num, u8 vel) {
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
 
-	// TODO: legato
-
-	set_cv_cc(&(aout[ch]), num);
+	if (flags[ch].legato) {
+		notes_hold(&notes[ch], num, vel);
+	}
+	set_cv_pitch(&(aout[ch]), num);
 	update_dacs(aout);
 	multi_tr_set(ch);
 }
 
 static void multi_note_off(u8 ch, u8 num, u8 vel) {
+	const held_note_t *prior;
+
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
 
-	// TODO: legato?
-
 	if (flags[ch].sustain == 0) {
-		multi_tr_clr(ch);
+		if (flags[ch].legato) {
+			notes_release(&notes[ch], num);
+			prior = notes_get(&notes[ch], kNotePriorityLast);
+			if (prior) {
+				set_cv_pitch(&(aout[ch]), prior->num);
+				update_dacs(aout);
+			}
+			else {
+				multi_tr_clr(ch);
+			}
+		}
+		else {
+			// legato is off
+			multi_tr_clr(ch);
+		}
 	}
 }
 
 static void multi_pitch_bend(u8 ch, u16 bend) {
 	if (ch > 3)
 		return;
+
+	// TODO:
 }
 
 static void multi_sustain(u8 ch, u8 val) {
@@ -562,6 +580,9 @@ static void multi_sustain(u8 ch, u8 val) {
 	if (val < 64) {
 		multi_tr_clr(ch);
 		flags[ch].sustain = 0;
+		if (flags[ch].legato) {
+			notes_init(&(notes[ch]));
+		}
 	}
 	else {
 		flags[ch].sustain = 1;
