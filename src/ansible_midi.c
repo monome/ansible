@@ -23,7 +23,7 @@
 //------------------------------
 //------ prototypes
 
-static void set_cv_pitch(uint16_t *cv, u8 num);
+static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset);
 static void set_cv_velocity(uint16_t *cv, u8 vel);
 static void set_cv_cc(uint16_t *cv, u8 value);
 
@@ -76,6 +76,46 @@ const u16 SEMI[128] = {
 	4164, 4198, 4232, 4266, 4300, 4334
 };
 
+// step = 4096.0 / (10 octave * 12.0 semitones per octave)
+// semi_per_octave = step * 12
+// bend_step = semi_per_octave / 512.0
+// [int(n * bend_step) for n in xrange(0,512)]
+const u16 BEND1[512] = {
+	0, 0, 1, 2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 10, 11, 12, 12, 13, 14, 15, 16, 16, 17,
+	18, 19, 20, 20, 21, 22, 23, 24, 24, 25, 26, 27, 28, 28, 29, 30, 31, 32, 32,
+	33, 34, 35, 36, 36, 37, 38, 39, 40, 40, 41, 42, 43, 44, 44, 45, 46, 47, 48,
+	48, 49, 50, 51, 52, 52, 53, 54, 55, 56, 56, 57, 58, 59, 60, 60, 61, 62, 63,
+	64, 64, 65, 66, 67, 68, 68, 69, 70, 71, 72, 72, 73, 74, 75, 76, 76, 77, 78,
+	79, 80, 80, 81, 82, 83, 84, 84, 85, 86, 87, 88, 88, 89, 90, 91, 92, 92, 93,
+	94, 95, 96, 96, 97, 98, 99, 100, 100, 101, 102, 103, 104, 104, 105, 106, 107,
+	108, 108, 109, 110, 111, 112, 112, 113, 114, 115, 116, 116, 117, 118, 119,
+	120, 120, 121, 122, 123, 124, 124, 125, 126, 127, 128, 128, 129, 130, 131,
+	132, 132, 133, 134, 135, 136, 136, 137, 138, 139, 140, 140, 141, 142, 143,
+	144, 144, 145, 146, 147, 148, 148, 149, 150, 151, 152, 152, 153, 154, 155,
+	156, 156, 157, 158, 159, 160, 160, 161, 162, 163, 164, 164, 165, 166, 167,
+	168, 168, 169, 170, 171, 172, 172, 173, 174, 175, 176, 176, 177, 178, 179,
+	180, 180, 181, 182, 183, 184, 184, 185, 186, 187, 188, 188, 189, 190, 191,
+	192, 192, 193, 194, 195, 196, 196, 197, 198, 199, 200, 200, 201, 202, 203,
+	204, 204, 205, 206, 207, 208, 208, 209, 210, 211, 212, 212, 213, 214, 215,
+	216, 216, 217, 218, 219, 220, 220, 221, 222, 223, 224, 224, 225, 226, 227,
+	228, 228, 229, 230, 231, 232, 232, 233, 234, 235, 236, 236, 237, 238, 239,
+	240, 240, 241, 242, 243, 244, 244, 245, 246, 247, 248, 248, 249, 250, 251,
+	252, 252, 253, 254, 255, 256, 256, 257, 258, 259, 260, 260, 261, 262, 263,
+	264, 264, 265, 266, 267, 268, 268, 269, 270, 271, 272, 272, 273, 274, 275,
+	276, 276, 277, 278, 279, 280, 280, 281, 282, 283, 284, 284, 285, 286, 287,
+	288, 288, 289, 290, 291, 292, 292, 293, 294, 295, 296, 296, 297, 298, 299,
+	300, 300, 301, 302, 303, 304, 304, 305, 306, 307, 308, 308, 309, 310, 311,
+	312, 312, 313, 314, 315, 316, 316, 317, 318, 319, 320, 320, 321, 322, 323,
+	324, 324, 325, 326, 327, 328, 328, 329, 330, 331, 332, 332, 333, 334, 335,
+	336, 336, 337, 338, 339, 340, 340, 341, 342, 343, 344, 344, 345, 346, 347,
+	348, 348, 349, 350, 351, 352, 352, 353, 354, 355, 356, 356, 357, 358, 359,
+	360, 360, 361, 362, 363, 364, 364, 365, 366, 367, 368, 368, 369, 370, 371,
+	372, 372, 373, 374, 375, 376, 376, 377, 378, 379, 380, 380, 381, 382, 383,
+	384, 384, 385, 386, 387, 388, 388, 389, 390, 391, 392, 392, 393, 394, 395,
+	396, 396, 397, 398, 399, 400, 400, 401, 402, 403, 404, 404, 405, 406, 407,
+	408, 408
+};
+
 // copy of nvram state for editing
 static midi_standard_state_t standard_state;
 static midi_arp_state_t *arp_state = NULL;
@@ -98,6 +138,7 @@ static fixed_learning_state_t fixed_learn;
 static note_pool_t notes[4];
 static voice_flags_t flags[4];
 static voice_state_t voice_state;
+static s16 pitch_offset[4];
 static uint16_t aout[4];
 
 // TODO: move to main.c?
@@ -174,8 +215,8 @@ void handler_MidiFrontLong(s32 data) {
 ////////////////////////////////////////////////////////////////////////////////
 ///// common cv utilities
 
-static void set_cv_pitch(uint16_t *cv, u8 num) {
-	*cv = SEMI[num];
+static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset) {
+	*cv = SEMI[num] + offset;
 }
 
 static void set_cv_velocity(uint16_t *cv, u8 vel) {
@@ -194,6 +235,7 @@ static void set_voice_allocation(voicing_mode v) {
 	for (int i = 0; i < 4; i++) {
 		voice_flags_init(&(flags[i]));
 		notes_init(&(notes[i]));
+		pitch_offset[i] = 0;
 		aout[i] = 0;
 	}
 	update_dacs(aout);
@@ -351,12 +393,10 @@ void handler_StandardMidiPacket(s32 data) {
 ///// poly behavior (standard)
 
 static void poly_note_on(u8 ch, u8 num, u8 vel) {
-	u8 slot;
-	// get next slot
-	slot = voice_slot_next(&voice_state);
-	//ch = voice_slot_num(&voice_state, slot);
-	// if slot is active; steal slot, perform note off
+	u8 slot = voice_slot_next(&voice_state);
+
 	if (voice_slot_active(&voice_state, slot)) {
+		// steal slot
 		// TODO: check for sustain
 		multi_tr_clr(slot);
 		// FIXME: here we clear tr but then immediately reset it for note
@@ -364,17 +404,13 @@ static void poly_note_on(u8 ch, u8 num, u8 vel) {
 		// pause long enough to have tr retrigger.
 		voice_slot_release(&voice_state, slot);
 	}
-	// preform note on for the slot's channel
-	multi_note_on(slot, num, vel);
-	// mark slot as active
+
 	voice_slot_activate(&voice_state, slot, num);
+	multi_note_on(slot, num, vel);
 }
 
 static void poly_note_off(u8 ch, u8 num, u8 vel) {
-	s8 slot;
-
-	// find slot allocated for note num (if any)
-	slot = voice_slot_find(&voice_state, num);
+	s8 slot = voice_slot_find(&voice_state, num);
 	if (slot != -1) {
 		// TODO: check for sustain
 		multi_tr_clr(slot);
@@ -383,7 +419,25 @@ static void poly_note_off(u8 ch, u8 num, u8 vel) {
 }
 
 static void poly_pitch_bend(u8 ch, u16 bend) {
-	// TODO: bend all active slots/voices
+	// MAINT: assuming bend is always 14 bit...
+	if (bend == MIDI_BEND_ZERO) {
+		pitch_offset[0] = 0;
+	}
+	else if (bend > MIDI_BEND_ZERO) {
+		bend -= MIDI_BEND_ZERO;
+		pitch_offset[0] = BEND1[bend >> 4];
+	}
+	else {
+		bend = MIDI_BEND_ZERO - bend - 1;
+		pitch_offset[0] = -BEND1[bend >> 4];
+	}
+
+	for (u8 i = 0; i < voice_state.count; i++) {
+		if (voice_state.voice[i].active) {
+			set_cv_pitch(&(aout[i]), voice_state.voice[i].num, pitch_offset[0]);
+		}
+	}
+	update_dacs(aout);
 }
 
 static void poly_sustain(u8 ch, u8 val) {
@@ -423,9 +477,9 @@ static void mono_note_on(u8 ch, u8 num, u8 vel) {
 		// FIXME: update for ansible
 		return;
 
-	// keep track of held notes for legato
+	// keep track of held notes for legato and pitch bend
 	notes_hold(&notes[0], num, vel);
-	set_cv_pitch(MONO_PITCH_CV, num);
+	set_cv_pitch(MONO_PITCH_CV, num, pitch_offset[0]);
 	set_cv_velocity(MONO_VELOCITY_CV, vel);
 	update_dacs(aout);
 	set_tr(TR1);
@@ -442,7 +496,7 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 		notes_release(&notes[0], num);
 		prior = notes_get(&notes[0], kNotePriorityLast);
 		if (prior) {
-			set_cv_pitch(MONO_PITCH_CV, prior->num);
+			set_cv_pitch(MONO_PITCH_CV, prior->num, pitch_offset[0]);
 			set_cv_velocity(MONO_VELOCITY_CV, prior->vel);
 			update_dacs(aout);
 		}
@@ -453,9 +507,25 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 }
 
 static void mono_pitch_bend(u8 ch, u16 bend) {
-	// MAINT: assuming bend is always 14 bit; confirm 12-bit dac
-	aout[3] = bend >> 2;
-	update_dacs(aout);
+	// MAINT: assuming bend is always 14 bit...
+	if (bend == MIDI_BEND_ZERO) {
+		pitch_offset[0] = 0;
+	}
+	else if (bend > MIDI_BEND_ZERO) {
+		bend -= MIDI_BEND_ZERO;
+		pitch_offset[0] = BEND1[bend >> 4];
+	}
+	else {
+		bend = MIDI_BEND_ZERO - bend - 1;
+		pitch_offset[0] = -BEND1[bend >> 4];
+	}
+
+	// re-set pitch to pick up changed offset
+	const held_note_t *active = notes_get(&(notes[0]), kNotePriorityLast);
+	if (active) {
+		set_cv_pitch(MONO_PITCH_CV, active->num, pitch_offset[0]);
+		update_dacs(aout);
+	}
 }
 
 static void mono_sustain(u8 ch, u8 val) {
@@ -479,7 +549,7 @@ static void mono_generic(u8 ch, u8 val) {
 static void mono_control_change(u8 ch, u8 num, u8 val) {
 		switch (num) {
 		case 1:  // mod wheel
-			set_cv_cc(MONO_MOD_CV, val);
+			//set_cv_cc(MONO_MOD_CV, val);
 			update_dacs(aout);
 			break;
 		case 64:  // sustain pedal
@@ -533,10 +603,8 @@ static void multi_note_on(u8 ch, u8 num, u8 vel) {
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
 
-	if (flags[ch].legato) {
-		notes_hold(&notes[ch], num, vel);
-	}
-	set_cv_pitch(&(aout[ch]), num);
+	notes_hold(&notes[ch], num, vel);
+	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
 	update_dacs(aout);
 	multi_tr_set(ch);
 }
@@ -548,11 +616,11 @@ static void multi_note_off(u8 ch, u8 num, u8 vel) {
 		return;
 
 	if (flags[ch].sustain == 0) {
+		notes_release(&notes[ch], num);
 		if (flags[ch].legato) {
-			notes_release(&notes[ch], num);
 			prior = notes_get(&notes[ch], kNotePriorityLast);
 			if (prior) {
-				set_cv_pitch(&(aout[ch]), prior->num);
+				set_cv_pitch(&(aout[ch]), prior->num, pitch_offset[ch]);
 				update_dacs(aout);
 			}
 			else {
@@ -570,7 +638,25 @@ static void multi_pitch_bend(u8 ch, u16 bend) {
 	if (ch > 3)
 		return;
 
-	// TODO:
+	// MAINT: assuming bend is always 14 bit...
+	if (bend == MIDI_BEND_ZERO) {
+		pitch_offset[ch] = 0;
+	}
+	else if (bend > MIDI_BEND_ZERO) {
+		bend -= MIDI_BEND_ZERO;
+		pitch_offset[ch] = BEND1[bend >> 4];
+	}
+	else {
+		bend = MIDI_BEND_ZERO - bend - 1;
+		pitch_offset[ch] = -BEND1[bend >> 4];
+	}
+
+	// re-set pitch to pick up changed offset
+	const held_note_t *active = notes_get(&(notes[ch]), kNotePriorityLast);
+	if (active) {
+		set_cv_pitch(&(aout[ch]), active->num, pitch_offset[ch]);
+		update_dacs(aout);
+	}
 }
 
 static void multi_sustain(u8 ch, u8 val) {
