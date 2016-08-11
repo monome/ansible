@@ -12,6 +12,8 @@
 #include "gpio.h"
 #include "dac.h"
 
+#include "conf_tc_irq.h"
+
 // this
 #include "main.h"
 #include "ansible_midi.h"
@@ -178,14 +180,18 @@ static voice_state_t voice_state;
 
 // arp mode working state
 static chord_t chord;
-static arp_seq_t sequence;
+static arp_seq_t sequences[2];
+static arp_seq_t *active_seq;
+static arp_seq_t *next_seq;
 static arp_player_t player;
+static u8 pulse_count;
 
 // shared state
 static s16 pitch_offset[4];
 static midi_clock_t midi_clock;
 static key_state_t key_state;
 static uint16_t aout[4];
+static bool external_clock;
 
 
 
@@ -249,6 +255,7 @@ void handler_MidiFrontShort(s32 data) {
 	}
 	else {
 		// mMidiArp
+		print_dbg("\r\n arp: wrote config (todo)");
 	}
 }
 
@@ -886,8 +893,6 @@ static void fixed_note_on(u8 ch, u8 num, u8 vel) {
 				initial_set = true;
 				standard_state.fixed.notes[fixed_learn.note_idx] = num;
 				multi_tr_set(fixed_learn.note_idx); // indicate mapping
-				//print_dbg("\n\r fln: ");
-				//print_dbg_ulong(fixed_learn.note_idx);
 			}
 
 			// different note; advance to next mapping
@@ -896,8 +901,6 @@ static void fixed_note_on(u8 ch, u8 num, u8 vel) {
 				if (fixed_learn.note_idx < 4) {
 					standard_state.fixed.notes[fixed_learn.note_idx] = num;
 					multi_tr_set(fixed_learn.note_idx); // indicate mapping
-					//print_dbg("\n\r fln: ");
-					//print_dbg_ulong(fixed_learn.note_idx);
 					if (fixed_learn.note_idx == 3) {
 						fixed_learn.note_idx++;
 					}
@@ -941,10 +944,6 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 			if (fixed_learn.cc_idx == 0 && initial_set == false) {
 				initial_set = true;
 				standard_state.fixed.cc[fixed_learn.cc_idx] = num;
-				//print_dbg("\n\r cc learn: assigned cc: ");
-				//print_dbg_ulong(num);
-				//print_dbg(" for ch: ");
-				//print_dbg_ulong(fixed_learn.cc_idx);
 			}
 
 			// different cc; advance to next mapping
@@ -952,10 +951,6 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 				fixed_learn.cc_idx++;
 				if (fixed_learn.cc_idx < 4) {
 					standard_state.fixed.cc[fixed_learn.cc_idx] = num;
-					//print_dbg("\n\r cc learn: assigned cc: ");
-					//print_dbg_ulong(num);
-					//print_dbg(" for ch: ");
-					//print_dbg_ulong(fixed_learn.cc_idx);
 					if (fixed_learn.cc_idx == 3) {
 						// immediately end learning instead of waiting around for
 						// a different cc to be sent..
@@ -968,8 +963,6 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 				aout[fixed_learn.cc_idx] = val << 5;
 				update_dacs(aout);
 			}
-			//print_dbg("\n\r flcc: ");
-			//print_dbg_ulong(fixed_learn.cc_idx);
 		}
 		if (fixed_finalize_learning(false)) {
 			// prepare for next learning pass
@@ -996,14 +989,45 @@ void default_midi_arp() {
 	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
 }
 
-void clock_midi_arp(uint8_t phase) {
+static bool arp_seq_switch_active(void) {
+	// TODO: better abstract this and move to arp.c
+	arp_seq_t *last_seq;
+	bool switched = false;
+	
+	cpu_irq_disable_level(APP_TC_IRQ_PRIORITY);
+
+	if (next_seq->state == eSeqWaiting) {
+		next_seq->state = eSeqPlaying;
+		active_seq->state = eSeqFree;
+		last_seq = active_seq;
+		active_seq = next_seq;
+		next_seq = last_seq;
+		switched = true;
+	}
+
+	cpu_irq_enable_level(APP_TC_IRQ_PRIORITY);
+
+	return switched;
+}
+
+static void arp_clock_pulse(uint8_t phase) {
 	if (phase) {
-		set_tr(TR1);
-		// FIXME: this is most definately wrong; need to work at ARP_PPQ size intervals
-		arp_player_pulse(&player, &sequence, &player_behavior);
+		set_tr(TR4);
+		if (arp_seq_switch_active()) {
+			print_dbg("\r\n > arp: switched seq");
+		}
+		arp_player_pulse(&player, active_seq, &player_behavior);
 	}
 	else {
-		clr_tr(TR1);
+		clr_tr(TR4);
+	}
+}
+
+void clock_midi_arp(uint8_t phase) {
+	// internal clock timer callback, pulse clock if we are not being
+	// driven externally
+	if (!external_clock) {
+		arp_clock_pulse(phase);
 	}
 }
 
@@ -1016,14 +1040,46 @@ void handler_ArpKey(s32 data) {
 	print_dbg_ulong(data);
 }
 
-void handler_ArpTr(s32 data) { 
-	print_dbg("\r\n> arp tr ");
-	print_dbg_ulong(data);
+void handler_ArpTr(s32 data) {
+	u32 now;
+
+	switch (data) {
+	case 0:
+		arp_clock_pulse(0);
+		break;
+	case 1:
+		// sync internal clock timer
+		now = time_now();
+		time_clear();
+		//now /= ARP_PPQ;
+		now = now >> 1; // high/low phase
+		// TODO: clip now to low/high bounds
+		clock_set_tr(now, 0);
+		arp_clock_pulse(1);
+		break;
+	case 2:
+		// nothing;
+		break;
+	case 3:
+		// switch arp pattern
+		break;
+	}
 }
 
 void handler_ArpTrNormal(s32 data) { 
 	print_dbg("\r\n> arp tr normal ");
 	print_dbg_ulong(data);
+
+	switch (data) {
+	case 0:
+		key_state.normaled = 0;
+		external_clock = false;
+		break;
+	case 1:
+		key_state.normaled = 1;
+		external_clock = true;
+		break;
+	}
 }
 
 void handler_ArpMidiPacket(s32 data) {
@@ -1032,7 +1088,13 @@ void handler_ArpMidiPacket(s32 data) {
 
 void init_arp(void) {
 	chord_init(&chord);
-	arp_seq_init(&sequence);
+
+	// ping pong
+	active_seq = &sequences[0];
+	next_seq = &sequences[1];
+	arp_seq_init(active_seq);
+	arp_seq_init(next_seq);
+
 	arp_player_init(&player);
 
 	active_behavior.note_on = &arp_note_on;
@@ -1058,15 +1120,42 @@ void init_arp(void) {
 	player_behavior.panic = NULL;
 }
 
+static void arp_rebuild(chord_t *c) {
+	arp_seq_state current_state = arp_seq_get_state(next_seq);
+	
+	if (current_state == eSeqFree || current_state == eSeqWaiting) {
+		arp_seq_set_state(next_seq, eSeqBuilding); // TODO: check return
+		arp_seq_build(next_seq, arp_state.style, &chord);
+		arp_seq_set_state(next_seq, eSeqWaiting);
+	}
+	else {
+		print_dbg("\r\n > arp: next seq busy, skipping build");
+	}
+}
 
 static void arp_note_on(u8 ch, u8 num, u8 vel) {
+	// HMMM: we may need to double buffer the sequences building one
+	// then switching to it on a (ext) clock high so that the sequence
+	// is fully sync'd with the ext clock.
+	//
+	// as it stands now the sequence change is picked up on the next
+	// tick which means it is out of sync with the clock +/- some number
+	// of ticks.
+	//
+	// or queue up changes to the chord and build the seq in the clock
+	// function when pulse_count == 0;
+
+	print_dbg("\r\n > arp: note on; ");
+	print_dbg_ulong(num);
 	chord_note_add(&chord, num, vel);
-	arp_seq_build(&sequence, arp_state.style, &chord);
+	arp_rebuild(&chord);
 }
 
 static void arp_note_off(u8 ch, u8 num, u8 vel) {
+	print_dbg("\r\n > arp: note off; ");
+	print_dbg_ulong(num);
 	chord_note_release(&chord, num);
-	arp_seq_build(&sequence, arp_state.style, &chord);
+	arp_rebuild(&chord);
 }
 
 static void arp_pitch_bend(u8 ch, u16 bend) {
@@ -1076,21 +1165,62 @@ static void arp_control_change(u8 ch, u8 num, u8 val) {
 }
 
 static void arp_rt_tick(void) {
+	//u32 now;
+
+	// TODO: need to implement this...
+	
+	if (key_state.normaled)
+		return;
+
+	// divide down 24 ppq by ARP_PPQ and pulse
+
+	/*
+	if (data == 1) {
+		now = time_now();
+		time_clear();
+
+		print_dbg("\r\n arp clk d: ");
+		print_dbg_ulong(now);
+		
+		now /= ARP_PPQ;
+		pulse_count = 0;
+		clock_set_tr(now);
+
+		print_dbg(" p: ");
+		print_dbg_ulong(now);
+	}
+	*/
 }
 
 static void arp_rt_start(void) {
+	if (key_state.normaled)
+		return;
 }
 
 static void arp_rt_stop(void) {
+	if (key_state.normaled)
+		return;
 }
 
 static void arp_rt_continue(void) {
+	if (key_state.normaled)
+		return;
 }
 
 static void player_note_on(u8 ch, u8 num, u8 vel) {
 	// actually drives hw
+	//print_dbg("\r\n > arp: player note on: ");
+	//print_dbg_ulong(num);
+	//mono_note_on(ch, num, vel);
+	set_cv_pitch(MONO_PITCH_CV, num, 0);
+	update_dacs(aout);
+	set_tr(TR1);
 }
 
 static void player_note_off(u8 ch, u8 num, u8 vel) {
 	// actually drives hw
+	//print_dbg("\r\n > arp: player note off: ");
+	//print_dbg_ulong(num);
+	//mono_note_off(ch, num, vel);
+	clr_tr(TR1);
 }
