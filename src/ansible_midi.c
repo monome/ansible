@@ -8,6 +8,7 @@
 
 #include "monome.h"
 #include "i2c.h"
+#include "gpio.h"
 
 // this
 #include "main.h"
@@ -32,11 +33,14 @@ static void set_cv_cc(uint16_t *cv, u8 value);
 
 static void set_voice_allocation(voicing_mode v);
 
+static void reset(void);
+
 static void poly_note_on(u8 ch, u8 num, u8 vel);
 static void poly_note_off(u8 ch, u8 num, u8 vel);
 static void poly_pitch_bend(u8 ch, u16 bend);
 static void poly_sustain(u8 ch, u8 val);
 static void poly_control_change(u8 ch, u8 num, u8 val);
+static void poly_panic(void);
 
 static void mono_note_on(u8 ch, u8 num, u8 vel);
 static void mono_note_off(u8 ch, u8 num, u8 vel);
@@ -44,6 +48,7 @@ static void mono_pitch_bend(u8 ch, u16 bend);
 static void mono_sustain(u8 ch, u8 val);
 static void mono_channel_pressure(u8 ch, u8 val);
 static void mono_control_change(u8 ch, u8 num, u8 val);
+static void mono_panic(void);
 
 static void mono_rt_tick(void);
 static void mono_rt_start(void);
@@ -205,6 +210,7 @@ void set_mode_midi(void) {
 	midi_clock_set_div(&midi_clock, 4); // 16th notes; TODO; make configurable?
 
 	key_state.key1 = key_state.key2 = key_state.front = 0;
+	key_state.normaled = !gpio_get_pin_value(B10);
 	
 	aout[0] = aout[1] = aout[2] = aout[3] = 0;
 	update_dacs(aout);
@@ -244,8 +250,7 @@ static inline void set_cv_cc(uint16_t *cv, u8 value) {
 	*cv = value << 5;
 }
 
-
-static void set_voice_allocation(voicing_mode v) {
+static void reset(void) {
 	// start from a clean slate
 	for (int i = 0; i < 4; i++) {
 		voice_flags_init(&(flags[i]));
@@ -258,6 +263,10 @@ static void set_voice_allocation(voicing_mode v) {
 	clr_tr(TR2);
 	clr_tr(TR3);
 	clr_tr(TR4);
+}
+
+static void set_voice_allocation(voicing_mode v) {
+	reset();
 
 	// config behavior, clock, flags, etc.
 	switch (v) {
@@ -271,6 +280,7 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.seq_start = NULL;
 		active_behavior.seq_stop = NULL;
 		active_behavior.seq_continue = NULL;
+		active_behavior.panic = &poly_panic;
 		voice_slot_init(&voice_state, kVoiceAllocRotate, 4); // TODO: count configurable?
 		clock = &clock_null;
 		print_dbg("\r\n standard: voice poly");
@@ -285,6 +295,7 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.seq_start = &mono_rt_start;
 		active_behavior.seq_stop = &mono_rt_stop;
 		active_behavior.seq_continue = &mono_rt_continue;
+		active_behavior.panic = &mono_panic;
 		clock = &clock_null;
 		flags[0].legato = 1;
 		mono_pitch_bend(0, MIDI_BEND_ZERO);
@@ -300,6 +311,7 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.seq_start = NULL;
 		active_behavior.seq_stop = NULL;
 		active_behavior.seq_continue = NULL;
+		active_behavior.panic = &reset;
 		clock = &clock_null;
 		flags[0].legato = flags[1].legato = flags[2].legato = flags[3].legato = 1;
 		print_dbg("\r\n standard: voice multi");
@@ -314,6 +326,7 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.seq_start = NULL;
 		active_behavior.seq_stop = NULL;
 		active_behavior.seq_continue = NULL;
+		active_behavior.panic = &reset;
 		clock = &clock_null;
 		print_dbg("\r\n standard: voice fixed");
 		break;
@@ -375,7 +388,8 @@ void handler_StandardKey(s32 data) {
 			fixed_finalize_learning(true);
 		}
 		else {
-			// TODO: panic, all notes off
+			// panic, all notes off
+			if (active_behavior.panic) (*active_behavior.panic)();
 		}
 		break;
 
@@ -498,6 +512,11 @@ static void poly_control_change(u8 ch, u8 num, u8 val) {
 			poly_sustain(ch, val);
 			break;
 	}
+}
+
+static void poly_panic(void) {
+	voice_slot_init(&voice_state, voice_state.mode, voice_state.count);
+	reset();
 }
 
 
@@ -641,11 +660,17 @@ static void mono_rt_start(void) {
 static void mono_rt_stop(void) {
 	print_dbg("\r\n mono_rt_stop()");
 	midi_clock_stop(&midi_clock);
+	clr_tr(TR4);
 }
 
 static void mono_rt_continue(void) {
 	print_dbg("\r\n mono_rt_continue()");
 	midi_clock_continue(&midi_clock);
+}
+
+static void mono_panic(void) {
+	midi_clock_stop(&midi_clock);
+	reset();
 }
 
 
