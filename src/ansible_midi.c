@@ -4,6 +4,7 @@
 
 #include "midi_common.h"
 #include "notes.h"
+#include "timers.h"
 
 #include "monome.h"
 #include "i2c.h"
@@ -16,8 +17,10 @@
 
 #define MONO_PITCH_CV &(aout[0])
 #define MONO_VELOCITY_CV &(aout[1])
-#define MONO_MOD_CV &(aout[2])
+#define MONO_PRESSURE_CV &(aout[2])
+#define MONO_MOD_CV &(aout[3])
 #define MONO_BEND_CV &(aout[3])
+
 
 
 //------------------------------
@@ -39,7 +42,13 @@ static void mono_note_on(u8 ch, u8 num, u8 vel);
 static void mono_note_off(u8 ch, u8 num, u8 vel);
 static void mono_pitch_bend(u8 ch, u16 bend);
 static void mono_sustain(u8 ch, u8 val);
+static void mono_channel_pressure(u8 ch, u8 val);
 static void mono_control_change(u8 ch, u8 num, u8 val);
+
+static void mono_rt_tick(void);
+static void mono_rt_start(void);
+static void mono_rt_stop(void);
+static void mono_rt_continue(void);
 
 static void multi_tr_set(u8 ch);
 static void multi_tr_clr(u8 ch);
@@ -151,6 +160,8 @@ typedef struct {
 
 static key_state_t key_state;
 
+static midi_clock_t midi_clock;
+
 void set_mode_midi(void) {
 	switch(f.state.mode) {
 	case mMidiStandard:
@@ -175,6 +186,7 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTr] = &handler_ArpTr;
 		app_event_handlers[kEventTrNormal] = &handler_ArpTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_ArpMidiPacket;
+
 		clock = &clock_midi_arp;
 		clock_set(f.midi_arp_state.clock_period);
 		process_ii = &ii_midi_arp;
@@ -188,6 +200,9 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventFrontShort] = &handler_MidiFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_MidiFrontLong;
 	}
+
+	midi_clock_init(&midi_clock);
+	midi_clock_set_div(&midi_clock, 4); // 16th notes; TODO; make configurable?
 
 	key_state.key1 = key_state.key2 = key_state.front = 0;
 	
@@ -252,6 +267,10 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.channel_pressure = NULL;
 		active_behavior.pitch_bend = &poly_pitch_bend;
 		active_behavior.control_change = &poly_control_change;
+		active_behavior.clock_tick = NULL;
+		active_behavior.seq_start = NULL;
+		active_behavior.seq_stop = NULL;
+		active_behavior.seq_continue = NULL;
 		voice_slot_init(&voice_state, kVoiceAllocRotate, 4); // TODO: count configurable?
 		clock = &clock_null;
 		print_dbg("\r\n standard: voice poly");
@@ -259,10 +278,14 @@ static void set_voice_allocation(voicing_mode v) {
 	case eVoiceMono:
 		active_behavior.note_on = &mono_note_on;
 		active_behavior.note_off = &mono_note_off;
-		active_behavior.channel_pressure = NULL;
+		active_behavior.channel_pressure = &mono_channel_pressure;
 		active_behavior.pitch_bend = &mono_pitch_bend;
 		active_behavior.control_change = &mono_control_change;
-		clock = &clock_midi_standard;
+		active_behavior.clock_tick = &mono_rt_tick;
+		active_behavior.seq_start = &mono_rt_start;
+		active_behavior.seq_stop = &mono_rt_stop;
+		active_behavior.seq_continue = &mono_rt_continue;
+		clock = &clock_null;
 		flags[0].legato = 1;
 		mono_pitch_bend(0, MIDI_BEND_ZERO);
 		print_dbg("\r\n standard: voice mono");
@@ -273,6 +296,10 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.channel_pressure = NULL;
 		active_behavior.pitch_bend = &multi_pitch_bend;
 		active_behavior.control_change = &multi_control_change;
+		active_behavior.clock_tick = NULL;
+		active_behavior.seq_start = NULL;
+		active_behavior.seq_stop = NULL;
+		active_behavior.seq_continue = NULL;
 		clock = &clock_null;
 		flags[0].legato = flags[1].legato = flags[2].legato = flags[3].legato = 1;
 		print_dbg("\r\n standard: voice multi");
@@ -283,6 +310,10 @@ static void set_voice_allocation(voicing_mode v) {
 		active_behavior.channel_pressure = NULL;
 		active_behavior.pitch_bend = NULL;
 		active_behavior.control_change = &fixed_control_change;
+		active_behavior.clock_tick = NULL;
+		active_behavior.seq_start = NULL;
+		active_behavior.seq_stop = NULL;
+		active_behavior.seq_continue = NULL;
 		clock = &clock_null;
 		print_dbg("\r\n standard: voice fixed");
 		break;
@@ -340,7 +371,7 @@ void handler_StandardKey(s32 data) {
 		key_state.key1 = 0;
 		//print_dbg("\r\n standard key1: release");
 		if (fixed_learn.learning == 1 ) {
-			print_dbg("; canceling fixed mapping learning");
+			//print_dbg("; canceling fixed mapping learning");
 			fixed_finalize_learning(true);
 		}
 		else {
@@ -357,7 +388,7 @@ void handler_StandardKey(s32 data) {
 		//print_dbg("\r\n standard key2: release");
 		if (fixed_learn.learning == 1) {
 			// in learning mode; do nothing
-			print_dbg("; noop, in learning mode");
+			//print_dbg("; noop, in learning mode");
 		}
 		else {
 			// switch voicing mode
@@ -383,6 +414,8 @@ void handler_StandardTr(s32 data) {
 void handler_StandardTrNormal(s32 data) { 
 	print_dbg("\r\n> standard tr normal => ");
 	print_dbg_ulong(data);
+	// FIXME: this will be wrong on power up if a cable is inserted
+	key_state.normaled = data;
 }
 
 void handler_StandardMidiPacket(s32 data) {
@@ -542,6 +575,11 @@ static void mono_sustain(u8 ch, u8 val) {
 	}
 }
 
+static void mono_channel_pressure(u8 ch, u8 val) {
+	set_cv_cc(MONO_PRESSURE_CV, val);
+	update_dacs(aout);
+}
+
 static void mono_generic(u8 ch, u8 val) {
 	(val < 64) ? clr_tr(TR3) : set_tr(TR3);
 }
@@ -549,7 +587,7 @@ static void mono_generic(u8 ch, u8 val) {
 static void mono_control_change(u8 ch, u8 num, u8 val) {
 		switch (num) {
 		case 1:  // mod wheel
-			//set_cv_cc(MONO_MOD_CV, val);
+			set_cv_cc(MONO_MOD_CV, val);
 			update_dacs(aout);
 			break;
 		case 64:  // sustain pedal
@@ -561,6 +599,55 @@ static void mono_control_change(u8 ch, u8 num, u8 val) {
 			break;
 	}
 }
+
+static void mono_rt_tick(void) {
+	static u32 previous = 0;
+	u32 now, average;
+
+	if (key_state.normaled) {
+		// external sync on;
+		return;
+	}
+
+	now = time_now();
+	if (previous == 0) {
+		previous = now;
+	}
+	// smooth it? given all the polling tempo changes jump around
+	average = (now + previous) >> 1;
+	previous = now;
+
+	midi_clock_pulse(&midi_clock, average);
+	time_clear();
+
+	//print_dbg("\r\n mono_rt_tick: ");
+	//print_dbg_ulong(midi_clock.trigger);
+	//print_dbg(" p: ");
+	//print_dbg_ulong(midi_clock.pulse_period);
+
+	if (midi_clock.trigger) {
+		set_tr(TR4);
+	}
+	else {
+		clr_tr(TR4);
+	}
+}
+
+static void mono_rt_start(void) {
+	print_dbg("\r\n mono_rt_start()");
+	midi_clock_start(&midi_clock);
+}
+
+static void mono_rt_stop(void) {
+	print_dbg("\r\n mono_rt_stop()");
+	midi_clock_stop(&midi_clock);
+}
+
+static void mono_rt_continue(void) {
+	print_dbg("\r\n mono_rt_continue()");
+	midi_clock_continue(&midi_clock);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ///// multi behavior (standard)

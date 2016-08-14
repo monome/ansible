@@ -219,7 +219,7 @@ static void handler_MonomePoll(s32 data) {
 
 static void handler_MidiConnect(s32 data) {
 	print_dbg("\r\n> midi connect");
-	timer_add(&midiPollTimer, 13, &midi_poll_timer_callback, NULL);
+	timer_add(&midiPollTimer, 8, &midi_poll_timer_callback, NULL);
 	connected = conMIDI;
 	flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
 	set_mode(f.state.midi_mode);
@@ -442,6 +442,10 @@ uint8_t get_tr(uint8_t n) {
 
 void clock_set(uint32_t n) {
 	timer_set(&clockTimer, n);
+}
+
+void clock_reset_set(uint32_t n) {
+	timer_reset_set(&clockTimer, n);
 }
 
 static void ii_null(uint8_t *d, uint8_t l) {
