@@ -457,7 +457,6 @@ static void poly_note_on(u8 ch, u8 num, u8 vel) {
 
 	if (voice_slot_active(&voice_state, slot)) {
 		// steal slot
-		// TODO: check for sustain
 		multi_tr_clr(slot);
 		// FIXME: here we clear tr but then immediately reset it for note
 		// on so the envelop wont retrigger. need some way to queue or
@@ -472,9 +471,10 @@ static void poly_note_on(u8 ch, u8 num, u8 vel) {
 static void poly_note_off(u8 ch, u8 num, u8 vel) {
 	s8 slot = voice_slot_find(&voice_state, num);
 	if (slot != -1) {
-		// TODO: check for sustain
-		multi_tr_clr(slot);
-		voice_slot_release(&voice_state, slot);
+		if (!flags[slot].sustain) {
+			multi_tr_clr(slot);
+			voice_slot_release(&voice_state, slot);
+		}
 	}
 }
 
@@ -493,28 +493,25 @@ static void poly_pitch_bend(u8 ch, u16 bend) {
 	}
 
 	for (u8 i = 0; i < voice_state.count; i++) {
-		if (voice_state.voice[i].active) {
-			set_cv_pitch(&(aout[i]), voice_state.voice[i].num, pitch_offset[0]);
+		if (voice_slot_active(&voice_state, i)) {
+			set_cv_pitch(&(aout[i]), voice_slot_num(&voice_state, i), pitch_offset[0]);
 		}
 	}
 	update_dacs(aout);
 }
 
 static void poly_sustain(u8 ch, u8 val) {
-	u8 slot;
-
-	for (slot = 0; slot < MAX_VOICE_COUNT; slot++) {
-		ch = voice_state.voice[slot].num;
+	for (u8 slot = 0; slot < MAX_VOICE_COUNT; slot++) {
 		if (val < 64) {
 			// release active voices
-			if (voice_state.voice[slot].active) {
-				voice_state.voice[slot].active = 0;
-				multi_tr_clr(ch);
+			if (voice_slot_active(&voice_state, slot)) {
+				multi_tr_clr(slot);
+				voice_slot_release(&voice_state, slot);
 			}
-			flags[ch].sustain = 0;
+			flags[slot].sustain = 0;
 		}
 		else {
-			flags[ch].sustain = 1;
+			flags[slot].sustain = 1;
 		}
 	}
 }
@@ -538,8 +535,6 @@ static void poly_panic(void) {
 
 static void mono_note_on(u8 ch, u8 num, u8 vel) {
 	if (num > MIDI_NOTE_MAX)
-		// drop notes outside CV range
-		// FIXME: update for ansible
 		return;
 
 	// keep track of held notes for legato and pitch bend
@@ -554,7 +549,6 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 	const held_note_t *prior;
 	
 	if (num > MIDI_NOTE_MAX)
-		// drop notes outside CV range
 		return;
 
 	if (flags[0].sustain == 0) {
