@@ -27,6 +27,8 @@
 //------------------------------
 //------ prototypes
 
+static void write_midi_standard(void);
+
 static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset);
 static void set_cv_velocity(uint16_t *cv, u8 vel);
 static void set_cv_cc(uint16_t *cv, u8 value);
@@ -218,10 +220,13 @@ void set_mode_midi(void) {
 
 
 void handler_MidiFrontShort(s32 data) {
-	print_dbg("\r\n midi front short: ");
-	print_dbg_ulong(data);
 	if (standard_state.voicing == eVoiceFixed && key_state.key2) {
 		fixed_start_learning();
+	}
+	else {
+		// save voice mode configuration to flash
+		write_midi_standard();
+		print_dbg("\r\n standard: wrote midi config");
 	}
 }
 
@@ -339,7 +344,7 @@ static void set_voice_allocation(voicing_mode v) {
 ////////////////////////////////////////////////////////////////////////////////
 ///// handlers (standard)
 
-void default_midi_standard() {
+void default_midi_standard(void) {
 	fixed_mapping_t m;
 
 	flashc_memset32((void*)&(f.midi_standard_state.clock_period), 100, 4, true);
@@ -356,6 +361,14 @@ void default_midi_standard() {
 	m.cc[3] = 19;
 
 	fixed_write_mapping(&(f.midi_standard_state.fixed), &m);
+}
+
+void write_midi_standard(void) {
+	flashc_memset32((void*)&(f.midi_standard_state.clock_period),
+									standard_state.clock_period, 4, true);
+	flashc_memset8((void*)&(f.midi_standard_state.voicing),
+								 standard_state.voicing, 1, true);
+	fixed_write_mapping(&(f.midi_standard_state.fixed), &standard_state.fixed);
 }
 
 void clock_midi_standard(uint8_t phase) {
