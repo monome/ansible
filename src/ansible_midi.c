@@ -22,6 +22,21 @@
 #define MONO_MOD_CV &(aout[3])
 #define MONO_BEND_CV &(aout[3])
 
+//------------------------------
+//------ types
+
+typedef struct {
+	u8 learning : 1;
+	u8 note_idx : 3;
+	u8 cc_idx : 3;
+} fixed_learning_state_t;
+
+typedef struct {
+	u8 key1 : 1;
+	u8 key2 : 1;
+	u8 front : 1;
+	u8 normaled : 1; // isn't this tracked elsewhere?
+} key_state_t;
 
 
 //------------------------------
@@ -144,26 +159,12 @@ static midi_behavior_t active_behavior = {
 	.control_change = NULL
 };
 
-typedef struct {
-	u8 learning : 1;
-	u8 note_idx : 3;
-	u8 cc_idx : 3;
-} fixed_learning_state_t;
-
 static fixed_learning_state_t fixed_learn;
 static note_pool_t notes[4];
 static voice_flags_t flags[4];
 static voice_state_t voice_state;
 static s16 pitch_offset[4];
 static uint16_t aout[4];
-
-// TODO: move to main.c?
-typedef struct {
-	u8 key1 : 1;
-	u8 key2 : 1;
-	u8 front : 1;
-	u8 normaled : 1; // isn't this tracked elsewhere?
-} key_state_t;
 
 static key_state_t key_state;
 
