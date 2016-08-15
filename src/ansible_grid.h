@@ -43,12 +43,12 @@ typedef struct {
 
 	u8 glyph[4];
 
-} mp_set;
+} mp_data_t;
 
 typedef struct {
 	uint32_t clock_period;
 	uint8_t last_preset;
-	mp_set m[GRID_PRESETS];
+	mp_data_t m[GRID_PRESETS];
 } mp_state_t;
 
 

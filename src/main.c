@@ -185,7 +185,10 @@ void set_mode(ansible_mode_t m) {
 ////////////////////////////////////////////////////////////////////////////////
 // event handlers
 
-static void handler_FtdiConnect(s32 data) { ftdi_setup(); }
+static void handler_FtdiConnect(s32 data) { 
+	ftdi_setup();
+}
+
 static void handler_FtdiDisconnect(s32 data) { 
 	timers_unset_monome();
 	app_event_handlers[ kEventFrontShort ]	= &handler_FrontShort;
@@ -454,6 +457,8 @@ static void ii_null(uint8_t *d, uint8_t l) {
 }
 
 
+
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -484,6 +489,7 @@ int main(void)
 	spi_unselectChip(SPI,DAC_SPI);
 
 	print_dbg("\r\n\n// ansible //////////////////////////////// ");
+	print_dbg("\r\n== FLASH struct size: ");
 	print_dbg_ulong(sizeof(f));
 
 	if(flash_is_fresh()) {
@@ -513,6 +519,7 @@ int main(void)
 		flash_read();
 	}
 
+	init_levels();
 	init_mp();
 
 	print_dbg("\r\ni2c addr: ");

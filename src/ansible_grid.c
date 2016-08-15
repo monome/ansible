@@ -31,7 +31,7 @@ uint8_t time_fine;
 void (*grid_refresh)(void);
 
 
-mp_set m;
+mp_data_t m;
 
 
 void set_mode_grid() {

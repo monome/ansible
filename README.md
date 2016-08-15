@@ -15,7 +15,7 @@ no analog input
 2x LED near mode
 
 
----
+---	
 
 handlers:
 	arc enc
@@ -68,25 +68,47 @@ short - cancel/eject
 ---
 
 
-
+arc display functions
+	- range x0-x1 with value
+		- segment (16 split, draw single)
+	- anti-aliased "point"
+		- scale 0-10 position
 
 ### ARC
 
 #### mode 0 - LEVELS
 
 4x "levels" with indication
+		>> according to quantize mode:
+		>> free: 0-10 (like returns) with anti-alias
+		>> semitones: fixed number of segments with gap
+		>>>> show target value and current value (for slew)
 	output cv
 	output pulse trains
+		++ map CV to pulse train rates
 
 key 1: alt.
-	hold: recall (segment), save-to (segment), slew, segments
+	hold: recall (segment), save-to (segment), seg start, seg length
+		>> highlight active action,
+		++ action completed on key release
+		++ segs can be adjusted in realtime while clock input is changing 
+		>> seg start/length display linked. 16 segments total. 0 is top.
 	fast: next
+		++ respects seg length
 in 1: next
+		++ respects seg length
 
 key 2: 
-	hold:quantize mode: free vs. semitones with scale setup (mode, offset, octave)
-	fast: reset to seg zero
-in 2: reset to segment zero
+	hold: quantize mode: free vs. semitones with scale setup (mode/range, offset/octave, slew)
+		++ push key 1 to cycle through edit channel: 1-4, all (blink for a second)
+		>> free vs semi: two icons-- anti-aliased point vs. block
+		>> mode: show scale stackup (intervals) highlight octaves
+		>> range: show with ticks for volts, include offset in shading
+		>> octave: left side, octave setting 0-8 (segmented by 2's)
+		>> offset: include range with shading
+		>> slew: bar with highlighted point (anti-aliased)
+	fast: reset to seg start
+in 2: reset to segment start
 
 #### mode 1 - PLAY/CYCLE uses LEVELS data
 
@@ -106,6 +128,7 @@ key 1: alt
 			relative = left-to-right speed w/ multiples, free length/start
 			free = fully free
 		2: trig pulse width + mode
+			OR slew mode -- linear interp between all stages vs.
 		3: force (sensitivity)
 		4: friction
 	fast: edit mode (speed/length/start)
@@ -232,7 +255,7 @@ cc control for pulse length multiplier
 cc control for speed mult?
 
 send midi sync to midi out port?
-
+what to do with midi sync in??
 
 
 
