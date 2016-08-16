@@ -221,13 +221,18 @@ void set_mode_midi(void) {
 
 
 void handler_MidiFrontShort(s32 data) {
-	if (standard_state.voicing == eVoiceFixed && key_state.key2) {
-		fixed_start_learning();
+	if (f.state.mode == mMidiStandard) {
+		if (standard_state.voicing == eVoiceFixed && key_state.key2) {
+			fixed_start_learning();
+		}
+		else {
+			// save voice mode configuration to flash
+			write_midi_standard();
+			print_dbg("\r\n standard: wrote midi config");
+		}
 	}
 	else {
-		// save voice mode configuration to flash
-		write_midi_standard();
-		print_dbg("\r\n standard: wrote midi config");
+		// mMidiArp
 	}
 }
 
