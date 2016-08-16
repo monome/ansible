@@ -28,9 +28,9 @@ typedef struct {
 } cycles_state_t;
 
 void set_mode_arc(void);
-
 void handler_ArcFrontShort(s32 data);
 void handler_ArcFrontLong(s32 data);
+void arc_keytimer(void);
 
 void default_levels(void);
 void init_levels(void);
@@ -54,6 +54,3 @@ void handler_CyclesRefresh(s32 data);
 void handler_CyclesKey(s32 data);
 void handler_CyclesTr(s32 data);
 void handler_CyclesTrNormal(s32 data);
-
-
-void arc_draw_point(uint8_t n, uint16_t p);

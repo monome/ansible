@@ -10,6 +10,8 @@
 #define TR3 B04
 #define TR4 B05
 
+#define KEY_HOLD_TIME 8
+
 typedef enum {
 	conNONE,
 	conARC,

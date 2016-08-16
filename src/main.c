@@ -242,7 +242,7 @@ static void handler_Front(s32 data) {
 	// print_dbg_ulong(data);
 
 	if(data == 1) {
-		front_timer = 15;
+		front_timer = KEY_HOLD_TIME;
 	}
 	else {
 		if(front_timer) {
@@ -324,7 +324,10 @@ static void handler_KeyTimer(s32 data) {
 		front_timer--;
 	}
 
-	grid_keytimer();
+	if(connected == conGRID)
+		grid_keytimer();
+	else if(connected == conARC)
+		arc_keytimer();
 }
 
 
