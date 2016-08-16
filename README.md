@@ -84,8 +84,9 @@ arc display functions
 		>> semitones: fixed number of segments with gap
 		>>>> show target value and current value (for slew)
 	output cv
-	output pulse trains
+	output pulse trains in VOLT mode
 		++ map CV to pulse train rates
+	output note change in NOTE mode
 
 key 1: alt.
 	hold: recall (segment), save-to (segment), seg start, seg length

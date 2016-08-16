@@ -70,6 +70,7 @@ CSRCS = \
        ../src/ansible_midi.c    \
        ../src/ansible_tt.c    \
        ../libavr32/src/adc.c     \
+       ../libavr32/src/dac.c     \
        ../libavr32/src/events.c     \
        ../libavr32/src/i2c.c     \
        ../libavr32/src/init_ansible.c \

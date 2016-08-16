@@ -1,17 +1,23 @@
 /*
 
-anti-aliased LED point
+config:
+	modal view (don't display stuff in mixed mode)
+	a. range (smashes offset) end point with shading
+	b. scale -- note intervals. includes "none". two octaves (25 notes)
+	a. offset (smashes range) start point with shading
+	b. offset (0-12) note interval. shaded blocks with highlight.
+	slew - light bar
 
-1024 points
+note display
+	play vs edit
 
-div by 16 to find "center"
-mod by 16 to find "offset"
+cv output
+cv slew
 
-center = full bright
-+1 = offset
--1 = 16 - offset
+slew indication
 
-(or figure out the correct way)
+tr output in VOLT mode
+tr new note in NOTE mode
 
 */
 

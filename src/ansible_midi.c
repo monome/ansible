@@ -9,6 +9,7 @@
 #include "monome.h"
 #include "i2c.h"
 #include "gpio.h"
+#include "dac.h"
 
 // this
 #include "main.h"

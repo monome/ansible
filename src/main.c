@@ -51,6 +51,7 @@ usb flash
 #include "util.h"
 #include "ftdi.h"
 #include "ii.h"
+#include "dac.h"
 
 #include "conf_board.h"
 
@@ -401,26 +402,6 @@ void flash_read(void) {
 
 void clock_null(u8 phase) { ;; }
 
-void update_dacs(uint16_t *d) {
-	spi_selectChip(SPI,DAC_SPI);
-	spi_write(SPI,0x31);
-	spi_write(SPI,d[2]>>4); // 2
-	spi_write(SPI,d[2]<<4);
-	spi_write(SPI,0x31);
-	spi_write(SPI,d[0]>>4); // 0
-	spi_write(SPI,d[0]<<4);
-	spi_unselectChip(SPI,DAC_SPI);
-	
-	spi_selectChip(SPI,DAC_SPI);
-	spi_write(SPI,0x38);
-	spi_write(SPI,d[3]>>4); // 3
-	spi_write(SPI,d[3]<<4);
-	spi_write(SPI,0x38);
-	spi_write(SPI,d[1]>>4); // 1
-	spi_write(SPI,d[1]<<4);
-	spi_unselectChip(SPI,DAC_SPI);
-}
-
 void update_leds(uint8_t m) {
 	if(m & 1)
 		gpio_set_gpio_pin(B00);
@@ -483,12 +464,7 @@ int main(void)
 	register_interrupts();
 	cpu_irq_enable();
 
-	// setup daisy chain for two dacs
-	spi_selectChip(SPI,DAC_SPI);
-	spi_write(SPI,0x80);
-	spi_write(SPI,0xff);
-	spi_write(SPI,0xff);
-	spi_unselectChip(SPI,DAC_SPI);
+	init_dacs();
 
 	print_dbg("\r\n\n// ansible //////////////////////////////// ");
 	print_dbg("\r\n== FLASH struct size: ");

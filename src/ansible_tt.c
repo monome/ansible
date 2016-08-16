@@ -3,6 +3,7 @@
 
 #include "monome.h"
 #include "i2c.h"
+#include "dac.h"
 
 #include "main.h"
 #include "ansible_tt.h"

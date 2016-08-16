@@ -66,7 +66,6 @@ extern void handler_None(s32 data);
 extern void clock_null(u8 phase);
 
 void set_mode(ansible_mode_t m);
-void update_dacs(uint16_t *d);
 void update_leds(uint8_t m);
 void set_tr(uint8_t n);
 void clr_tr(uint8_t n);
