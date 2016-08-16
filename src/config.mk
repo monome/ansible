@@ -74,7 +74,9 @@ CSRCS = \
        ../libavr32/src/i2c.c     \
        ../libavr32/src/init_ansible.c \
        ../libavr32/src/init_common.c \
+       ../libavr32/src/midi_common.c \
        ../libavr32/src/monome.c \
+       ../libavr32/src/notes.c \
        ../libavr32/src/timers.c \
        ../libavr32/src/usb.c \
        ../libavr32/src/util.c \
@@ -93,7 +95,7 @@ CSRCS = \
        avr32/drivers/pm/power_clocks_lib.c                \
        avr32/drivers/spi/spi.c                            \
        avr32/drivers/tc/tc.c                              \
-       avr32/drivers/twi/twi.c                              \
+       avr32/drivers/twi/twi.c                            \
        avr32/drivers/usart/usart.c                        \
        avr32/drivers/usbb/usbb_host.c                     \
        avr32/utils/debug/print_funcs.c                    \
@@ -107,7 +109,7 @@ CSRCS = \
 ASSRCS = \
        avr32/utils/startup/trampoline_uc3.S               \
        avr32/drivers/intc/exception.S                     \
-              
+
 
 # List of include paths.
 INC_PATH = \
