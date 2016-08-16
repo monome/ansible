@@ -108,6 +108,7 @@ void state_read(void);
 
 static softTimer_t clockTimer = { .next = NULL, .prev = NULL };
 static softTimer_t keyTimer = { .next = NULL, .prev = NULL };
+static softTimer_t cvTimer = { .next = NULL, .prev = NULL };
 static softTimer_t monomePollTimer = { .next = NULL, .prev = NULL };
 static softTimer_t monomeRefreshTimer  = { .next = NULL, .prev = NULL };
 static softTimer_t midiPollTimer = { .next = NULL, .prev = NULL };
@@ -128,6 +129,10 @@ static void keyTimer_callback(void* o) {
 	e.type = kEventKeyTimer;
 	e.data = 0;
 	event_post(&e);
+}
+
+static void cvTimer_callback(void* o) {  
+	dac_timer_update();
 }
 
 static void monome_poll_timer_callback(void* obj) {
@@ -514,6 +519,7 @@ int main(void)
 
 	timer_add(&clockTimer,1000,&clockTimer_callback, NULL);
 	timer_add(&keyTimer,50,&keyTimer_callback, NULL);
+	timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
 
 	connected = conNONE;
 	set_mode(f.state.mode);

@@ -18,6 +18,8 @@ void set_mode_tt(void) {
 	clock_set(50);
 	process_ii = &ii_tt;
 	update_leds(0);
+
+	dac_set_slew(0,500);
 }
 
 void default_tt() {
@@ -25,15 +27,16 @@ void default_tt() {
 }
 
 void clock_tt(uint8_t phase) {
-	static uint16_t d[4];
-	static uint16_t cv;
-	cv += 0xff;
-	cv &= 4095;
+	// static uint16_t d[4];
+	// static uint16_t cv;
+	// cv += 0xff;
+	// cv &= 4095;
 
-	d[0] = cv;
-	d[1] = 4095 - cv;
+	// d[0] = cv;
+	// d[1] = 4095 - cv;
 
-	update_dacs(d);
+	// update_dacs(d);
+	;;
 }
 
 void ii_tt(uint8_t *d, uint8_t l) {
@@ -63,6 +66,23 @@ void ii_tt(uint8_t *d, uint8_t l) {
 void handler_TTKey(s32 data) { 
 	print_dbg("\r\n> TT key");
 	print_dbg_ulong(data);
+
+	switch(data) {
+	case 0:
+		dac_set_value(0,0);
+		break;
+	case 1:
+		dac_set_value(0,DAC_10V);
+		break;
+	case 2:
+		dac_set_value_noslew(0,0);
+		break;
+	case 3:
+		dac_set_value_noslew(0,DAC_10V);
+		break;
+	default:
+		break;
+	}
 }
 
 void handler_TTTr(s32 data) { 
