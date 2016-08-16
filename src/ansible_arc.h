@@ -4,24 +4,21 @@
 
 
 typedef struct {
-	uint16_t value[4];
+	uint16_t pattern[4][16];
 	bool mode[4];
-} levels_pattern_t;
-
-typedef struct {
-	levels_pattern_t pattern[16];
-	uint8_t edit;
+	uint8_t now;
 	uint8_t start;
 	int8_t len;
 	uint8_t dir;
+	uint8_t scale[4];
+	uint16_t offset[4];
+	uint16_t range[4];
 } levels_data_t;
 
 typedef struct {
 	uint32_t clock_period;
 	levels_data_t l;
 } levels_state_t;
-
-
 
 
 
