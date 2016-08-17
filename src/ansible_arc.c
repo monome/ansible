@@ -11,19 +11,26 @@ config:
 note display
 	play vs edit
 
-cv output
-cv slew
+share scales with kria/mp?
+
+indicate play position
 
 slew indication
+default slew for editing??
 
 tr output in VOLT mode
 tr new note in NOTE mode
+
+tune acceleration
+
+presets
 
 */
 
 #include "print_funcs.h"
 #include "flashc.h"
 #include "gpio.h"
+#include "dac.h"
 
 #include "monome.h"
 #include "i2c.h"
@@ -154,6 +161,8 @@ static levels_data_t l;
 void default_levels() {
 	uint8_t i1;
 
+	// JUST MAKE l and flash it
+
 	for(i1=0;i1<16;i1++)
 		flashc_memcpy((void *)&f.levels_state.l.pattern[i1], &l.pattern, sizeof(l.pattern), true);
 
@@ -162,6 +171,10 @@ void default_levels() {
 	flashc_memset8((void*)&(f.levels_state.l.start), 0, 1, true);
 	flashc_memset8((void*)&(f.levels_state.l.len), 3, 1, true);
 	flashc_memset8((void*)&(f.levels_state.l.dir), 0, 1, true);
+	// flashc_memset8((void*)&(f.levels_state.l.scale), 0, 1, true);
+	// flashc_memset16((void*)&(f.levels_state.l.offset), 0, 2, true);
+	// flashc_memset16((void*)&(f.levels_state.l.range), 0, 2, true);
+	// flashc_memset16((void*)&(f.levels_state.l.slew), 5, 2, true);
 }
 
 void init_levels() {
@@ -178,9 +191,15 @@ void resume_levels() {
 
 	arc_refresh = &refresh_levels;
 
+	reset_dacs();
+
 	for(i1=0;i1<4;i1++) {
 		l.pattern[i1][l.now] = f.levels_state.l.pattern[i1][l.now];
 		l.mode[i1] = f.levels_state.l.mode[i1];
+		// l.slew[i1] = f.levels_state.l.slew[i1];
+
+		dac_set_slew(i1,5);
+		// dac_set_slew(i1,l.slew[i1]);
 	}
 
 	mode = 0;
@@ -235,6 +254,10 @@ void handler_LevelsEnc(s32 data) {
 			else if(i > 0x3ff)
 				i = 0x3ff;
 			l.pattern[n][l.now] = i;
+
+			if(l.now == play) {
+				dac_set_value(n, i << 4);
+			}
 		}
 
 		break;
@@ -385,6 +408,9 @@ void refresh_levels_change() {
 
 		// PATTERN START
 		monomeLedBuffer[128 + (l.start * 4) + i1] = 15;
+
+		// PLAY
+		monomeLedBuffer[192 + (play * 4) + i1] = 11;		
 	}
 
 
@@ -425,16 +451,26 @@ void handler_LevelsKey(s32 data) {
 				ch_edit = (ch_edit + 1) % 5;
 			else {
 				levels_pattern_next();
-				if(!ext_clock)
+				if(!ext_clock) {
 					play = l.now;
+					dac_set_value(0, l.pattern[0][play] << 4);
+					dac_set_value(1, l.pattern[1][play] << 4);
+					dac_set_value(2, l.pattern[2][play] << 4);
+					dac_set_value(3, l.pattern[3][play] << 4);
+				}
 			}
 			monomeFrameDirty++;
 		}
 		else if(mode == 1) {
 			if(pattern_read != -1) {
 				l.now = pattern_read;
-				if(!ext_clock)
+				if(!ext_clock) {
 					play = l.now;
+					dac_set_value(0, l.pattern[0][play] << 4);
+					dac_set_value(1, l.pattern[1][play] << 4);
+					dac_set_value(2, l.pattern[2][play] << 4);
+					dac_set_value(3, l.pattern[3][play] << 4);
+				}
 			}
 			else if(pattern_write != -1) {
 				l.pattern[0][pattern_write] = l.pattern[0][l.now];
@@ -459,8 +495,13 @@ void handler_LevelsKey(s32 data) {
 
 			if(mode == 0) {
 				l.now = l.start;
-				if(!ext_clock)
+				if(!ext_clock) {
 					play = l.now;
+					dac_set_value(0, l.pattern[0][play] << 4);
+					dac_set_value(1, l.pattern[1][play] << 4);
+					dac_set_value(2, l.pattern[2][play] << 4);
+					dac_set_value(3, l.pattern[3][play] << 4);
+				}
 				monomeFrameDirty++;
 			}
 		}
@@ -521,6 +562,10 @@ void handler_LevelsTr(s32 data) {
 		}
 		else
 			levels_play_next();
+		dac_set_value(0, l.pattern[0][play] << 4);
+		dac_set_value(1, l.pattern[1][play] << 4);
+		dac_set_value(2, l.pattern[2][play] << 4);
+		dac_set_value(3, l.pattern[3][play] << 4);
 		break;
 	case 3:
 		ext_reset = true;

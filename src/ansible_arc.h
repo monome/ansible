@@ -13,6 +13,7 @@ typedef struct {
 	uint8_t scale[4];
 	uint16_t offset[4];
 	uint16_t range[4];
+	uint16_t slew[4];
 } levels_data_t;
 
 typedef struct {

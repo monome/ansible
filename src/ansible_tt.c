@@ -27,16 +27,15 @@ void default_tt() {
 }
 
 void clock_tt(uint8_t phase) {
-	// static uint16_t d[4];
-	// static uint16_t cv;
-	// cv += 0xff;
-	// cv &= 4095;
+	static uint16_t d[4];
+	static uint16_t cv;
+	cv += 0xff;
+	cv &= 4095;
 
-	// d[0] = cv;
-	// d[1] = 4095 - cv;
+	d[2] = cv;
+	d[3] = 4095 - cv;
 
-	// update_dacs(d);
-	;;
+	update_dacs(d);
 }
 
 void ii_tt(uint8_t *d, uint8_t l) {
