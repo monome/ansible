@@ -4,6 +4,7 @@
 
 #include "midi_common.h"
 #include "notes.h"
+#include "arp.h"
 #include "timers.h"
 
 #include "monome.h"
@@ -89,6 +90,20 @@ static void fixed_note_on(u8 ch, u8 num, u8 vel);
 static void fixed_note_off(u8 ch, u8 num, u8 vel);
 static void fixed_control_change(u8 ch, u8 num, u8 val);
 
+static void init_arp(void);
+
+static void arp_note_on(u8 ch, u8 num, u8 vel);
+static void arp_note_off(u8 ch, u8 num, u8 vel);
+static void arp_pitch_bend(u8 ch, u16 bend);
+static void arp_control_change(u8 ch, u8 num, u8 val);
+static void arp_rt_tick(void);
+static void arp_rt_start(void);
+static void arp_rt_stop(void);
+static void arp_rt_continue(void);
+
+static void player_note_on(u8 ch, u8 num, u8 vel);
+static void player_note_off(u8 ch, u8 num, u8 vel);
+
 
 //-----------------------------
 //----- globals
@@ -150,40 +165,39 @@ const u16 BEND1[512] = {
 
 // copy of nvram state for editing
 static midi_standard_state_t standard_state;
-static midi_arp_state_t *arp_state = NULL;
+static midi_arp_state_t arp_state;
 
-static midi_behavior_t active_behavior = {
-	.note_on = NULL,
-	.note_off = NULL,
-	.channel_pressure = NULL,
-	.pitch_bend = NULL,
-	.control_change = NULL
-};
+static midi_behavior_t active_behavior = {0};
+static midi_behavior_t player_behavior = {0};
 
+// standard mode working state
 static fixed_learning_state_t fixed_learn;
 static note_pool_t notes[4];
 static voice_flags_t flags[4];
 static voice_state_t voice_state;
+
+// arp mode working state
+static chord_t chord;
+static arp_seq_t sequence;
+static arp_player_t player;
+
+// shared state
 static s16 pitch_offset[4];
+static midi_clock_t midi_clock;
+static key_state_t key_state;
 static uint16_t aout[4];
 
-static key_state_t key_state;
 
-static midi_clock_t midi_clock;
 
 void set_mode_midi(void) {
 	switch(f.state.mode) {
 	case mMidiStandard:
 		print_dbg("\r\n> mode midi standard");
-
 		standard_state = f.midi_standard_state;
-		//print_standard_state(&standard_state);
-		
 		app_event_handlers[kEventKey] = &handler_StandardKey;
 		app_event_handlers[kEventTr] = &handler_StandardTr;
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
-
 		set_voice_allocation(standard_state.voicing);
 		clock_set(standard_state.clock_period);
 		process_ii = &ii_midi_standard;
@@ -191,13 +205,14 @@ void set_mode_midi(void) {
 		break;
 	case mMidiArp:
 		print_dbg("\r\n> mode midi arp");
+		arp_state = f.midi_arp_state;
 		app_event_handlers[kEventKey] = &handler_ArpKey;
 		app_event_handlers[kEventTr] = &handler_ArpTr;
 		app_event_handlers[kEventTrNormal] = &handler_ArpTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_ArpMidiPacket;
-
+		init_arp();
 		clock = &clock_midi_arp;
-		clock_set(f.midi_arp_state.clock_period);
+		clock_set(arp_state.clock_period);
 		process_ii = &ii_midi_arp;
 		update_leds(2);
 		break;
@@ -978,13 +993,18 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 
 void default_midi_arp() {
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period), 100, 4, true);
+	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
 }
 
 void clock_midi_arp(uint8_t phase) {
-	if(phase)
+	if (phase) {
 		set_tr(TR1);
-	else
+		// FIXME: this is most definately wrong; need to work at ARP_PPQ size intervals
+		arp_player_pulse(&player, &sequence, &player_behavior);
+	}
+	else {
 		clr_tr(TR1);
+	}
 }
 
 void ii_midi_arp(uint8_t *d, uint8_t l) {
@@ -1007,6 +1027,70 @@ void handler_ArpTrNormal(s32 data) {
 }
 
 void handler_ArpMidiPacket(s32 data) {
-	print_dbg("\r\n> arp midi packet");
-	//midi_packet_parse(&midi_behavior_arp, (u32)data);
+	midi_packet_parse(&active_behavior, (u32)data);
+}
+
+void init_arp(void) {
+	chord_init(&chord);
+	arp_seq_init(&sequence);
+	arp_player_init(&player);
+
+	active_behavior.note_on = &arp_note_on;
+	active_behavior.note_off = &arp_note_off;
+	active_behavior.channel_pressure = NULL;
+	active_behavior.pitch_bend = &arp_pitch_bend;
+	active_behavior.control_change = &arp_control_change;
+	active_behavior.clock_tick = &arp_rt_tick;
+	active_behavior.seq_start = &arp_rt_start;
+	active_behavior.seq_stop = &arp_rt_stop;
+	active_behavior.seq_continue = &arp_rt_continue;
+	active_behavior.panic = NULL;
+
+	player_behavior.note_on = &player_note_on;
+	player_behavior.note_off = &player_note_off;
+	player_behavior.channel_pressure = NULL;
+	player_behavior.pitch_bend = NULL;
+	player_behavior.control_change = NULL;
+	player_behavior.clock_tick = NULL;
+	player_behavior.seq_start = NULL;
+	player_behavior.seq_stop = NULL;
+	player_behavior.seq_continue = NULL;
+	player_behavior.panic = NULL;
+}
+
+
+static void arp_note_on(u8 ch, u8 num, u8 vel) {
+	chord_note_add(&chord, num, vel);
+	arp_seq_build(&sequence, arp_state.style, &chord);
+}
+
+static void arp_note_off(u8 ch, u8 num, u8 vel) {
+	chord_note_release(&chord, num);
+	arp_seq_build(&sequence, arp_state.style, &chord);
+}
+
+static void arp_pitch_bend(u8 ch, u16 bend) {
+}
+
+static void arp_control_change(u8 ch, u8 num, u8 val) {
+}
+
+static void arp_rt_tick(void) {
+}
+
+static void arp_rt_start(void) {
+}
+
+static void arp_rt_stop(void) {
+}
+
+static void arp_rt_continue(void) {
+}
+
+static void player_note_on(u8 ch, u8 num, u8 vel) {
+	// actually drives hw
+}
+
+static void player_note_off(u8 ch, u8 num, u8 vel) {
+	// actually drives hw
 }

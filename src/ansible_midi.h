@@ -1,5 +1,7 @@
 #pragma once
 
+#include "arp.h"
+
 // standard midi modes
 typedef enum {
 	eVoicePoly = 0,
@@ -25,6 +27,7 @@ typedef struct {
 
 typedef struct {
 	uint32_t clock_period;
+	arp_style style;
 } midi_arp_state_t;
 
 void set_mode_midi(void);
