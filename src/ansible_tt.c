@@ -27,15 +27,15 @@ void default_tt() {
 }
 
 void clock_tt(uint8_t phase) {
-	static uint16_t d[4];
-	static uint16_t cv;
-	cv += 0xff;
-	cv &= 4095;
+	// static uint16_t d[4];
+	// static uint16_t cv;
+	// cv += 0xff;
+	// cv &= 4095;
 
-	d[2] = cv;
-	d[3] = 4095 - cv;
+	// d[2] = cv;
+	// d[3] = 4095 - cv;
 
-	update_dacs(d);
+	// update_dacs(d);
 }
 
 void ii_tt(uint8_t *d, uint8_t l) {
@@ -68,16 +68,24 @@ void handler_TTKey(s32 data) {
 
 	switch(data) {
 	case 0:
-		dac_set_value(0,0);
+		// dac_set_value(0,0);
 		break;
 	case 1:
-		dac_set_value(0,DAC_10V);
+		// dac_set_value(0,DAC_10V);
+		dac_set_value(0, 1636);
+		dac_set_value(1, 1636);
+		dac_set_value(2, 1636);
+		dac_set_value(3, 1636);
 		break;
 	case 2:
-		dac_set_value_noslew(0,0);
+		// dac_set_value_noslew(0,0);
 		break;
 	case 3:
-		dac_set_value_noslew(0,DAC_10V);
+		dac_set_value(0, 0);
+		dac_set_value(1, 0);
+		dac_set_value(2, 0);
+		dac_set_value(3, 0);
+		// dac_set_value_noslew(0,DAC_10V);
 		break;
 	default:
 		break;
