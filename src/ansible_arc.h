@@ -12,7 +12,8 @@ typedef struct {
 	int8_t len;
 	uint8_t dir;
 	uint8_t scale[4];
-	uint8_t offset[4];
+	uint8_t octave[4];
+	uint16_t offset[4];
 	uint16_t range[4];
 	uint16_t slew[4];
 } levels_data_t;

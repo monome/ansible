@@ -113,6 +113,13 @@ static softTimer_t monomePollTimer = { .next = NULL, .prev = NULL };
 static softTimer_t monomeRefreshTimer  = { .next = NULL, .prev = NULL };
 static softTimer_t midiPollTimer = { .next = NULL, .prev = NULL };
 
+softTimer_t auxTimer[4] = { 
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL }
+};
+
 void handler_None(s32 data) { ;; }
 
 static void clockTimer_callback(void* o) {  

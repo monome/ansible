@@ -7,7 +7,8 @@ config:
 	a. offset (smashes range) start point with shading
 	b. offset (0-12) note interval. shaded blocks with highlight.
 
-default slew for editing??
+implement offset and range
+implmement octave offset
 
 tr output in VOLT mode
 tr new note in NOTE mode
@@ -18,15 +19,16 @@ presets
 
 /////
 
+default slew for editing?? or same as transition?
 should note range be 48?
 
 loop trapping
 SLEW NEEDS LOG/etc scaling
 tune acceleration
 
-live slew indication
-
-share scales with kria/mp?
+future features?
+	live slew indication
+	share scales with kria/mp?
 */
 
 #include "print_funcs.h"
@@ -158,6 +160,8 @@ static void levels_play_next(void);
 
 static void levels_dac_refresh(void);
 
+static void levels_at1(void* o);
+
 static uint8_t mode;
 static uint8_t ch_edit;
 static bool mixed_modes;
@@ -167,6 +171,7 @@ static int8_t pattern_write;
 static int16_t enc_count[4];
 static levels_data_t l;
 static uint8_t levels_scales[4][25];
+static bool tr_state[4];
 
 void default_levels() {
 	uint8_t i1,i2;
@@ -179,15 +184,16 @@ void default_levels() {
 	for(i1=0;i1<4;i1++) {
 		l.mode[i1] = 0;
 		l.scale[i1] = 1;
+		l.octave[i1] = 0;
 		l.offset[i1] = 0;
-		l.range[i1] = 1;
+		l.range[i1] = 10;
 		l.slew[i1] = 20;
 		for(i2=0;i2<16;i2++)
 			l.pattern[i1][i2] = 0;
 	}
 
 	flashc_memcpy((void *)&f.levels_state.l, &l, sizeof(l), true);
-	flashc_memset32((void*)&(f.levels_state.clock_period), 100, 4, true);
+	flashc_memset32((void*)&(f.levels_state.clock_period), 250, 4, true);
 }
 
 void init_levels() {
@@ -206,6 +212,7 @@ void resume_levels() {
 		l.pattern[i1][l.now] = f.levels_state.l.pattern[i1][l.now];
 		l.mode[i1] = f.levels_state.l.mode[i1];
 		l.scale[i1] = f.levels_state.l.scale[i1];
+		l.octave[i1] = f.levels_state.l.octave[i1];
 		l.offset[i1] = f.levels_state.l.offset[i1];
 		l.range[i1] = f.levels_state.l.range[i1];
 		l.slew[i1] = f.levels_state.l.slew[i1];
@@ -230,14 +237,26 @@ void resume_levels() {
 	ext_clock = !gpio_get_pin_value(B10);
 	ext_reset = false;
 
+	timer_add(&auxTimer[0], l.pattern[0][l.now], &levels_at1, NULL );
+
 	monomeFrameDirty++;
 }
 
-void clock_levels(uint8_t phase) {
-	if(phase)
+static void levels_at1(void* o) {
+	if(tr_state[0])
 		set_tr(TR1);
 	else
 		clr_tr(TR1);
+
+	tr_state[0] ^= 1;
+}
+
+void clock_levels(uint8_t phase) {
+	;;
+	// if(phase)
+	// 	set_tr(TR1);
+	// else
+	// 	clr_tr(TR1);
 }
 
 void ii_levels(uint8_t *d, uint8_t l) {
@@ -257,7 +276,9 @@ void handler_LevelsEnc(s32 data) {
 	// print_dbg_hex(delta);
 
 	switch(mode) {
+	// NORMAL
 	case 0:
+		// NOTE
 		if(l.mode[n]) {
 			enc_count[n] += delta;
 			i = enc_count[n] >> 4;
@@ -283,6 +304,7 @@ void handler_LevelsEnc(s32 data) {
 				}
 			}
 		}
+		// VOLT
 		else {
 			if(delta > 0)
 				i = l.pattern[n][l.now] + delta_acc[delta];
@@ -294,13 +316,15 @@ void handler_LevelsEnc(s32 data) {
 				i = 0x3ff;
 			l.pattern[n][l.now] = i;
 
+			timer_set(&auxTimer[0], 0x3ff - l.pattern[0][l.now] + 10);
+
 			if(!ext_clock) {
 			// if(l.now == play) {
 				dac_set_value(n, i << 4);
 			}
 		}
-
 		break;
+	// LEFT KEY
 	case 1:
 		i = (enc_count[n] + delta) & 0xff;
 		if(i >> 4 != enc_count[n] >> 4) {
@@ -347,6 +371,7 @@ void handler_LevelsEnc(s32 data) {
 		// print_dbg_ulong(i >> 4);
 		enc_count[n] = i;
 		break;
+	// RIGHT KEY
 	case 2:
 		switch(n) {
 		// volt/note mode
@@ -365,11 +390,11 @@ void handler_LevelsEnc(s32 data) {
 		// range / scale
 		case 1:
 			if(mixed_modes == false) {
-				if(ch_edit) {
-					enc_count[1] += delta;
-					i = enc_count[1] >> 4;
-					enc_count[1] -= i << 4;
+				enc_count[1] += delta;
+				i = enc_count[1] >> 4;
+				enc_count[1] -= i << 4;
 
+				if(ch_edit) {
 					if(l.mode[ch_edit-1] == 0) {
 						// range
 						if(i) {
@@ -398,9 +423,6 @@ void handler_LevelsEnc(s32 data) {
 					}
 				}
 				else {
-					enc_count[1] += delta;
-					i = enc_count[1] >> 4;
-					enc_count[1] -= i << 4;
 					// range
 					if(l.mode[0] == 0) {
 						if(i) {
@@ -445,10 +467,65 @@ void handler_LevelsEnc(s32 data) {
 		case 2:
 			if(mixed_modes == false) {
 				if(ch_edit) {
+					// volt offset
+					if(l.mode[ch_edit-1] == 0) {
+						if(delta > 0)
+							i = l.offset[ch_edit-1] + delta_acc[delta];
+						else 
+							i = l.offset[ch_edit-1] - delta_acc[-delta];
+						if(i < 0)
+							i = 0;
+						else if(i > 0x3ff)
+							i = 0x3ff;
+						l.offset[ch_edit-1] = i;
+					}
+					// octave
+					else {
+						enc_count[2] += delta;
+						i = enc_count[2] >> 4;
+						enc_count[2] -= i << 4;
+
+						i += l.octave[ch_edit-1];
+
+						if(i < 0) i = 0;
+						else if(i > 5) i = 5;
+
+						l.octave[ch_edit-1] = i;
+					}
 
 				}
 				else {
-					
+					// volt offset
+					if(l.mode[0] == 0) {
+						if(delta > 0)
+							i = l.offset[0] + delta_acc[delta];
+						else 
+							i = l.offset[0] - delta_acc[-delta];
+						if(i < 0)
+							i = 0;
+						else if(i > 0x3ff)
+							i = 0x3ff;
+						l.offset[0] = i;
+						l.offset[1] = i;
+						l.offset[2] = i;
+						l.offset[3] = i;
+					}
+					// octave
+					else {
+						enc_count[2] += delta;
+						i = enc_count[2] >> 4;
+						enc_count[2] -= i << 4;
+
+						i += l.octave[0];
+
+						if(i < 0) i = 0;
+						else if(i > 5) i = 5;
+
+						l.octave[0] = i;
+						l.octave[1] = i;
+						l.octave[2] = i;
+						l.octave[3] = i;
+					}
 				}
 			}
 			break;
@@ -627,11 +704,23 @@ void refresh_levels_config() {
 					monomeLedBuffer[64 + ((32 + i2) & 0x3f)] = 3;
 			}
 
-			// octaves
+			// note octave markers
 			monomeLedBuffer[64 + ((32 + 0) & 0x3f)] = 7;
 			monomeLedBuffer[64 + ((32 + 12) & 0x3f)] = 7;
 			monomeLedBuffer[64 + ((32 + 24) & 0x3f)] = 7;
 			monomeLedBuffer[64 + ((32 + 36) & 0x3f)] = 7;
+
+			// octave
+			monomeLedBuffer[128 + 41 + 0 * 3] = 3;
+			monomeLedBuffer[128 + 41 + 1 * 3] = 3;
+			monomeLedBuffer[128 + 41 + 2 * 3] = 3;
+			monomeLedBuffer[128 + 41 + 3 * 3] = 3;
+			monomeLedBuffer[128 + 41 + 4 * 3] = 3;
+			monomeLedBuffer[128 + 41 + 5 * 3] = 3;
+
+			monomeLedBuffer[128 + 40 + l.octave[ch_edit-1] * 3 + 0] = 15;
+			monomeLedBuffer[128 + 40 + l.octave[ch_edit-1] * 3 + 1] = 15;
+			monomeLedBuffer[128 + 40 + l.octave[ch_edit-1] * 3 + 2] = 15;
 		}
 		else {
 			// range
@@ -640,6 +729,15 @@ void refresh_levels_config() {
 				if(l.range[ch_edit-1] >= i1)
 					monomeLedBuffer[64 + 40 + i1] +=3;
 			}
+
+			// offset
+			monomeLedBuffer[128 + 39] = 3;
+			monomeLedBuffer[128 + 0] = 3;
+			monomeLedBuffer[128 + 24] = 3;
+
+			i1 = (l.offset[ch_edit-1] * 3) >> 2;
+			i1 = (i1 + 640) & 0x3ff;
+			arc_draw_point(2, i1);
 		}
 		
 		// slew
@@ -661,11 +759,32 @@ void refresh_levels_config() {
 						monomeLedBuffer[64 + ((32 + i2) & 0x3f)] = 3;
 				}
 
-				// octaves
+				// note octave markers
 				monomeLedBuffer[64 + ((32 + 0) & 0x3f)] = 7;
 				monomeLedBuffer[64 + ((32 + 12) & 0x3f)] = 7;
 				monomeLedBuffer[64 + ((32 + 24) & 0x3f)] = 7;
 				monomeLedBuffer[64 + ((32 + 36) & 0x3f)] = 7;
+
+				// octave
+				monomeLedBuffer[128 + 41 + 0 * 3] = 3;
+				monomeLedBuffer[128 + 41 + 1 * 3] = 3;
+				monomeLedBuffer[128 + 41 + 2 * 3] = 3;
+				monomeLedBuffer[128 + 41 + 3 * 3] = 3;
+				monomeLedBuffer[128 + 41 + 4 * 3] = 3;
+				monomeLedBuffer[128 + 41 + 5 * 3] = 3;
+
+				monomeLedBuffer[128 + 40 + l.octave[0] * 3 + 0] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[0] * 3 + 1] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[0] * 3 + 2] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[1] * 3 + 0] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[1] * 3 + 1] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[1] * 3 + 2] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[2] * 3 + 0] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[2] * 3 + 1] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[2] * 3 + 2] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[3] * 3 + 0] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[3] * 3 + 1] += 3;
+				monomeLedBuffer[128 + 40 + l.octave[3] * 3 + 2] += 3;
 			}
 			else {
 				// range
@@ -675,7 +794,25 @@ void refresh_levels_config() {
 						if(l.range[i2] >= i1)
 							monomeLedBuffer[64 + 40 + i1] +=3;
 				}
-					
+
+				// offset
+				monomeLedBuffer[128 + 39] = 3;
+				monomeLedBuffer[128 + 0] = 3;
+				monomeLedBuffer[128 + 24] = 3;
+
+				i1 = (l.offset[0] * 3) >> 2;
+				i1 = (i1 + 640) & 0x3ff;
+				arc_draw_point_dark(2, i1);
+				i1 = (l.offset[1] * 3) >> 2;
+				i1 = (i1 + 640) & 0x3ff;
+				arc_draw_point_dark(2, i1);
+				i1 = (l.offset[2] * 3) >> 2;
+				i1 = (i1 + 640) & 0x3ff;
+				arc_draw_point_dark(2, i1);
+				i1 = (l.offset[3] * 3) >> 2;
+				i1 = (i1 + 640) & 0x3ff;
+				arc_draw_point_dark(2, i1);
+
 			}
 
 		}

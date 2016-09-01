@@ -1,5 +1,7 @@
 #pragma once
 
+#include "timers.h"
+
 #include "ansible_grid.h"
 #include "ansible_arc.h"
 #include "ansible_midi.h"
@@ -58,6 +60,8 @@ typedef const struct {
 } nvram_data_t;
 
 extern nvram_data_t f;
+
+extern softTimer_t auxTimer[4];
 
 
 void (*clock)(u8 phase);

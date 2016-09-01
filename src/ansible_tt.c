@@ -15,7 +15,7 @@ void set_mode_tt(void) {
 	app_event_handlers[kEventTr] = &handler_TTTr;
 	app_event_handlers[kEventTrNormal] = &handler_TTTrNormal;
 	clock = &clock_tt;
-	clock_set(50);
+	clock_set(f.tt_state.clock_period);
 	process_ii = &ii_tt;
 	update_leds(0);
 
@@ -23,7 +23,7 @@ void set_mode_tt(void) {
 }
 
 void default_tt() {
-	flashc_memset32((void*)&(f.tt_state.clock_period), 200, 4, true);
+	flashc_memset32((void*)&(f.tt_state.clock_period), 500, 4, true);
 }
 
 void clock_tt(uint8_t phase) {
@@ -36,6 +36,11 @@ void clock_tt(uint8_t phase) {
 	// d[3] = 4095 - cv;
 
 	// update_dacs(d);
+
+	if(phase)
+		set_tr(TR4);
+	else
+		clr_tr(TR4);
 }
 
 void ii_tt(uint8_t *d, uint8_t l) {

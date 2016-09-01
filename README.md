@@ -1,5 +1,8 @@
 # ansible
 
+http://msgpack.org/index.html
+https://github.com/hasegaw/msgpack-mcu
+
 6hp
 
 4x gate out
@@ -32,11 +35,6 @@ handlers:
 
 I2C protocol map
 
-
-
-
-
----
 
 in TT slave mode
 	map TRs/CVs sequentially
@@ -150,38 +148,85 @@ toggle vs hold key modes?
 key 1: tempo (grid mode: tap, push, jump, halve/double) / (tt clock)
 in 1: clock
 
+. . . . . . . . . . . . . . . . (step progress)
+. . . . . . . . . . . . . . . . fine
+. . . . . . . . . . . . . . . . rough
+. . . . . . . . . . . . . . . .
+. . . . . . . . . . . . . . . . - --  tap  ++ +
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . half  stop/start  double
+. . . . . . . . . . . . . . . .       reset/sync
+
+(JACK INSERT = CLOCK DIVIDER INTERFACE)
+
+. . . . . . . . . . . . . . . . (step progress)
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . mult | div
+. . . . . . . . . . . . . . . .
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . .       stop/start 
+. . . . . . . . . . . . . . . .       reset/sync
+
+
 key 2: config (graphic selector)
-	a: four voice, two voice, disconnected
-	b: sync: all (note+tr in voice mode, loops), independent
+	a: four voice, disconnected (tr and note independent, no "off" for note)
+	b: sync loop/speed: all, per-voice, free
 in 2: reset
 
 grid layout:
-	voice(1-4)
+	ch (1-4)
 
-	trigger
-		4voice: 64 steps (? in unsync mode only? how does probability work then?)
-		2voice: 16 step + accent
-		ind: 16 steps
-	gate time
+	trigger + playhead (?)
+	gate time + multiplier
 	note
 	octave
 
 	loop length
+		(ch sel not required in tr mode)
 	speed multiple
 		fullscreen squares?
-	probability
+	// both: probability
 		four levels
 
 	scale
 
 	pattern
 		(indicate blank vs. not)
+		hold + ch for mutes
 
-	alt
-		(voice: mute)
+			  11 1 1
+	1234 6789 12 4 6
+		  
 
+mult/div time:
 
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . 
+. . . o o o o . . o o o o . . . 
+. . . o o o o . . o o o o . . .
+. . . o o o o . . o o o o . . . 
+. . . o o o o . . o o o o . . . 
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . 
 
+. . . . . . . . . . . . . . . . 
+. . . . o o o o o o o o . . . . 
+. . . . o o o o o o o o . . . . 
+. . . . . . . . . . . . . . . . 
+. . . . o o o o o o o o . . . . 
+. . . . o o o o o o o o . . . . 
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . 
+
+. . . . . . . . . . . . . . . . 
+o o o o o o o o o o o o o o o o 
+. . . . . . . . . . . . . . . . 
+o o o o o o o o o o o o o o o o 
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . 
+. . . . . . . . . . . . . . . . 
 
 
 
@@ -195,15 +240,27 @@ key 1: tempo (grid mode: tap, push, jump, halve/double) / (tt clock)
 in 1: clock
 
 key 2: config
-	a: scale modes (shared with kria?)
-	b: voice shift register vs allocate (steal vs. not) vs fixed four vs tt driven
-	c: trig on position set
+	a: 8 trig / 1.2.4 voice
+	b: scale
+	c: trig on push
 in 2: reset
 
 > tt param read for trigger/gate states mapped overriding to tt tr inputs
 > driven on tt clock (must prevent self-clocking infinite loop)
 
 identical mp layout
+
+
+
+c.......oooooooo
+.aa.aaa.oooooooo
+.aa.aa..oooooooo
+.aa.a...oooooooo
+.aa.a...oooooooo
+........oooooooo
+bbbbbbbboooooooo
+bbbbbbbboooooooo
+
 
 
 
