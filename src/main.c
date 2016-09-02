@@ -173,6 +173,11 @@ void set_mode(ansible_mode_t m) {
 	// print_dbg("\r\nset mode ");
 	// print_dbg_ulong(f.state.mode);
 
+	timer_remove(&auxTimer[0]);
+	timer_remove(&auxTimer[1]);
+	timer_remove(&auxTimer[2]);
+	timer_remove(&auxTimer[3]);
+
 	switch (m) {
 	case mGridKria:
 	case mGridMP:
