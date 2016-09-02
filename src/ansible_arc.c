@@ -4,17 +4,14 @@ UI REWORK.
 	two-press for switching edit modes?
 	OR L to toggle into config, R in config to change
 
+rework slew display (anti-point with other indication)
+
 presets
 
 /////
 
-SLEW NEEDS scaling
-
-default slew for editing?? or same as transition?
-tune acceleration
-
-
 future features?
+	slew wants exponentiation
 	live slew indication
 	share scales with kria/mp?
 */
@@ -89,8 +86,10 @@ uint8_t key_count_arc[2];
 
 void (*arc_refresh)(void);
 
-const uint8_t delta_acc[32] = {0, 1, 3, 5, 7, 9, 10, 12, 14, 16, 18, 19, 21, 23, 25, 27, 28, 30, 32, 34, 36, 37, 39, 41, 43,
-45, 46, 48, 50, 52, 54, 55 };
+const uint8_t delta_acc[16] = {0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120};
+// = {0, 1, 3, 5, 7, 9, 10, 12, 14, 16, 18, 19, 21, 23, 25, 27, 28, 30, 32, 34, 36, 37, 39, 41, 43,
+//45, 46, 48, 50, 52, 54, 55 };
+
 
 static void key_long_levels(uint8_t key);
 static void key_long_cycles(uint8_t key);
@@ -438,6 +437,8 @@ void handler_LevelsEnc(s32 data) {
 		}
 		// VOLT
 		else {
+			if(delta > 15) delta = 15;
+			if(delta < -15) delta = -15;
 			if(delta > 0)
 				i = l.pattern[n][l.now] + delta_acc[delta];
 			else 
@@ -621,6 +622,8 @@ void handler_LevelsEnc(s32 data) {
 				if(ch_edit) {
 					// volt offset
 					if(l.mode[ch_edit-1] == 0) {
+						if(delta > 15) delta = 15;
+						if(delta < -15) delta = -15;
 						if(delta > 0)
 							i = l.offset[ch_edit-1] + delta_acc[delta];
 						else 
@@ -648,6 +651,8 @@ void handler_LevelsEnc(s32 data) {
 				else {
 					// volt offset
 					if(l.mode[0] == 0) {
+						if(delta > 15) delta = 15;
+						if(delta < -15) delta = -15;
 						if(delta > 0)
 							i = l.offset[0] + delta_acc[delta];
 						else 
@@ -693,9 +698,15 @@ void handler_LevelsEnc(s32 data) {
 				dac_set_slew(ch_edit-1, i);
 			}
 			else {
-				i = l.slew[0] + (delta * 8);
+				if(delta > 15) delta = 15;
+				if(delta < -15) delta = -15;
+				if(delta > 0)
+					i = l.offset[0] + delta_acc[delta];
+				else 
+					i = l.offset[0] - delta_acc[-delta];
+				i += l.slew[0];;
 				if(i < 1) i = 1;
-				else if(i > 4091) i = 4091;
+				else if(i > 2047) i = 2047;
 
 				for(uint8_t i1=0;i1<4;i1++) {
 					l.slew[i1] = i;
@@ -980,7 +991,7 @@ void refresh_levels_config() {
 
 		// slew
 		for(i1=0;i1<4;i1++) {
-			for(i2=0;i2 < 1 + ((l.slew[i1] * 3) >> 8);i2++)
+			for(i2=0;i2 < 1 + ((l.slew[i1] * 3) >> 7);i2++)
 				monomeLedBuffer[192 + ((40 + i2) & 0x3f)] += 3;
 		}
 	}
