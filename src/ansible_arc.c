@@ -302,12 +302,14 @@ static void levels_at1(void* o) {
 
 static void levels_at2(void* o) {
 	if(tr_state[2]) {
-		set_tr(TR3);
-		timer_reset_set(&auxTimer[2], tr_time[2] + tr_time_pw[2]);
-	}
-	else {
 		clr_tr(TR3);
 		timer_reset_set(&auxTimer[2], tr_time[2] - tr_time_pw[2]);
+	}
+	else {
+		tr_time[2] = get_tr_time(2);
+		tr_time_pw[2] = get_tr_time_pw(2);
+		set_tr(TR3);
+		timer_reset_set(&auxTimer[2], tr_time[2] + tr_time_pw[2]);
 	}
 
 	tr_state[2] ^= 1;
@@ -315,12 +317,14 @@ static void levels_at2(void* o) {
 
 static void levels_at3(void* o) {
 	if(tr_state[3]) {
-		set_tr(TR4);
-		timer_reset_set(&auxTimer[3], tr_time[3] + tr_time_pw[3]);
-	}
-	else {
 		clr_tr(TR4);
 		timer_reset_set(&auxTimer[3], tr_time[3] - tr_time_pw[3]);
+	}
+	else {
+		tr_time[3] = get_tr_time(3);
+		tr_time_pw[3] = get_tr_time_pw(3);
+		set_tr(TR4);
+		timer_reset_set(&auxTimer[3], tr_time[3] + tr_time_pw[3]);
 	}
 
 	tr_state[3] ^= 1;
