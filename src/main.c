@@ -499,7 +499,7 @@ int main(void)
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		// flash_write();
-		flashc_memset8((void*)&(f.preset_select), 0, 1, true);
+		// flashc_memset8((void*)&(f.preset_select), 0, 1, true);
 		default_kria();
 		default_mp();
 		default_levels();
@@ -510,8 +510,8 @@ int main(void)
 	}
 	else {
 		// load from flash at startup
-		preset_select = f.preset_select;
-		flash_read();
+		// preset_select = f.preset_select;
+		// flash_read();
 	}
 
 	init_levels();

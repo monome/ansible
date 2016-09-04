@@ -1,7 +1,5 @@
 /*
 
-rework slew display (anti-point with other indication)
-
 presets
 
 -------------
@@ -44,6 +42,56 @@ future features?
 #include "main.h"
 #include "ansible_arc.h"
 
+static uint8_t arc_preset_mode;
+static uint8_t arc_preset;
+static int8_t arc_preset_read;
+static int8_t arc_preset_write;
+
+static int16_t enc_count[4];
+
+void (*arc_refresh)(void);
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// LEVELS
+
+static void levels_pattern_next(void);
+static void levels_play_next(void);
+
+static void levels_dac_refresh(void);
+
+static void levels_timer_volt0(void* o);
+static void levels_timer_volt1(void* o);
+static void levels_timer_volt2(void* o);
+static void levels_timer_volt3(void* o);
+static void levels_timer_note0(void* o);
+static void levels_timer_note1(void* o);
+static void levels_timer_note2(void* o);
+static void levels_timer_note3(void* o);
+
+static levels_data_t l;
+
+static uint8_t mode;
+static uint8_t mode_config;
+static uint8_t play;
+static uint8_t pattern_pos;
+static uint8_t pattern_pos_play;
+static int8_t pattern_read;
+static int8_t pattern_write;
+static uint8_t levels_scales[4][29];
+static bool tr_state[4];
+static uint16_t tr_time[4];
+static int16_t tr_time_pw[4];
+
+#define LEVELS_CM_MODE 0
+#define LEVELS_CM_RANGE 1
+#define LEVELS_CM_OFFSET 2
+#define LEVELS_CM_SLEW 3
+
+////////////////////////////////////////////////////////////////////////////////
+// CYCLES
+
 
 
 void set_mode_arc(void) {
@@ -55,8 +103,9 @@ void set_mode_arc(void) {
 		app_event_handlers[kEventTrNormal] = &handler_LevelsTrNormal;
 		app_event_handlers[kEventMonomeRingEnc] = &handler_LevelsEnc;
 		app_event_handlers[kEventMonomeRefresh] = &handler_LevelsRefresh;
-		clock = &clock_levels;
-		clock_set(f.levels_state.clock_period);
+		clock = &clock_null;
+		// clock = &clock_levels;
+		// clock_set(f.levels_state.clock_period);
 		process_ii = &ii_levels;
 		resume_levels();
 		update_leds(1);
@@ -87,8 +136,49 @@ void set_mode_arc(void) {
 }
 
 
+static inline void arc_leave_preset(void) {
+	arc_preset_mode = 0;
+
+	switch(f.state.mode) {
+	case mArcLevels:
+		mode = 0;
+		app_event_handlers[kEventMonomeRingEnc] = &handler_LevelsEnc;
+		app_event_handlers[kEventKey] = &handler_LevelsKey;
+		arc_refresh = &refresh_levels;
+		break;
+	case mArcCycles:
+
+		app_event_handlers[kEventMonomeRingEnc] = &handler_CyclesEnc;
+		app_event_handlers[kEventKey] = &handler_CyclesKey;
+		// arc_refresh = &refresh_cycles;
+		break;
+	default:
+		break;
+	}	
+}
+
 void handler_ArcFrontShort(s32 data) {
-	print_dbg("\r\n> PRESET");
+	print_dbg("\r\n> PRESET ");
+	print_dbg_ulong(arc_preset);
+	if(arc_preset_mode) {
+		arc_leave_preset();
+	}
+	else {
+		enc_count[0] = 0;
+		enc_count[1] = 0;
+		enc_count[2] = 0;
+		enc_count[3] = 0;
+
+		arc_preset_mode = 1;
+		arc_preset_read = -1;
+		arc_preset_write = -1;
+
+		app_event_handlers[kEventKey] = &handler_ArcPresetKey;
+		app_event_handlers[kEventMonomeRingEnc] = &handler_ArcPresetEnc;
+		arc_refresh = &refresh_arc_preset;
+	}
+
+	monomeFrameDirty++;
 }
 
 void handler_ArcFrontLong(s32 data) {
@@ -98,18 +188,23 @@ void handler_ArcFrontLong(s32 data) {
 		set_mode(mArcLevels);
 }
 
-uint8_t key_count_arc[2];
-
-void (*arc_refresh)(void);
-
-// https://en.wikipedia.org/wiki/Triangular_number
-const uint8_t delta_acc[16] = {0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120};
 
 
 static void key_long_levels(uint8_t key);
 static void key_long_cycles(uint8_t key);
 
 static void generate_scales(uint8_t n);
+
+static void arc_draw_point(uint8_t n, uint16_t p);
+static void arc_draw_point_dark(uint8_t n, uint16_t p);
+
+static bool ext_clock;
+static bool ext_reset;
+
+uint8_t key_count_arc[2];
+
+// https://en.wikipedia.org/wiki/Triangular_number
+const uint8_t delta_acc[16] = {0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120};
 
 
 void arc_keytimer(void) {
@@ -146,49 +241,101 @@ void arc_keytimer(void) {
 	}
 }
 
-static void arc_draw_point(uint8_t n, uint16_t p);
-static void arc_draw_point_dark(uint8_t n, uint16_t p);
+void handler_ArcPresetEnc(s32 data) {
+	uint8_t n;
+	int8_t delta;
+	int16_t i;
 
-static bool ext_clock;
-static bool ext_reset;
+	monome_ring_enc_parse_event_data(data, &n, &delta);
+
+	enc_count[n] += delta;
+	i = enc_count[n] >> 4;
+	enc_count[n] -= i << 4;
+
+	if(i) {
+		switch(n) {
+		case 0:
+			if(arc_preset_read == -1)
+				arc_preset_read = arc_preset;
+			else
+				arc_preset_read = (arc_preset_read + i) & 0x7;
+			arc_preset_write = -1;
+			break;
+		case 1:
+			if(arc_preset_write == -1)
+				arc_preset_write = arc_preset;
+			else
+				arc_preset_write = (arc_preset_write + i) & 0x7;
+			arc_preset_read = -1;
+			break;
+		default:
+			arc_preset_read = -1;
+			arc_preset_write = -1;
+			break;
+		}
+		monomeFrameDirty++;
+	}
+}
+
+void handler_ArcPresetKey(s32 data) {
+	switch(data) {
+	case 1:
+	case 3:
+		if(arc_preset_write != -1) {
+			arc_preset = arc_preset_write;
+			print_dbg("\r\nwrite preset: ");
+			print_dbg_ulong(arc_preset);
+			flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
+			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+
+			arc_leave_preset();
+			resume_levels();
+		}
+		else if(arc_preset_read != -1) {
+			arc_preset = arc_preset_read;
+			print_dbg("\r\nread preset: ");
+			print_dbg_ulong(arc_preset);
+			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+			init_levels();
+			arc_leave_preset();
+			resume_levels();
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void refresh_arc_preset(void) {
+	uint16_t i1;
+	for(i1=0;i1<256;i1++) {
+		monomeLedBuffer[i1] = 0;
+	}
+
+	if(arc_preset_read != -1) {
+		for(i1=0;i1<8;i1++) {
+			monomeLedBuffer[arc_preset * 8 + i1] = 7;
+			monomeLedBuffer[arc_preset_read * 8 + i1] = 15;
+		}
+	}
+	else if(arc_preset_write != -1) {
+		for(i1=0;i1<8;i1++) {
+			monomeLedBuffer[arc_preset * 8 + i1] = 7;
+			monomeLedBuffer[64 + arc_preset_write * 8 + i1] = 15;
+		}
+	}
+	else {
+		for(i1=0;i1<8;i1++)
+			monomeLedBuffer[arc_preset * 8 + i1] = 7;
+	}
+}
+
+
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
-static void levels_pattern_next(void);
-static void levels_play_next(void);
-
-static void levels_dac_refresh(void);
-
-static void levels_timer_volt0(void* o);
-static void levels_timer_volt1(void* o);
-static void levels_timer_volt2(void* o);
-static void levels_timer_volt3(void* o);
-static void levels_timer_note0(void* o);
-static void levels_timer_note1(void* o);
-static void levels_timer_note2(void* o);
-static void levels_timer_note3(void* o);
-
-static levels_data_t l;
-
-static uint8_t mode;
-static uint8_t mode_config;
-static uint8_t play;
-static uint8_t pattern_pos;
-static uint8_t pattern_pos_play;
-static int8_t pattern_read;
-static int8_t pattern_write;
-static int16_t enc_count[4];
-static uint8_t levels_scales[4][29];
-static bool tr_state[4];
-static uint16_t tr_time[4];
-static int16_t tr_time_pw[4];
-
-#define LEVELS_CM_MODE 0
-#define LEVELS_CM_RANGE 1
-#define LEVELS_CM_OFFSET 2
-#define LEVELS_CM_SLEW 3
 
 static inline uint16_t get_tr_time(uint8_t n) {
 	return ((0x3ff - l.pattern[n][l.now]) >> (2 - l.range[n])) + 40;
@@ -220,26 +367,30 @@ void default_levels() {
 			l.pattern[i1][i2] = 0;
 	}
 
-	flashc_memcpy((void *)&f.levels_state.l, &l, sizeof(l), true);
-	flashc_memset32((void*)&(f.levels_state.clock_period), 250, 4, true);
+	for(i1=0;i1<8;i1++)
+		flashc_memcpy((void *)&f.levels_state.l[i1], &l, sizeof(l), true);
+	flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+	// flashc_memcpy_memset32((void*)&(f.levels_state.clock_period), 250, 4, true);
 }
 
 void init_levels() {
 	uint8_t i1;
 
-	l.now = f.levels_state.l.now;
-	l.start = f.levels_state.l.start;
-	l.len = f.levels_state.l.len;
-	l.dir = f.levels_state.l.dir;
+	arc_preset = f.levels_state.preset;
+
+	l.now = f.levels_state.l[arc_preset].now;
+	l.start = f.levels_state.l[arc_preset].start;
+	l.len = f.levels_state.l[arc_preset].len;
+	l.dir = f.levels_state.l[arc_preset].dir;
 
 	for(i1=0;i1<4;i1++) {
-		l.pattern[i1][l.now] = f.levels_state.l.pattern[i1][l.now];
-		l.mode[i1] = f.levels_state.l.mode[i1];
-		l.scale[i1] = f.levels_state.l.scale[i1];
-		l.octave[i1] = f.levels_state.l.octave[i1];
-		l.offset[i1] = f.levels_state.l.offset[i1];
-		l.range[i1] = f.levels_state.l.range[i1];
-		l.slew[i1] = f.levels_state.l.slew[i1];
+		l.pattern[i1][l.now] = f.levels_state.l[arc_preset].pattern[i1][l.now];
+		l.mode[i1] = f.levels_state.l[arc_preset].mode[i1];
+		l.scale[i1] = f.levels_state.l[arc_preset].scale[i1];
+		l.octave[i1] = f.levels_state.l[arc_preset].octave[i1];
+		l.offset[i1] = f.levels_state.l[arc_preset].offset[i1];
+		l.range[i1] = f.levels_state.l[arc_preset].range[i1];
+		l.slew[i1] = f.levels_state.l[arc_preset].slew[i1];
 	}
 }
 
@@ -248,18 +399,14 @@ void resume_levels() {
 
 	mode = 0;
 	mode_config = 0;
-	pattern_pos = 0;
-	pattern_pos_play = 0;
+	pattern_pos = l.start;
+	pattern_pos_play = l.start;
 
 	arc_refresh = &refresh_levels;
 
-	reset_dacs();
-
 	for(i1=0;i1<4;i1++) {
 		dac_set_slew(i1,l.slew[i1]);
-
 		generate_scales(i1);
-
 		tr_state[i1] = 0;
 	}
 
@@ -277,6 +424,9 @@ void resume_levels() {
 
 	ext_clock = !gpio_get_pin_value(B10);
 	ext_reset = false;
+
+	// reset_dacs();
+	levels_dac_refresh();
 
 	monomeFrameDirty++;
 }
@@ -854,50 +1004,6 @@ void refresh_levels_config() {
 		}
 		break;
 	}
-	
-
-	// if(ch_edit) {
-	// 	if(l.mode[ch_edit-1]) {
-	// 		// show note map
-	// 		if(l.scale[ch_edit-1]) {
-	// 			for(i1=0;i1<29;i1++)
-	// 				monomeLedBuffer[64 + ((32 + levels_scales[ch_edit-1][i1]) & 0x3f)] = 3;
-	// 		}
-	// 		// all semis
-	// 		else {
-	// 			for(i2=0;i2<48;i2++)
-	// 				monomeLedBuffer[64 + ((32 + i2) & 0x3f)] = 3;
-	// 		}
-
-	// 		// note octave markers
-	// 		monomeLedBuffer[64 + ((32 + 0) & 0x3f)] = 7;
-	// 		monomeLedBuffer[64 + ((32 + 12) & 0x3f)] = 7;
-	// 		monomeLedBuffer[64 + ((32 + 24) & 0x3f)] = 7;
-	// 		monomeLedBuffer[64 + ((32 + 36) & 0x3f)] = 7;
-	// 		monomeLedBuffer[64 + ((32 + 48) & 0x3f)] = 7;
-
-
-	// 	}
-	// 	else {
-	// 		// range
-	// 		i2 = 48 >> (2-l.range[ch_edit-1]);
-	// 		for(i1=1;i1<i2;i1++)
-	// 			monomeLedBuffer[64 + ((40 + i1) & 0x3f)] = 3;
-
-	// 		// offset
-	// 		monomeLedBuffer[128 + 39] = 3;
-	// 		monomeLedBuffer[128 + 0] = 3;
-	// 		monomeLedBuffer[128 + 24] = 3;
-
-	// 		i1 = (l.offset[ch_edit-1] * 3) >> 2;
-	// 		i1 = (i1 + 640) & 0x3ff;
-	// 		arc_draw_point(2, i1);
-	// 	}
-		
-	// 	// slew
-	// 	for(i2=0;i2 < 1 + ((l.slew[ch_edit-1] * 3) >> 8);i2++)
-	// 		monomeLedBuffer[192 + ((40 + i2) & 0x3f)] += 3;
-	// }
 }
 
 

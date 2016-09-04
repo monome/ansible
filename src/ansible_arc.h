@@ -2,6 +2,7 @@
 
 #include "main.h"
 
+#define ARC_NUM_PRESETS 8
 
 typedef struct {
 	uint16_t pattern[4][16];
@@ -19,8 +20,9 @@ typedef struct {
 } levels_data_t;
 
 typedef struct {
-	uint32_t clock_period;
-	levels_data_t l;
+	// uint32_t clock_period;
+	uint8_t preset;
+	levels_data_t l[ARC_NUM_PRESETS];
 } levels_state_t;
 
 
@@ -34,6 +36,9 @@ void set_mode_arc(void);
 void handler_ArcFrontShort(s32 data);
 void handler_ArcFrontLong(s32 data);
 void arc_keytimer(void);
+void refresh_arc_preset(void);
+void handler_ArcPresetEnc(s32 data);
+void handler_ArcPresetKey(s32 data);
 
 void default_levels(void);
 void init_levels(void);
