@@ -1011,7 +1011,7 @@ static bool arp_seq_switch_active(void) {
 }
 
 static void arp_clock_pulse(uint8_t phase) {
-	bool switched;
+	bool switched = false;
 
 	if (phase) {
 		//set_tr(TR4);
@@ -1019,21 +1019,18 @@ static void arp_clock_pulse(uint8_t phase) {
 		if (switched) {
 			print_dbg("\r\n > arp: switched seq");
 		}
+	}
 
-		//print_dbg("\r\n p: ");
-		for (u8 i = 0; i < 4; i++) {
-			if (switched) {
-				arp_player_reset(&(player[i]));
-			}
-			arp_player_pulse(&(player[i]), active_seq, &player_behavior);
-			//print_dbg_ulong(player[i].div_count);
-			//print_dbg(" ");
+	//print_dbg("\r\n p: ");
+	for (u8 i = 0; i < 4; i++) {
+		if (switched) {
+			arp_player_reset(&(player[i]));
 		}
-		update_dacs(aout);
+		arp_player_pulse(&(player[i]), active_seq, &player_behavior, phase);
+		//print_dbg_ulong(player[i].div_count);
+		//print_dbg(" ");
 	}
-	else {
-		//clr_tr(TR4);
-	}
+	update_dacs(aout);
 }
 
 void clock_midi_arp(uint8_t phase) {
@@ -1109,14 +1106,8 @@ void init_arp(void) {
 	arp_seq_init(next_seq);
 
 	for (u8 i = 0; i < 4; i++) {
-		arp_player_init(&(player[i]));
-		player[i].ch = i;
+		arp_player_init(&(player[i]), i, i + 1);
 	}
-	player[0].division = 1;
-	player[1].division = 2;
-	player[2].division = 3;
-	player[3].division = 4;
-
 
 	active_behavior.note_on = &arp_note_on;
 	active_behavior.note_off = &arp_note_off;
