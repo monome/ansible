@@ -183,7 +183,7 @@ static chord_t chord;
 static arp_seq_t sequences[2];
 static arp_seq_t *active_seq;
 static arp_seq_t *next_seq;
-static arp_player_t player;
+static arp_player_t player[4];
 static u8 pulse_count;
 
 // shared state
@@ -993,7 +993,7 @@ static bool arp_seq_switch_active(void) {
 	// TODO: better abstract this and move to arp.c
 	arp_seq_t *last_seq;
 	bool switched = false;
-	
+
 	cpu_irq_disable_level(APP_TC_IRQ_PRIORITY);
 
 	if (next_seq->state == eSeqWaiting) {
@@ -1011,15 +1011,28 @@ static bool arp_seq_switch_active(void) {
 }
 
 static void arp_clock_pulse(uint8_t phase) {
+	bool switched;
+
 	if (phase) {
-		set_tr(TR4);
-		if (arp_seq_switch_active()) {
+		//set_tr(TR4);
+		switched = arp_seq_switch_active();
+		if (switched) {
 			print_dbg("\r\n > arp: switched seq");
 		}
-		arp_player_pulse(&player, active_seq, &player_behavior);
+
+		//print_dbg("\r\n p: ");
+		for (u8 i = 0; i < 4; i++) {
+			if (switched) {
+				arp_player_reset(&(player[i]));
+			}
+			arp_player_pulse(&(player[i]), active_seq, &player_behavior);
+			//print_dbg_ulong(player[i].div_count);
+			//print_dbg(" ");
+		}
+		update_dacs(aout);
 	}
 	else {
-		clr_tr(TR4);
+		//clr_tr(TR4);
 	}
 }
 
@@ -1095,7 +1108,15 @@ void init_arp(void) {
 	arp_seq_init(active_seq);
 	arp_seq_init(next_seq);
 
-	arp_player_init(&player);
+	for (u8 i = 0; i < 4; i++) {
+		arp_player_init(&(player[i]));
+		player[i].ch = i;
+	}
+	player[0].division = 1;
+	player[1].division = 2;
+	player[2].division = 3;
+	player[3].division = 4;
+
 
 	active_behavior.note_on = &arp_note_on;
 	active_behavior.note_off = &arp_note_off;
@@ -1208,19 +1229,33 @@ static void arp_rt_continue(void) {
 }
 
 static void player_note_on(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
 	// actually drives hw
 	//print_dbg("\r\n > arp: player note on: ");
 	//print_dbg_ulong(num);
 	//mono_note_on(ch, num, vel);
-	set_cv_pitch(MONO_PITCH_CV, num, 0);
-	update_dacs(aout);
-	set_tr(TR1);
+
+	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
+	multi_tr_set(ch);
+	//set_cv_pitch(MONO_PITCH_CV, num, 0);
+	//update_dacs(aout);
+	//set_tr(TR1);
 }
 
 static void player_note_off(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
 	// actually drives hw
-	//print_dbg("\r\n > arp: player note off: ");
+	//print_dbg("\r\n > arp: off: ");
+	//print_dbg_ulong(ch);
+	//print_dbg(" ");
 	//print_dbg_ulong(num);
 	//mono_note_off(ch, num, vel);
-	clr_tr(TR1);
+
+	multi_tr_clr(ch);
+
+	//clr_tr(TR1);
 }
