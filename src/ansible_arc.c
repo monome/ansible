@@ -1,8 +1,5 @@
 /*
 
-UI REWORK.
-	two-press for switching edit modes
-
 rework slew display (anti-point with other indication)
 
 presets
@@ -214,7 +211,7 @@ void default_levels() {
 
 	for(i1=0;i1<4;i1++) {
 		l.mode[i1] = 0;
-		l.scale[i1] = 1;
+		l.scale[i1] = 0;
 		l.octave[i1] = 0;
 		l.offset[i1] = 0;
 		l.range[i1] = 2;
@@ -811,14 +808,9 @@ void refresh_levels_config() {
 			}
 			// volt range
 			else {
-				i2 = 48 >> (2-l.range[i1]);
-				for(i3=1;i3<i2;i3++)
+				i2 = (48 >> (2-l.range[i1]));
+				for(i3=0;i3<i2;i3++)
 					monomeLedBuffer[i1*64 + ((40 + i3) & 0x3f)] = 3;
-
-				monomeLedBuffer[i1*64 + 0] = 7;
-				monomeLedBuffer[i1*64 + 52] = 7;
-				// monomeLedBuffer[i1*64 + 40] = 7;
-				monomeLedBuffer[i1*64 + 24] = 7;
 			}
 		}
 		break;
@@ -840,7 +832,7 @@ void refresh_levels_config() {
 			}
 			// volt offset
 			else {
-				monomeLedBuffer[i1*64 + 39] = 3;
+				monomeLedBuffer[i1*64 + 40] = 3;
 				monomeLedBuffer[i1*64 + 0] = 3;
 				monomeLedBuffer[i1*64 + 24] = 3;
 
@@ -853,11 +845,11 @@ void refresh_levels_config() {
 	case LEVELS_CM_SLEW:
 		// slew
 		for(i1=0;i1<4;i1++) {
-			// i2 = (l.slew[i1] * 3) >> 2;
-			// i2 = (i2 + 640) & 0x3ff;
-			// arc_draw_point_dark(i1, i2);
+			i2 = (l.slew[i1] * 3) >> 3;
+			i2 = (i2 + 640) & 0x3ff;
+			arc_draw_point_dark(i1, i2);
 
-			for(i2=0;i2 < 1 + ((l.slew[i1] * 3) >> 7);i2++)
+			for(i2=0;i2<48;i2++)
 				monomeLedBuffer[i1*64 + ((40 + i2) & 0x3f)] += 3;
 		}
 		break;
@@ -921,8 +913,8 @@ void handler_LevelsKey(s32 data) {
 			// SHORT PRESS
 			if(mode == 2) {
 				mode_config = (mode_config + 1) & 3;
-				print_dbg("\r\nmode: ");
-				print_dbg_ulong(mode_config);
+				// print_dbg("\r\nmode: ");
+				// print_dbg_ulong(mode_config);
 				monomeFrameDirty++;
 			}
 			else {
