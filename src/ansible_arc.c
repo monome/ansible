@@ -1,19 +1,38 @@
 /*
 
 UI REWORK.
-	two-press for switching edit modes?
-	OR L to toggle into config, R in config to change
+	two-press for switching edit modes
 
 rework slew display (anti-point with other indication)
 
 presets
+
+-------------
+
+CYCLE
+
+key 1 long: config
+	1: mode: mult vs. free
+		(does is mult also div?)
+	2: tri vs sine + range (left/right segments)
+	3: force
+	4: friction
+in 1: add force?
+jack present:
+
+key 2: reset
+in 2: reset
+
+
+
+
+
 
 /////
 
 future features?
 	slew wants exponentiation
 	live slew indication
-	share scales with kria/mp?
 */
 
 #include "print_funcs.h"
@@ -86,15 +105,13 @@ uint8_t key_count_arc[2];
 
 void (*arc_refresh)(void);
 
+// https://en.wikipedia.org/wiki/Triangular_number
 const uint8_t delta_acc[16] = {0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120};
-// = {0, 1, 3, 5, 7, 9, 10, 12, 14, 16, 18, 19, 21, 23, 25, 27, 28, 30, 32, 34, 36, 37, 39, 41, 43,
-//45, 46, 48, 50, 52, 54, 55 };
 
 
 static void key_long_levels(uint8_t key);
 static void key_long_cycles(uint8_t key);
 
-static uint8_t calc_note(uint8_t s, uint8_t i);
 static void generate_scales(uint8_t n);
 
 
@@ -263,7 +280,6 @@ void resume_levels() {
 }
 
 static void levels_timer_volt0(void* o) {
-	print_dbg("\r\bt0");
 	if(tr_state[0]) {
 		clr_tr(TR1);
 		timer_reset_set(&auxTimer[0], tr_time[0] - tr_time_pw[0]);
@@ -1292,13 +1308,6 @@ static void arc_draw_point_dark(uint8_t n, uint16_t p) {
 	monomeLedBuffer[(n * 64) + ((c + 63) % 64)] = (15 - (p % 16)) >> 1;
 }
 
-static uint8_t calc_note(uint8_t s, uint8_t i) {
-	uint8_t n, r;
-	r = 0;
-	for(n=0;n<i;n++)
-		r += SCALE_INT[s][n];
-	return r;
-}
 
 static void generate_scales(uint8_t n) {
 	levels_scales[n][0] = 0;

@@ -251,7 +251,6 @@ in 2: reset
 identical mp layout
 
 
-
 c.......oooooooo
 .aa.aaa.oooooooo
 .aa.aa..oooooooo
