@@ -94,6 +94,9 @@ static void fixed_control_change(u8 ch, u8 num, u8 val);
 
 static void init_arp(void);
 
+static void arp_rebuild(chord_t *c);
+static void arp_next_style(void);
+
 static void arp_note_on(u8 ch, u8 num, u8 vel);
 static void arp_note_off(u8 ch, u8 num, u8 vel);
 static void arp_pitch_bend(u8 ch, u16 bend);
@@ -184,7 +187,6 @@ static arp_seq_t sequences[2];
 static arp_seq_t *active_seq;
 static arp_seq_t *next_seq;
 static arp_player_t player[4];
-static u8 pulse_count;
 
 // shared state
 static s16 pitch_offset[4];
@@ -989,6 +991,16 @@ void default_midi_arp() {
 	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
 }
 
+static void arp_next_style(void) {
+	arp_state.style++;
+	if (arp_state.style >= eStyleMax) {
+		arp_state.style = eStyleUp;
+	}
+	print_dbg("\r\n arp style: ");
+	print_dbg_ulong(arp_state.style);
+	arp_rebuild(&chord);
+}
+
 static bool arp_seq_switch_active(void) {
 	// TODO: better abstract this and move to arp.c
 	arp_seq_t *last_seq;
@@ -1017,7 +1029,11 @@ static void arp_clock_pulse(uint8_t phase) {
 		//set_tr(TR4);
 		switched = arp_seq_switch_active();
 		if (switched) {
-			print_dbg("\r\n > arp: switched seq");
+			print_dbg("\r\n arp seq: ");
+			for (u8 i = 0; i < active_seq->length; i++) {
+				print_dbg_ulong(active_seq->notes[i].note.num);
+				print_dbg(" ");
+			}
 		}
 	}
 
@@ -1046,8 +1062,26 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 }
 
 void handler_ArpKey(s32 data) { 
-	print_dbg("\r\n> arp key ");
-	print_dbg_ulong(data);
+	//print_dbg("\r\n> arp key ");
+	//print_dbg_ulong(data);
+	switch (data) {
+	case 0:
+		// key 1 release
+		key_state.key1 = 0;
+		break;
+	case 1:
+		// key 1 press: tap tempo
+		key_state.key1 = 1;
+		break;
+	case 2:
+		// key 2 release: nothing
+		key_state.key2 = 0;
+		break;
+	case 3:
+		key_state.key2 = 1;
+		arp_next_style();
+		break;
+	}
 }
 
 void handler_ArpTr(s32 data) {
@@ -1055,23 +1089,24 @@ void handler_ArpTr(s32 data) {
 
 	switch (data) {
 	case 0:
+		// tr 1 lo
 		arp_clock_pulse(0);
 		break;
 	case 1:
-		// sync internal clock timer
+		// tr 1 hi; sync internal clock timer
 		now = time_now();
 		time_clear();
-		//now /= ARP_PPQ;
 		now = now >> 1; // high/low phase
 		// TODO: clip now to low/high bounds
 		clock_set_tr(now, 0);
 		arp_clock_pulse(1);
 		break;
 	case 2:
-		// nothing;
+		// tr 2 lo; nothing
 		break;
 	case 3:
-		// switch arp pattern
+		// tr 2 hi; switch arp pattern
+		arp_next_style();
 		break;
 	}
 }
@@ -1157,15 +1192,15 @@ static void arp_note_on(u8 ch, u8 num, u8 vel) {
 	// or queue up changes to the chord and build the seq in the clock
 	// function when pulse_count == 0;
 
-	print_dbg("\r\n > arp: note on; ");
-	print_dbg_ulong(num);
+	//print_dbg("\r\n > arp: note on; ");
+	//print_dbg_ulong(num);
 	chord_note_add(&chord, num, vel);
 	arp_rebuild(&chord);
 }
 
 static void arp_note_off(u8 ch, u8 num, u8 vel) {
-	print_dbg("\r\n > arp: note off; ");
-	print_dbg_ulong(num);
+	//print_dbg("\r\n > arp: note off; ");
+	//print_dbg_ulong(num);
 	chord_note_release(&chord, num);
 	arp_rebuild(&chord);
 }
@@ -1181,7 +1216,7 @@ static void arp_rt_tick(void) {
 
 	// TODO: need to implement this...
 	
-	if (key_state.normaled)
+	if (external_clock)
 		return;
 
 	// divide down 24 ppq by ARP_PPQ and pulse
@@ -1205,17 +1240,17 @@ static void arp_rt_tick(void) {
 }
 
 static void arp_rt_start(void) {
-	if (key_state.normaled)
+	if (external_clock)
 		return;
 }
 
 static void arp_rt_stop(void) {
-	if (key_state.normaled)
+	if (external_clock)
 		return;
 }
 
 static void arp_rt_continue(void) {
-	if (key_state.normaled)
+	if (external_clock)
 		return;
 }
 
@@ -1223,30 +1258,13 @@ static void player_note_on(u8 ch, u8 num, u8 vel) {
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
 
-	// actually drives hw
-	//print_dbg("\r\n > arp: player note on: ");
-	//print_dbg_ulong(num);
-	//mono_note_on(ch, num, vel);
-
 	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
 	multi_tr_set(ch);
-	//set_cv_pitch(MONO_PITCH_CV, num, 0);
-	//update_dacs(aout);
-	//set_tr(TR1);
 }
 
 static void player_note_off(u8 ch, u8 num, u8 vel) {
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
 
-	// actually drives hw
-	//print_dbg("\r\n > arp: off: ");
-	//print_dbg_ulong(ch);
-	//print_dbg(" ");
-	//print_dbg_ulong(num);
-	//mono_note_off(ch, num, vel);
-
 	multi_tr_clr(ch);
-
-	//clr_tr(TR1);
 }
