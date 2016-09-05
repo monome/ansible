@@ -1229,11 +1229,12 @@ static void arp_pitch_bend(u8 ch, u16 bend) {
 }
 
 static void arp_control_change(u8 ch, u8 num, u8 val) {
-	u16 period, gate;
+	u16 period, t;
 	u8 i;
 
 	switch (num) {
 	case 16:
+		// clock mod
 		if (!external_clock) {
 			// clock speed; 1000ms - 23ms (same range as ww)
 			period = 25000 / ((val << 3) + 25);
@@ -1243,12 +1244,22 @@ static void arp_control_change(u8 ch, u8 num, u8 val) {
 		}
 		break;
 	case 17:
+		// gate mod
 		//print_dbg("\r\n arp gates: ");
 		for (i = 0; i < 4; i++) {
-			gate = (val * player[i].division) >> 7;
-			//print_dbg_ulong(gate);
+			t = arp_player_set_gate_width(&player[i], val);
+			//print_dbg_ulong(t);
 			//print_dbg(" ");
-			player[i].fixed_gate = gate;
+		}
+		break;
+	case 18:
+		// division mod
+		//print_dbg("\r\n arp divs: 1 ");
+		for (i = 1; i < 4; i++) {
+			t = (i + 1) + ((val >> 5) * (i + 1));
+			//print_dbg_ulong(t);
+			//print_dbg(" ");
+			arp_player_set_division(&player[i], t, &player_behavior);
 		}
 	}
 }
