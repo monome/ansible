@@ -1073,8 +1073,8 @@ void handler_ArpKey(s32 data) {
 		if (tapped) {
 			tapped = false;
 			now = time_now();
-			now = uclip(now >> 1, 10, 2000); // range in ms; 30-6000 bpm
-			print_dbg("\r\n apr tap: ");
+			now = uclip(now >> 1, 23, 1000); // range in ms
+			print_dbg("\r\n arp tap: ");
 			print_dbg_ulong(now);
 			clock_set_tr(now, 0);
 		}
@@ -1107,7 +1107,7 @@ void handler_ArpTr(s32 data) {
 		now = time_now();
 		time_clear();
 		now = now >> 1; // high/low phase
-		// TODO: clip now to low/high bounds
+		// TODO: clip now to low/high bounds?
 		clock_set_tr(now, 0);
 		arp_clock_pulse(1);
 		break;
@@ -1194,17 +1194,6 @@ static void arp_rebuild(chord_t *c) {
 }
 
 static void arp_note_on(u8 ch, u8 num, u8 vel) {
-	// HMMM: we may need to double buffer the sequences building one
-	// then switching to it on a (ext) clock high so that the sequence
-	// is fully sync'd with the ext clock.
-	//
-	// as it stands now the sequence change is picked up on the next
-	// tick which means it is out of sync with the clock +/- some number
-	// of ticks.
-	//
-	// or queue up changes to the chord and build the seq in the clock
-	// function when pulse_count == 0;
-
 	//print_dbg("\r\n > arp: note on; ");
 	//print_dbg_ulong(num);
 	chord_note_add(&chord, num, vel);
@@ -1222,6 +1211,19 @@ static void arp_pitch_bend(u8 ch, u16 bend) {
 }
 
 static void arp_control_change(u8 ch, u8 num, u8 val) {
+	u16 period;
+
+	switch (num) {
+	case 16: // general purpose controller 1
+		if (!external_clock) {
+			// clock speed; 1000ms - 23ms (same range as ww)
+			period = 25000 / ((val << 3) + 25);
+			//print_dbg("\r\n arp clock ms: ");
+			//print_dbg_ulong(period);
+			clock_set(period);
+		}
+		break;
+	}
 }
 
 static void arp_rt_tick(void) {
