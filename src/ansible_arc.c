@@ -1,9 +1,5 @@
 /*
 
-presets
-
--------------
-
 CYCLE
 
 key 1 long: config
@@ -44,8 +40,7 @@ future features?
 
 static uint8_t arc_preset_mode;
 static uint8_t arc_preset;
-static int8_t arc_preset_read;
-static int8_t arc_preset_write;
+static uint8_t arc_preset_select;
 
 static int16_t enc_count[4];
 
@@ -170,8 +165,7 @@ void handler_ArcFrontShort(s32 data) {
 		enc_count[3] = 0;
 
 		arc_preset_mode = 1;
-		arc_preset_read = -1;
-		arc_preset_write = -1;
+		arc_preset_select = arc_preset;
 
 		app_event_handlers[kEventKey] = &handler_ArcPresetKey;
 		app_event_handlers[kEventMonomeRingEnc] = &handler_ArcPresetEnc;
@@ -253,26 +247,7 @@ void handler_ArcPresetEnc(s32 data) {
 	enc_count[n] -= i << 4;
 
 	if(i) {
-		switch(n) {
-		case 0:
-			if(arc_preset_read == -1)
-				arc_preset_read = arc_preset;
-			else
-				arc_preset_read = (arc_preset_read + i) & 0x7;
-			arc_preset_write = -1;
-			break;
-		case 1:
-			if(arc_preset_write == -1)
-				arc_preset_write = arc_preset;
-			else
-				arc_preset_write = (arc_preset_write + i) & 0x7;
-			arc_preset_read = -1;
-			break;
-		default:
-			arc_preset_read = -1;
-			arc_preset_write = -1;
-			break;
-		}
+		arc_preset_select = (arc_preset_select + i) & 0x7;
 		monomeFrameDirty++;
 	}
 }
@@ -280,26 +255,22 @@ void handler_ArcPresetEnc(s32 data) {
 void handler_ArcPresetKey(s32 data) {
 	switch(data) {
 	case 1:
+		arc_preset = arc_preset_select;
+		print_dbg("\r\nread preset: ");
+		print_dbg_ulong(arc_preset);
+		flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+		init_levels();
+		arc_leave_preset();
+		resume_levels();
+		break;
 	case 3:
-		if(arc_preset_write != -1) {
-			arc_preset = arc_preset_write;
-			print_dbg("\r\nwrite preset: ");
-			print_dbg_ulong(arc_preset);
-			flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
-			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
-
-			arc_leave_preset();
-			resume_levels();
-		}
-		else if(arc_preset_read != -1) {
-			arc_preset = arc_preset_read;
-			print_dbg("\r\nread preset: ");
-			print_dbg_ulong(arc_preset);
-			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
-			init_levels();
-			arc_leave_preset();
-			resume_levels();
-		}
+		arc_preset = arc_preset_select;
+		print_dbg("\r\nwrite preset: ");
+		print_dbg_ulong(arc_preset);
+		flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
+		flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+		arc_leave_preset();
+		resume_levels();
 		break;
 	default:
 		break;
@@ -312,21 +283,9 @@ void refresh_arc_preset(void) {
 		monomeLedBuffer[i1] = 0;
 	}
 
-	if(arc_preset_read != -1) {
-		for(i1=0;i1<8;i1++) {
-			monomeLedBuffer[arc_preset * 8 + i1] = 7;
-			monomeLedBuffer[arc_preset_read * 8 + i1] = 15;
-		}
-	}
-	else if(arc_preset_write != -1) {
-		for(i1=0;i1<8;i1++) {
-			monomeLedBuffer[arc_preset * 8 + i1] = 7;
-			monomeLedBuffer[64 + arc_preset_write * 8 + i1] = 15;
-		}
-	}
-	else {
-		for(i1=0;i1<8;i1++)
-			monomeLedBuffer[arc_preset * 8 + i1] = 7;
+	for(i1=0;i1<8;i1++) {
+		monomeLedBuffer[arc_preset * 8 + i1] = 7;
+		monomeLedBuffer[arc_preset_select * 8 + i1] = 15;
 	}
 }
 
@@ -374,7 +333,7 @@ void default_levels() {
 }
 
 void init_levels() {
-	uint8_t i1;
+	uint8_t i1, i2;
 
 	arc_preset = f.levels_state.preset;
 
@@ -384,7 +343,8 @@ void init_levels() {
 	l.dir = f.levels_state.l[arc_preset].dir;
 
 	for(i1=0;i1<4;i1++) {
-		l.pattern[i1][l.now] = f.levels_state.l[arc_preset].pattern[i1][l.now];
+		for(i2=0;i2<16;i2++)
+			l.pattern[i1][i2] = f.levels_state.l[arc_preset].pattern[i1][i2];
 		l.mode[i1] = f.levels_state.l[arc_preset].mode[i1];
 		l.scale[i1] = f.levels_state.l[arc_preset].scale[i1];
 		l.octave[i1] = f.levels_state.l[arc_preset].octave[i1];
@@ -399,8 +359,9 @@ void resume_levels() {
 
 	mode = 0;
 	mode_config = 0;
-	pattern_pos = l.start;
-	pattern_pos_play = l.start;
+	pattern_pos = l.now;
+	pattern_pos_play = l.now;
+	play = l.now;
 
 	arc_refresh = &refresh_levels;
 
