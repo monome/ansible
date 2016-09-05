@@ -20,11 +20,7 @@ in 2: reset (no jack 1) or add force (jack 1 present)
 
 
 
-tr flip on l/r side
 cv out
-
-friction should be 8/16 stage LOG
-negative friction doesn't work (never fully diminishes)
 
 force is 8 step mult
 
@@ -1269,6 +1265,8 @@ void clock_cycles(uint8_t phase) {
 			clr_tr(TR1 + i1);
 		else
 			set_tr(TR1 + i1);
+
+		dac_set_value(i1, c.pos[i1] << 4);
 	}
 
 	monomeFrameDirty++;
