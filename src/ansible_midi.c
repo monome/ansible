@@ -170,6 +170,10 @@ const u16 BEND1[512] = {
 	408, 408
 };
 
+const arp_style player_styles[4] = {
+	eStyleUp, eStyleDown, eStyleUpDown, eStyleRandom
+};
+
 // copy of nvram state for editing
 static midi_standard_state_t standard_state;
 static midi_arp_state_t arp_state;
@@ -1168,6 +1172,7 @@ void init_arp(void) {
 	
 	for (u8 i = 0; i < 4; i++) {
 		arp_player_init(&(player[i]), i, i + 1);
+		player[i].fixed_gate = 0; // triggers
 	}
 
 	active_behavior.note_on = &arp_note_on;
@@ -1224,10 +1229,11 @@ static void arp_pitch_bend(u8 ch, u16 bend) {
 }
 
 static void arp_control_change(u8 ch, u8 num, u8 val) {
-	u16 period;
+	u16 period, gate;
+	u8 i;
 
 	switch (num) {
-	case 16: // general purpose controller 1
+	case 16:
 		if (!external_clock) {
 			// clock speed; 1000ms - 23ms (same range as ww)
 			period = 25000 / ((val << 3) + 25);
@@ -1236,6 +1242,14 @@ static void arp_control_change(u8 ch, u8 num, u8 val) {
 			clock_set(period);
 		}
 		break;
+	case 17:
+		//print_dbg("\r\n arp gates: ");
+		for (i = 0; i < 4; i++) {
+			gate = (val * player[i].division) >> 7;
+			//print_dbg_ulong(gate);
+			//print_dbg(" ");
+			player[i].fixed_gate = gate;
+		}
 	}
 }
 
