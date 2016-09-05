@@ -20,11 +20,15 @@ in 2: reset (no jack 1) or add force (jack 1 present)
 
 
 
+tr flip on l/r side
+cv out
 
 friction should be 8/16 stage LOG
 negative friction doesn't work (never fully diminishes)
 
 force is 8 step mult
+
+
 
 
 
@@ -1183,6 +1187,14 @@ static void levels_play_next() {
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+// const uint8_t friction_map[33] = { 0, 4, 8, 12, 16, 20, 23, 26, 29, 32, 34, 36, 38, 40, 42, 44,
+	// 46, 48, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64};
+
+const uint8_t friction_map[25] = { 0, 12, 20, 26, 30, 34, 39, 42, 45,
+	48, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64};
+
+static uint16_t friction;
+
 void default_cycles() {
 	uint8_t i1;
 
@@ -1236,6 +1248,8 @@ void resume_cycles() {
 	key_count_arc[0] = 0;
 	key_count_arc[1] = 0;
 
+	friction = friction_map[c.friction] + 192;
+
 	// levels_dac_refresh();
 
 	monomeFrameDirty++;
@@ -1248,37 +1262,45 @@ void clock_cycles(uint8_t phase) {
 
 	for(i1=0;i1<4;i1++) {
 		c.pos[i1] = (c.pos[i1] + (c.speed[i1] >> 8)) & 0x3ff;
-		c.speed[i1] = (c.speed[i1] * (c.friction + 1)) >> 8;
+		c.speed[i1] = (c.speed[i1] * (friction)) / 256;
+		// c.speed[i1] = (c.speed[i1] * (friction)) >> 8;
+
+		if(c.pos[i1] & 0x200)
+			clr_tr(TR1 + i1);
+		else
+			set_tr(TR1 + i1);
 	}
 
 	monomeFrameDirty++;
-
-	if(phase)
-		set_tr(TR1);
-	else
-		clr_tr(TR1);
-
-
 }
 
 void ii_cycles(uint8_t *d, uint8_t l) {
 	;;
 }
 
+#define MAX_SPEED 0x6000
+
 void handler_CyclesEnc(s32 data) { 
 	uint8_t n;
 	int16_t i;
 	int8_t delta;
+	int32_t s;
 
 	monome_ring_enc_parse_event_data(data, &n, &delta);
 
 	if(mode == 0) {
 		// FIXME: TUNE THESE LIMITS
-		if(delta > 8)
-			delta = 8;
-		if(delta < -8)
-			delta = -8;
-		c.speed[n] += delta << 8;
+		// if(delta > 10)
+		// 	delta = 10;
+		// if(delta < -10)
+		// 	delta = -10;
+		s = c.speed[n] + (delta << 8);
+
+		if(s > MAX_SPEED)
+			s = MAX_SPEED;
+		if(s < -MAX_SPEED)
+			s = -MAX_SPEED;
+		c.speed[n] = s;
 	}
 	else {
 		switch(n) {
@@ -1298,6 +1320,10 @@ void handler_CyclesEnc(s32 data) {
 			break;
 		// force
 		case 2:
+			enc_count[n] += delta;
+			i = enc_count[n] >> 4;
+			enc_count[n] -= i << 4;
+
 			i += c.force;
 			if(c.force < 1)
 				c.force = 1;
@@ -1306,13 +1332,24 @@ void handler_CyclesEnc(s32 data) {
 			break;
 		// friction
 		case 3:
-			i = c.friction + delta;
-			if(i < 0)
-				c.friction = 0;
-			else if(i > 255)
-				c.friction = 255;
-			else
-				c.friction = i;
+			enc_count[n] += delta;
+			i = enc_count[n] >> 4;
+			enc_count[n] -= i << 4;
+
+			if(i) {
+				i += c.friction;
+				if(i < 0)
+					c.friction = 0;
+				else if(i > 24)
+					c.friction = 24;
+				else
+					c.friction = i;
+
+				friction = friction_map[c.friction] + 192;
+
+				// print_dbg("\r\nfriction: ");
+				// print_dbg_ulong(friction);
+			}
 
 			break;
 		}
@@ -1410,16 +1447,16 @@ void refresh_cycles_config(void) {
 	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
 
 	if(c.mode) {
-		monomeLedBuffer[35] = 7;
-		monomeLedBuffer[42] = 7;
-		monomeLedBuffer[44] = 7;
-		monomeLedBuffer[48] = 7;
-	}
-	else {
 		monomeLedBuffer[36] = 7;
 		monomeLedBuffer[39] = 7;
 		monomeLedBuffer[42] = 7;
 		monomeLedBuffer[45] = 7;
+	}
+	else {
+		monomeLedBuffer[35] = 7;
+		monomeLedBuffer[42] = 7;
+		monomeLedBuffer[44] = 7;
+		monomeLedBuffer[48] = 7;
 	}
 
 	if(c.shape) {
@@ -1432,16 +1469,19 @@ void refresh_cycles_config(void) {
 	}
 	else {
 		for(i1=0;i1<16;i1++) {
-			monomeLedBuffer[64 + i1] = i1;
-			monomeLedBuffer[64 + 16 + i1] = 15-i1;
-			monomeLedBuffer[64 + 32 + i1] = i1;
-			monomeLedBuffer[64 + 48 + i1] = 15-i1;
+			monomeLedBuffer[64 + i1*2] = 15-i1;
+			monomeLedBuffer[64 + i1*2 + 1] = 15-i1;
+			monomeLedBuffer[64 + 32 + i1*2] = i1;
+			monomeLedBuffer[64 + 32 + i1*2 + 1] = i1;
 		}
 	}
 
-	uint16_t i = (c.friction * 3);
-	i = (i + 640) & 0x3ff;
-	arc_draw_point(3, i);
+	monomeLedBuffer[192] = 7;
+	monomeLedBuffer[192 + 40] = 7;
+	monomeLedBuffer[192 + ((c.friction + 40) & 0x3f)] = 15;
+	// uint16_t i = (c.friction * 3);
+	// i = (i + 640) & 0x3ff;
+	// arc_draw_point(3, i);
 
 }
 
