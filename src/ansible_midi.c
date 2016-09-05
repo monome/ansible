@@ -48,6 +48,7 @@ typedef struct {
 //------ prototypes
 
 static void write_midi_standard(void);
+static void write_midi_arp(void);
 
 static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset);
 static void set_cv_velocity(uint16_t *cv, u8 vel);
@@ -258,7 +259,8 @@ void handler_MidiFrontShort(s32 data) {
 	}
 	else {
 		// mMidiArp
-		print_dbg("\r\n arp: wrote config (todo)");
+		print_dbg("\r\n arp: wrote config");
+		write_midi_arp();
 	}
 }
 
@@ -992,6 +994,13 @@ void default_midi_arp() {
 	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
 }
 
+void write_midi_arp(void) {
+	flashc_memset32((void*)&(f.midi_arp_state.clock_period),
+									arp_state.clock_period, 4, true);
+	flashc_memset8((void*)&(f.midi_arp_state.style),
+								 arp_state.style, 1, true);
+}
+
 static void arp_next_style(void) {
 	arp_state.style++;
 	if (arp_state.style >= eStyleMax) {
@@ -1153,6 +1162,10 @@ void init_arp(void) {
 	arp_seq_init(active_seq);
 	arp_seq_init(next_seq);
 
+	// ensure style matches stored config
+	arp_seq_build(active_seq, arp_state.style, &chord);
+	arp_seq_build(next_seq, arp_state.style, &chord);
+	
 	for (u8 i = 0; i < 4; i++) {
 		arp_player_init(&(player[i]), i, i + 1);
 	}
