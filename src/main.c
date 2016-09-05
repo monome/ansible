@@ -515,6 +515,7 @@ int main(void)
 	}
 
 	init_levels();
+	init_cycles();
 	init_mp();
 
 	print_dbg("\r\ni2c addr: ");

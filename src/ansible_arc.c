@@ -1,19 +1,30 @@
 /*
 
+levels "non-seq" mode? or all-pattern edit?
+
 CYCLE
 
-key 1 long: config
+key 1 short: add force
+key 1 long: friction
+in 1: add friction
+
+
+key 2 short: reset
+key 2 long: config
 	1: mode: mult vs. free
 		(does is mult also div?)
 	2: tri vs sine + range (left/right segments)
 	3: force
 	4: friction
-in 1: add force?
-jack present:
+in 2: reset (no jack 1) or add force (jack 1 present)
 
-key 2: reset
-in 2: reset
 
+
+
+friction should be 8/16 stage LOG
+negative friction doesn't work (never fully diminishes)
+
+force is 8 step mult
 
 
 
@@ -25,6 +36,8 @@ future features?
 	slew wants exponentiation
 	live slew indication
 */
+
+#include <string.h> //memset
 
 #include "print_funcs.h"
 #include "flashc.h"
@@ -66,6 +79,7 @@ static void levels_timer_note2(void* o);
 static void levels_timer_note3(void* o);
 
 static levels_data_t l;
+static cycles_data_t c;
 
 static uint8_t mode;
 static uint8_t mode_config;
@@ -113,8 +127,10 @@ void set_mode_arc(void) {
 		app_event_handlers[kEventMonomeRingEnc] = &handler_CyclesEnc;
 		app_event_handlers[kEventMonomeRefresh] = &handler_CyclesRefresh;
 		clock = &clock_cycles;
-		clock_set(f.cycles_state.clock_period);
+		// 24
+		clock_set(DAC_RATE_CV << 2);
 		process_ii = &ii_cycles;
+		resume_cycles();
 		update_leds(2);
 		break;
 	default:
@@ -784,9 +800,7 @@ void handler_LevelsRefresh(s32 data) {
 
 void refresh_levels() {
 	uint16_t i1, i2;
-	for(i1=0;i1<256;i1++) {
-		monomeLedBuffer[i1] = 0;
-	}
+	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
 
 	for(i1=0;i1<4;i1++) {
 		if(l.mode[i1]) {
@@ -840,9 +854,7 @@ void refresh_levels() {
 
 void refresh_levels_change() {
 	uint16_t i1;
-	for(i1=0;i1<256;i1++) {
-			monomeLedBuffer[i1] = 0;
-		}
+	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
 
 	if(l.dir) {
 		for(i1=0;i1<l.len * 4;i1++) {
@@ -880,9 +892,7 @@ void refresh_levels_change() {
 
 void refresh_levels_config() {
 	uint16_t i1, i2, i3;
-	for(i1=0;i1<256;i1++) {
-		monomeLedBuffer[i1] = 0;
-	}
+	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
 
 	switch(mode_config) {
 	case LEVELS_CM_MODE:
@@ -1174,14 +1184,81 @@ static void levels_play_next() {
 ////////////////////////////////////////////////////////////////////////////////
 
 void default_cycles() {
-	flashc_memset32((void*)&(f.cycles_state.clock_period), 50, 4, true);
+	uint8_t i1;
+
+	c.mode = 0;
+	c.shape = 0;
+	c.friction = 0;
+	c.force = 0;
+
+	for(i1=0;i1<4;i1++) {
+		c.pos[i1] = 0;
+		c.speed[i1] = 0;
+		c.mult[i1] = 1;
+	}
+
+	for(i1=0;i1<8;i1++)
+		flashc_memcpy((void *)&f.cycles_state.c[i1], &c, sizeof(c), true);
+
+	flashc_memset32((void*)&(f.cycles_state.preset), 0, 4, true);
+
 }
 
+void init_cycles() {
+	uint8_t i1;
+
+	arc_preset = f.cycles_state.preset;
+
+	c.mode = f.cycles_state.c[arc_preset].mode;
+	c.shape = f.cycles_state.c[arc_preset].shape;
+	c.friction = f.cycles_state.c[arc_preset].friction;
+	c.force = f.cycles_state.c[arc_preset].force;
+
+	for(i1=0;i1<4;i1++) {
+		c.pos[i1] = f.cycles_state.c[arc_preset].pos[i1];
+		c.speed[i1] = f.cycles_state.c[arc_preset].speed[i1];
+		c.mult[i1] = f.cycles_state.c[arc_preset].mult[i1];
+	}
+}
+
+void resume_cycles() {
+	uint8_t i1;
+
+	mode = 0;
+
+	arc_refresh = &refresh_cycles;
+
+	for(i1=0;i1<4;i1++) {
+		dac_set_slew(i1,DAC_RATE_CV << 2);
+		tr_state[i1] = 0;
+	}
+
+	key_count_arc[0] = 0;
+	key_count_arc[1] = 0;
+
+	// levels_dac_refresh();
+
+	monomeFrameDirty++;
+}
+
+
+
 void clock_cycles(uint8_t phase) {
+	uint8_t i1;
+
+	for(i1=0;i1<4;i1++) {
+		c.pos[i1] = (c.pos[i1] + (c.speed[i1] >> 8)) & 0x3ff;
+		c.speed[i1] = (c.speed[i1] * (c.friction + 1)) >> 8;
+	}
+
+	monomeFrameDirty++;
+
 	if(phase)
 		set_tr(TR1);
 	else
 		clr_tr(TR1);
+
+
 }
 
 void ii_cycles(uint8_t *d, uint8_t l) {
@@ -1190,32 +1267,69 @@ void ii_cycles(uint8_t *d, uint8_t l) {
 
 void handler_CyclesEnc(s32 data) { 
 	uint8_t n;
+	int16_t i;
 	int8_t delta;
 
 	monome_ring_enc_parse_event_data(data, &n, &delta);
 
-	print_dbg("\r\n cycles enc \tn: "); 
-	print_dbg_ulong(n); 
-	print_dbg("\t delta: "); 
-	print_dbg_hex(delta);
+	if(mode == 0) {
+		// FIXME: TUNE THESE LIMITS
+		if(delta > 8)
+			delta = 8;
+		if(delta < -8)
+			delta = -8;
+		c.speed[n] += delta << 8;
+	}
+	else {
+		switch(n) {
+		// mode
+		case 0:
+			if(delta > 0)
+				c.mode = 1;
+			else
+				c.mode = 0;
+			break;
+		// shape
+		case 1:
+			if(delta > 0)
+				c.shape = 1;
+			else
+				c.shape = 0;
+			break;
+		// force
+		case 2:
+			i += c.force;
+			if(c.force < 1)
+				c.force = 1;
+			else if(c.force > 4)
+				c.force = 4;
+			break;
+		// friction
+		case 3:
+			i = c.friction + delta;
+			if(i < 0)
+				c.friction = 0;
+			else if(i > 255)
+				c.friction = 255;
+			else
+				c.friction = i;
+
+			break;
+		}
+
+		monomeFrameDirty++;
+	}
 }
 
 
 void handler_CyclesRefresh(s32 data) { 
 	if(monomeFrameDirty) {
-		////
-		for(uint8_t i1=0;i1<16;i1++) {
-			monomeLedBuffer[i1] = 0;
-			monomeLedBuffer[16+i1] = 0;
-			monomeLedBuffer[32+i1] = 4;
-			monomeLedBuffer[48+i1] = 0;
-		}
+		arc_refresh();
 
-		monomeLedBuffer[0] = 15;
-
-		////
 		monome_set_quadrant_flag(0);
 		monome_set_quadrant_flag(1);
+		monome_set_quadrant_flag(2);
+		monome_set_quadrant_flag(3);
 		(*monome_refresh)();
 	}
 }
@@ -1223,6 +1337,39 @@ void handler_CyclesRefresh(s32 data) {
 void handler_CyclesKey(s32 data) { 
 	print_dbg("\r\n> cycles key ");
 	print_dbg_ulong(data);
+
+	switch(data) {
+	// key 1 UP
+	case 0:
+		if(key_count_arc[0]) {
+			key_count_arc[0] = 0;
+			// SHORT PRESS	
+		}
+		break;
+	// key 1 DOWN
+	case 1:
+		key_count_arc[0] = KEY_HOLD_TIME;	
+		break;
+	// key 2 UP
+	case 2:
+		if(key_count_arc[1]) {
+			key_count_arc[1] = 0;
+			// SHORT PRESS
+		}
+		else {
+			// LONG RELEASE
+			mode = 0;
+			arc_refresh = &refresh_cycles;
+			monomeFrameDirty++;
+		}
+		break;
+	// key 2 DOWN
+	case 3:
+		key_count_arc[1] = KEY_HOLD_TIME;
+		break;
+	default:
+		break;
+	}
 }
 
 void handler_CyclesTr(s32 data) { 
@@ -1238,16 +1385,82 @@ void handler_CyclesTrNormal(s32 data) {
 static void key_long_cycles(uint8_t key) {
 	print_dbg("\r\nLONG PRESS >>>>>>> ");
 	print_dbg_ulong(key);
+
+	if(key == 1) {
+		mode = 1;
+		enc_count[0] = 0;
+		enc_count[1] = 0;
+		enc_count[2] = 0;
+		enc_count[3] = 0;
+		arc_refresh = &refresh_cycles_config;
+		monomeFrameDirty++;
+	}
+}
+
+void refresh_cycles(void) {
+	uint8_t i1;
+	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+
+	for(i1=0;i1<4;i1++)
+		arc_draw_point(i1,c.pos[i1]);
+}
+
+void refresh_cycles_config(void) {
+	uint8_t i1;
+	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+
+	if(c.mode) {
+		monomeLedBuffer[35] = 7;
+		monomeLedBuffer[42] = 7;
+		monomeLedBuffer[44] = 7;
+		monomeLedBuffer[48] = 7;
+	}
+	else {
+		monomeLedBuffer[36] = 7;
+		monomeLedBuffer[39] = 7;
+		monomeLedBuffer[42] = 7;
+		monomeLedBuffer[45] = 7;
+	}
+
+	if(c.shape) {
+		for(i1=0;i1<16;i1++) {
+			monomeLedBuffer[64 + i1*4 + 0] = i1;
+			monomeLedBuffer[64 + i1*4 + 1] = i1;
+			monomeLedBuffer[64 + i1*4 + 2] = i1;
+			monomeLedBuffer[64 + i1*4 + 3] = i1;
+		}
+	}
+	else {
+		for(i1=0;i1<16;i1++) {
+			monomeLedBuffer[64 + i1] = i1;
+			monomeLedBuffer[64 + 16 + i1] = 15-i1;
+			monomeLedBuffer[64 + 32 + i1] = i1;
+			monomeLedBuffer[64 + 48 + i1] = 15-i1;
+		}
+	}
+
+	uint16_t i = (c.friction * 3);
+	i = (i + 640) & 0x3ff;
+	arc_draw_point(3, i);
+
 }
 
 
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 
 
 static void arc_draw_point(uint8_t n, uint16_t p) {
 	int c;
 
-	c = p / 16;
+	// c = p / 16;
+	c = p >> 4;
 
 	monomeLedBuffer[(n * 64) + c] = 15;
 	monomeLedBuffer[(n * 64) + ((c + 1) % 64)] = p % 16;

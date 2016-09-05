@@ -26,10 +26,20 @@ typedef struct {
 } levels_state_t;
 
 
-
+typedef struct {
+	uint16_t pos[4];
+	int16_t speed[4];
+	uint8_t mult[4];
+	uint8_t mode;
+	uint8_t shape;
+	uint8_t friction;
+	uint16_t force;
+} cycles_data_t;
 
 typedef struct {
-	uint32_t clock_period;
+	// uint32_t clock_period;
+	uint8_t preset;
+	cycles_data_t c[ARC_NUM_PRESETS];
 } cycles_state_t;
 
 void set_mode_arc(void);
@@ -55,8 +65,12 @@ void handler_LevelsTr(s32 data);
 void handler_LevelsTrNormal(s32 data);
 
 void default_cycles(void);
+void init_cycles(void);
+void resume_cycles(void);
 void clock_cycles(uint8_t phase);
 void ii_cycles(uint8_t *d, uint8_t l);
+void refresh_cycles(void);
+void refresh_cycles_config(void);
 void handler_CyclesEnc(s32 data);
 void handler_CyclesRefresh(s32 data);
 void handler_CyclesKey(s32 data);
