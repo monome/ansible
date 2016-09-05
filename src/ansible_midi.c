@@ -6,6 +6,7 @@
 #include "notes.h"
 #include "arp.h"
 #include "timers.h"
+#include "util.h"
 
 #include "monome.h"
 #include "i2c.h"
@@ -403,7 +404,7 @@ void write_midi_standard(void) {
 }
 
 void clock_midi_standard(uint8_t phase) {
-	if(phase)
+	if (phase)
 		set_tr(TR4);
 	else
 		clr_tr(TR4);
@@ -465,13 +466,13 @@ void handler_StandardKey(s32 data) {
 }
 
 void handler_StandardTr(s32 data) {
-	print_dbg("\r\n> standard tr => ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> standard tr => ");
+	// print_dbg_ulong(data);
 }
 
 void handler_StandardTrNormal(s32 data) { 
-	print_dbg("\r\n> standard tr normal => ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> standard tr normal => ");
+	// print_dbg_ulong(data);
 	// FIXME: this will be wrong on power up if a cable is inserted
 	key_state.normaled = data;
 }
@@ -1026,7 +1027,6 @@ static void arp_clock_pulse(uint8_t phase) {
 	bool switched = false;
 
 	if (phase) {
-		//set_tr(TR4);
 		switched = arp_seq_switch_active();
 		if (switched) {
 			print_dbg("\r\n arp seq: ");
@@ -1037,14 +1037,11 @@ static void arp_clock_pulse(uint8_t phase) {
 		}
 	}
 
-	//print_dbg("\r\n p: ");
 	for (u8 i = 0; i < 4; i++) {
 		if (switched) {
-			arp_player_reset(&(player[i]));
+			arp_player_reset(&(player[i]), &player_behavior);
 		}
 		arp_player_pulse(&(player[i]), active_seq, &player_behavior, phase);
-		//print_dbg_ulong(player[i].div_count);
-		//print_dbg(" ");
 	}
 	update_dacs(aout);
 }
@@ -1062,8 +1059,9 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 }
 
 void handler_ArpKey(s32 data) { 
-	//print_dbg("\r\n> arp key ");
-	//print_dbg_ulong(data);
+	static bool tapped = false;
+	u32 now;
+
 	switch (data) {
 	case 0:
 		// key 1 release
@@ -1072,6 +1070,18 @@ void handler_ArpKey(s32 data) {
 	case 1:
 		// key 1 press: tap tempo
 		key_state.key1 = 1;
+		if (tapped) {
+			tapped = false;
+			now = time_now();
+			now = uclip(now >> 1, 10, 2000); // range in ms; 30-6000 bpm
+			print_dbg("\r\n apr tap: ");
+			print_dbg_ulong(now);
+			clock_set_tr(now, 0);
+		}
+		else {
+			tapped = true;
+			time_clear();
+		}
 		break;
 	case 2:
 		// key 2 release: nothing
@@ -1105,8 +1115,11 @@ void handler_ArpTr(s32 data) {
 		// tr 2 lo; nothing
 		break;
 	case 3:
-		// tr 2 hi; switch arp pattern
-		arp_next_style();
+		// tr 2 hi; reset
+		arp_player_reset(&player[0], &player_behavior);
+		arp_player_reset(&player[1], &player_behavior);
+		arp_player_reset(&player[2], &player_behavior);
+		arp_player_reset(&player[3], &player_behavior);
 		break;
 	}
 }
@@ -1212,46 +1225,47 @@ static void arp_control_change(u8 ch, u8 num, u8 val) {
 }
 
 static void arp_rt_tick(void) {
-	//u32 now;
-
-	// TODO: need to implement this...
+	// incoming midi rt in arp mode doesn't conflicts with the idea of
+	// an internal software clock. there is no obvious ui to control
+	// whether timeing should be driven by the internal clock versus
+	// incoming midi clock.
+	//
+	// possibly use a long hold on tap tempo key to switch?
 	
-	if (external_clock)
-		return;
-
-	// divide down 24 ppq by ARP_PPQ and pulse
+	// u32 now;
 
 	/*
-	if (data == 1) {
-		now = time_now();
-		time_clear();
-
-		print_dbg("\r\n arp clk d: ");
-		print_dbg_ulong(now);
-		
-		now /= ARP_PPQ;
-		pulse_count = 0;
-		clock_set_tr(now);
-
-		print_dbg(" p: ");
-		print_dbg_ulong(now);
+	if (!external_clock) {
+		if (midi_clock.pulse_count == 0) {
+			time_clear();
+			arp_clock_pulse(1);
+		}
+		else if (midi_clock.pulse_count == 12) {
+			now = time_now();
+			arp_clock_pulse(0);
+		}
 	}
+
+	midi_clock_pulse(&midi_clock, ?);
 	*/
 }
 
 static void arp_rt_start(void) {
-	if (external_clock)
-		return;
+	// if (!external_clock) {
+	//	midi_clock_start(&midi_clock);
+	// }
 }
 
 static void arp_rt_stop(void) {
-	if (external_clock)
-		return;
+	// if (!external_clock) {
+	// 	midi_clock_stop(&midi_clock);
+	// }
 }
 
 static void arp_rt_continue(void) {
-	if (external_clock)
-		return;
+	// if (!external_clock) {
+	//  midi_clock_continue(&midi_clock);
+	// }
 }
 
 static void player_note_on(u8 ch, u8 num, u8 vel) {
