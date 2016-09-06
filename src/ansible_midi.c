@@ -103,10 +103,6 @@ static void arp_note_on(u8 ch, u8 num, u8 vel);
 static void arp_note_off(u8 ch, u8 num, u8 vel);
 static void arp_pitch_bend(u8 ch, u16 bend);
 static void arp_control_change(u8 ch, u8 num, u8 val);
-static void arp_rt_tick(void);
-static void arp_rt_start(void);
-static void arp_rt_stop(void);
-static void arp_rt_continue(void);
 
 static void player_note_on(u8 ch, u8 num, u8 vel);
 static void player_note_off(u8 ch, u8 num, u8 vel);
@@ -421,21 +417,11 @@ void ii_midi_standard(uint8_t *d, uint8_t l) {
 }
 
 void handler_StandardKey(s32 data) { 
-	//print_dbg("\r\n> standard key");
-	//print_dbg_ulong(data);
-
-	// 0 == key 1 release
-	// 1 == key 1 press
-	// 2 == key 2 release
-	// 3 == key 2 press
-
 	switch (data) {
 
 	case 0: // key 1 release
 		key_state.key1 = 0;
-		//print_dbg("\r\n standard key1: release");
 		if (fixed_learn.learning == 1 ) {
-			//print_dbg("; canceling fixed mapping learning");
 			fixed_finalize_learning(true);
 		}
 		else {
@@ -450,10 +436,8 @@ void handler_StandardKey(s32 data) {
 
 	case 2: // key 2 release
 		key_state.key2 = 0;
-		//print_dbg("\r\n standard key2: release");
 		if (fixed_learn.learning == 1) {
 			// in learning mode; do nothing
-			//print_dbg("; noop, in learning mode");
 		}
 		else {
 			// switch voicing mode
@@ -472,14 +456,9 @@ void handler_StandardKey(s32 data) {
 }
 
 void handler_StandardTr(s32 data) {
-	// print_dbg("\r\n> standard tr => ");
-	// print_dbg_ulong(data);
 }
 
 void handler_StandardTrNormal(s32 data) { 
-	// print_dbg("\r\n> standard tr normal => ");
-	// print_dbg_ulong(data);
-	// FIXME: this will be wrong on power up if a cable is inserted
 	key_state.normaled = data;
 }
 
@@ -1007,7 +986,7 @@ void write_midi_arp(void) {
 
 static void arp_next_style(void) {
 	arp_state.style++;
-	if (arp_state.style >= eStyleMax) {
+	if (arp_state.style > eStyleRandom) {
 		arp_state.style = eStyleUp;
 	}
 	print_dbg("\r\n arp style: ");
@@ -1041,13 +1020,13 @@ static void arp_clock_pulse(uint8_t phase) {
 
 	if (phase) {
 		switched = arp_seq_switch_active();
-		if (switched) {
-			print_dbg("\r\n arp seq: ");
-			for (u8 i = 0; i < active_seq->length; i++) {
-				print_dbg_ulong(active_seq->notes[i].note.num);
-				print_dbg(" ");
-			}
-		}
+		//if (switched) {
+		//	print_dbg("\r\n arp seq: ");
+		//	for (u8 i = 0; i < active_seq->length; i++) {
+		//		print_dbg_ulong(active_seq->notes[i].note.num);
+		//		print_dbg(" ");
+		//	}
+		//}
 	}
 
 	for (u8 i = 0; i < 4; i++) {
@@ -1089,6 +1068,7 @@ void handler_ArpKey(s32 data) {
 			now = uclip(now >> 1, 23, 1000); // range in ms
 			print_dbg("\r\n arp tap: ");
 			print_dbg_ulong(now);
+			arp_state.clock_period = now;
 			clock_set_tr(now, 0);
 		}
 		else {
@@ -1172,7 +1152,7 @@ void init_arp(void) {
 	
 	for (u8 i = 0; i < 4; i++) {
 		arp_player_init(&(player[i]), i, i + 1);
-		player[i].fixed_gate = 0; // triggers
+		arp_player_set_gate_width(&(player[i]), 0); // triggers
 	}
 
 	active_behavior.note_on = &arp_note_on;
@@ -1180,10 +1160,10 @@ void init_arp(void) {
 	active_behavior.channel_pressure = NULL;
 	active_behavior.pitch_bend = &arp_pitch_bend;
 	active_behavior.control_change = &arp_control_change;
-	active_behavior.clock_tick = &arp_rt_tick;
-	active_behavior.seq_start = &arp_rt_start;
-	active_behavior.seq_stop = &arp_rt_stop;
-	active_behavior.seq_continue = &arp_rt_continue;
+	active_behavior.clock_tick = NULL;
+	active_behavior.seq_start = NULL;
+	active_behavior.seq_stop = NULL;
+	active_behavior.seq_continue = NULL;
 	active_behavior.panic = NULL;
 
 	player_behavior.note_on = &player_note_on;
@@ -1212,15 +1192,11 @@ static void arp_rebuild(chord_t *c) {
 }
 
 static void arp_note_on(u8 ch, u8 num, u8 vel) {
-	//print_dbg("\r\n > arp: note on; ");
-	//print_dbg_ulong(num);
 	chord_note_add(&chord, num, vel);
 	arp_rebuild(&chord);
 }
 
 static void arp_note_off(u8 ch, u8 num, u8 vel) {
-	//print_dbg("\r\n > arp: note off; ");
-	//print_dbg_ulong(num);
 	chord_note_release(&chord, num);
 	arp_rebuild(&chord);
 }
@@ -1262,50 +1238,6 @@ static void arp_control_change(u8 ch, u8 num, u8 val) {
 			arp_player_set_division(&player[i], t, &player_behavior);
 		}
 	}
-}
-
-static void arp_rt_tick(void) {
-	// incoming midi rt in arp mode doesn't conflicts with the idea of
-	// an internal software clock. there is no obvious ui to control
-	// whether timeing should be driven by the internal clock versus
-	// incoming midi clock.
-	//
-	// possibly use a long hold on tap tempo key to switch?
-	
-	// u32 now;
-
-	/*
-	if (!external_clock) {
-		if (midi_clock.pulse_count == 0) {
-			time_clear();
-			arp_clock_pulse(1);
-		}
-		else if (midi_clock.pulse_count == 12) {
-			now = time_now();
-			arp_clock_pulse(0);
-		}
-	}
-
-	midi_clock_pulse(&midi_clock, ?);
-	*/
-}
-
-static void arp_rt_start(void) {
-	// if (!external_clock) {
-	//	midi_clock_start(&midi_clock);
-	// }
-}
-
-static void arp_rt_stop(void) {
-	// if (!external_clock) {
-	// 	midi_clock_stop(&midi_clock);
-	// }
-}
-
-static void arp_rt_continue(void) {
-	// if (!external_clock) {
-	//  midi_clock_continue(&midi_clock);
-	// }
 }
 
 static void player_note_on(u8 ch, u8 num, u8 vel) {
