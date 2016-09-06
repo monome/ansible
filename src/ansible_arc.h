@@ -29,7 +29,7 @@ typedef struct {
 typedef struct {
 	uint16_t pos[4];
 	int16_t speed[4];
-	uint8_t mult[4];
+	int8_t mult[4];
 	uint8_t mode;
 	uint8_t shape;
 	uint8_t friction;

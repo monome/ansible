@@ -2,6 +2,8 @@
 
 levels "non-seq" mode? or all-pattern edit?
 
+
+
 CYCLE
 
 key 1 short: add force
@@ -12,7 +14,6 @@ in 1: add friction
 key 2 short: reset
 key 2 long: config
 	1: mode: mult vs. free
-		(does is mult also div?)
 	2: tri vs sine + range (left/right segments)
 	3: force
 	4: friction
@@ -20,12 +21,16 @@ in 2: reset (no jack 1) or add force (jack 1 present)
 
 
 
-cv out
-
-force is 8 step mult
 
 
 
+key/in reset
+
+add force key/in
+
+add friction key/in
+
+preset
 
 
 
@@ -38,6 +43,7 @@ future features?
 */
 
 #include <string.h> //memset
+#include <stdlib.h> //abs
 
 #include "print_funcs.h"
 #include "flashc.h"
@@ -1190,6 +1196,7 @@ const uint8_t friction_map[25] = { 0, 12, 20, 26, 30, 34, 39, 42, 45,
 	48, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64};
 
 static uint16_t friction;
+static uint8_t add_force;
 
 void default_cycles() {
 	uint8_t i1;
@@ -1197,12 +1204,12 @@ void default_cycles() {
 	c.mode = 0;
 	c.shape = 0;
 	c.friction = 0;
-	c.force = 0;
+	c.force = 1;
 
 	for(i1=0;i1<4;i1++) {
 		c.pos[i1] = 0;
 		c.speed[i1] = 0;
-		c.mult[i1] = 1;
+		c.mult[i1] = 0;
 	}
 
 	for(i1=0;i1<8;i1++)
@@ -1246,7 +1253,7 @@ void resume_cycles() {
 
 	friction = friction_map[c.friction] + 192;
 
-	// levels_dac_refresh();
+	ext_clock = !gpio_get_pin_value(B10);
 
 	monomeFrameDirty++;
 }
@@ -1257,16 +1264,21 @@ void clock_cycles(uint8_t phase) {
 	uint8_t i1;
 
 	for(i1=0;i1<4;i1++) {
-		c.pos[i1] = (c.pos[i1] + (c.speed[i1] >> 8)) & 0x3ff;
+		c.speed[i1] += add_force;
+		c.pos[i1] = (c.pos[i1] + c.speed[i1]) & 0x3fff;
 		c.speed[i1] = (c.speed[i1] * (friction)) / 256;
 		// c.speed[i1] = (c.speed[i1] * (friction)) >> 8;
 
-		if(c.pos[i1] & 0x200)
+		if(c.pos[i1] & 0x2000)
 			clr_tr(TR1 + i1);
 		else
 			set_tr(TR1 + i1);
 
-		dac_set_value(i1, c.pos[i1] << 4);
+		if(c.shape)
+			dac_set_value(i1, c.pos[i1]);
+			// dac_set_value(i1, c.pos[i1] << 2);
+		else
+			dac_set_value(i1, abs(0x2000 - c.pos[i1]) << 1);
 	}
 
 	monomeFrameDirty++;
@@ -1276,7 +1288,7 @@ void ii_cycles(uint8_t *d, uint8_t l) {
 	;;
 }
 
-#define MAX_SPEED 0x6000
+#define MAX_SPEED 2000
 
 void handler_CyclesEnc(s32 data) { 
 	uint8_t n;
@@ -1287,18 +1299,70 @@ void handler_CyclesEnc(s32 data) {
 	monome_ring_enc_parse_event_data(data, &n, &delta);
 
 	if(mode == 0) {
-		// FIXME: TUNE THESE LIMITS
-		// if(delta > 10)
-		// 	delta = 10;
-		// if(delta < -10)
-		// 	delta = -10;
-		s = c.speed[n] + (delta << 8);
+		// sync
+		if(c.mode) {
+			if(n == 0) {
+				s = c.speed[0] + (delta << c.force);
 
-		if(s > MAX_SPEED)
-			s = MAX_SPEED;
-		if(s < -MAX_SPEED)
-			s = -MAX_SPEED;
-		c.speed[n] = s;
+				if(s > MAX_SPEED)
+					s = MAX_SPEED;
+				if(s < -MAX_SPEED)
+					s = -MAX_SPEED;
+				c.speed[0] = s;
+
+				if(c.mult[1] > -1)
+					c.speed[1] = c.speed[0] >> c.mult[1];
+				else
+					c.speed[1] = c.speed[0] << -c.mult[1];
+
+				if(c.mult[2] > -1)
+					c.speed[2] = c.speed[0] >> c.mult[2];
+				else
+					c.speed[2] = c.speed[0] << -c.mult[2];
+
+				if(c.mult[3] > -1)
+					c.speed[3] = c.speed[0] >> c.mult[3];
+				else
+					c.speed[3] = c.speed[0] << -c.mult[3];
+				
+			}
+			else {
+				enc_count[n] += delta;
+				i = enc_count[n] >> 4;
+				enc_count[n] -= i << 4;
+
+				if(i) {
+					i += c.mult[n];
+					if(i < -4)
+						i = -4;
+					else if(i > 1)
+						i = 1;
+					c.mult[n] = i;
+
+					if(i > -1)
+						c.speed[n] = c.speed[0] >> i;
+					else 
+						c.speed[n] = c.speed[0] << -i;
+				}
+			}
+		}
+		// free
+		else {
+			s = c.speed[n] + (delta << c.force);
+
+			if(s > MAX_SPEED)
+				s = MAX_SPEED;
+			if(s < -MAX_SPEED)
+				s = -MAX_SPEED;
+			c.speed[n] = s;
+
+			// print_dbg("\r\n");
+			// print_dbg_ulong(n);
+			// print_dbg(" ");
+			// print_dbg_ulong(s);
+		}
+
+
 	}
 	else {
 		switch(n) {
@@ -1323,10 +1387,11 @@ void handler_CyclesEnc(s32 data) {
 			enc_count[n] -= i << 4;
 
 			i += c.force;
-			if(c.force < 1)
-				c.force = 1;
-			else if(c.force > 4)
-				c.force = 4;
+			if(i < 1)
+				i = 1;
+			else if(i > 4)
+				i = 4;
+			c.force = i;
 			break;
 		// friction
 		case 3:
@@ -1337,11 +1402,10 @@ void handler_CyclesEnc(s32 data) {
 			if(i) {
 				i += c.friction;
 				if(i < 0)
-					c.friction = 0;
+					i = 0;
 				else if(i > 24)
-					c.friction = 24;
-				else
-					c.friction = i;
+					i = 24;
+				c.friction = i;
 
 				friction = friction_map[c.friction] + 192;
 
@@ -1370,15 +1434,20 @@ void handler_CyclesRefresh(s32 data) {
 }
 
 void handler_CyclesKey(s32 data) { 
-	print_dbg("\r\n> cycles key ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> cycles key ");
+	// print_dbg_ulong(data);
 
 	switch(data) {
 	// key 1 UP
 	case 0:
 		if(key_count_arc[0]) {
 			key_count_arc[0] = 0;
-			// SHORT PRESS	
+			// SHORT PRESS
+			// add_force = c.force;
+		}
+		// LONG UP
+		else {
+			friction = friction_map[c.friction] + 192;
 		}
 		break;
 	// key 1 DOWN
@@ -1390,10 +1459,18 @@ void handler_CyclesKey(s32 data) {
 		if(key_count_arc[1]) {
 			key_count_arc[1] = 0;
 			// SHORT PRESS
+			c.pos[0] = 0;
+			c.pos[1] = 0;
+			c.pos[2] = 0;
+			c.pos[3] = 0;
 		}
 		else {
 			// LONG RELEASE
 			mode = 0;
+			enc_count[0] = 0;
+			enc_count[1] = 0;
+			enc_count[2] = 0;
+			enc_count[3] = 0;
 			arc_refresh = &refresh_cycles;
 			monomeFrameDirty++;
 		}
@@ -1408,18 +1485,43 @@ void handler_CyclesKey(s32 data) {
 }
 
 void handler_CyclesTr(s32 data) { 
-	print_dbg("\r\n> cycles tr ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> cycles tr ");
+	// print_dbg_ulong(data);
+
+	switch(data) {
+	case 0:
+		friction = friction_map[c.friction] + 192;
+		break;
+	case 1:
+		friction = friction_map[c.friction >> 1] + 192;
+		break;
+	case 2:
+		if(ext_clock)
+			add_force = 0;
+		break;
+	case 3:
+		if(ext_clock)
+			add_force = 1 << (c.force - 1);
+		else {
+			c.pos[0] = 0;
+			c.pos[1] = 0;
+			c.pos[2] = 0;
+			c.pos[3] = 0;
+		}
+		break;
+	}
 }
 
 void handler_CyclesTrNormal(s32 data) { 
-	print_dbg("\r\n> cycles tr normal ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> cycles tr normal ");
+	// print_dbg_ulong(data);
+
+	ext_clock = data;
 }
 
 static void key_long_cycles(uint8_t key) {
-	print_dbg("\r\nLONG PRESS >>>>>>> ");
-	print_dbg_ulong(key);
+	// print_dbg("\r\nLONG PRESS >>>>>>> ");
+	// print_dbg_ulong(key);
 
 	if(key == 1) {
 		mode = 1;
@@ -1430,14 +1532,26 @@ static void key_long_cycles(uint8_t key) {
 		arc_refresh = &refresh_cycles_config;
 		monomeFrameDirty++;
 	}
+	else {
+		friction = friction_map[c.friction >> 1] + 192;
+	}
 }
 
 void refresh_cycles(void) {
 	uint8_t i1;
 	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
 
+	if(c.mode) {
+		for(i1=1;i1<4;i1++) {
+			monomeLedBuffer[i1*64 + 30 + c.mult[i1]*4] = 3;
+			monomeLedBuffer[i1*64 + 31 + c.mult[i1]*4] = 3;
+			monomeLedBuffer[i1*64 + 32 + c.mult[i1]*4] = 3;
+			monomeLedBuffer[i1*64 + 33 + c.mult[i1]*4] = 3;
+		}
+	}
+
 	for(i1=0;i1<4;i1++)
-		arc_draw_point(i1,c.pos[i1]);
+		arc_draw_point(i1,c.pos[i1] >> 4);
 }
 
 void refresh_cycles_config(void) {
@@ -1473,6 +1587,12 @@ void refresh_cycles_config(void) {
 			monomeLedBuffer[64 + 32 + i1*2 + 1] = i1;
 		}
 	}
+
+	for(i1=0;i1<8;i1++)
+		monomeLedBuffer[128 + 40 + i1] = 3;
+
+	monomeLedBuffer[128 + 38 + (c.force * 2)] = 15;
+	monomeLedBuffer[128 + 39 + (c.force * 2)] = 15;
 
 	monomeLedBuffer[192] = 7;
 	monomeLedBuffer[192 + 40] = 7;
