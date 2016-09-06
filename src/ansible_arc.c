@@ -21,20 +21,6 @@ in 2: reset (no jack 1) or add force (jack 1 present)
 
 
 
-
-
-
-key/in reset
-
-add force key/in
-
-add friction key/in
-
-preset
-
-
-
-
 /////
 
 future features?
@@ -167,7 +153,8 @@ static inline void arc_leave_preset(void) {
 
 		app_event_handlers[kEventMonomeRingEnc] = &handler_CyclesEnc;
 		app_event_handlers[kEventKey] = &handler_CyclesKey;
-		// arc_refresh = &refresh_cycles;
+		mode = 0;
+		arc_refresh = &refresh_cycles;
 		break;
 	default:
 		break;
@@ -280,19 +267,44 @@ void handler_ArcPresetKey(s32 data) {
 		arc_preset = arc_preset_select;
 		print_dbg("\r\nread preset: ");
 		print_dbg_ulong(arc_preset);
-		flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
-		init_levels();
-		arc_leave_preset();
-		resume_levels();
+		switch(f.state.mode) {
+		case mArcLevels:
+			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+			init_levels();
+			arc_leave_preset();
+			resume_levels();
+			break;
+		case mArcCycles:
+			flashc_memset8((void*)&(f.cycles_state.preset), arc_preset, 1, true);
+			init_cycles();
+			arc_leave_preset();
+			resume_cycles();
+			break;
+		default:
+			break;
+		}
 		break;
 	case 3:
 		arc_preset = arc_preset_select;
 		print_dbg("\r\nwrite preset: ");
 		print_dbg_ulong(arc_preset);
-		flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
-		flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
-		arc_leave_preset();
-		resume_levels();
+		switch(f.state.mode) {
+		case mArcLevels:
+			flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
+			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+			arc_leave_preset();
+			resume_levels();
+			break;
+		case mArcCycles:
+			flashc_memcpy((void *)&f.cycles_state.c[arc_preset], &c, sizeof(c), true);
+			flashc_memset8((void*)&(f.cycles_state.preset), arc_preset, 1, true);
+			arc_leave_preset();
+			resume_cycles();
+			break;
+		default:
+			break;
+		}
+		
 		break;
 	default:
 		break;
