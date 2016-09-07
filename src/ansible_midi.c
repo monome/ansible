@@ -43,6 +43,11 @@ typedef struct {
 	u8 normaled : 1; // isn't this tracked elsewhere?
 } key_state_t;
 
+typedef enum {
+	eClockInternal,
+	eClockExternal,
+	eClockMidi
+} clock_source;
 
 //------------------------------
 //------ prototypes
@@ -103,6 +108,10 @@ static void arp_note_on(u8 ch, u8 num, u8 vel);
 static void arp_note_off(u8 ch, u8 num, u8 vel);
 static void arp_pitch_bend(u8 ch, u16 bend);
 static void arp_control_change(u8 ch, u8 num, u8 val);
+static void arp_rt_tick(void);
+static void arp_rt_start(void);
+static void arp_rt_stop(void);
+static void arp_rt_continue(void);
 
 static void player_note_on(u8 ch, u8 num, u8 vel);
 static void player_note_off(u8 ch, u8 num, u8 vel);
@@ -195,7 +204,7 @@ static s16 pitch_offset[4];
 static midi_clock_t midi_clock;
 static key_state_t key_state;
 static uint16_t aout[4];
-static bool external_clock;
+static clock_source sync_source;
 
 
 
@@ -235,8 +244,10 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventFrontLong] = &handler_MidiFrontLong;
 	}
 
+	sync_source = eClockInternal;
+
 	midi_clock_init(&midi_clock);
-	midi_clock_set_div(&midi_clock, 4); // 16th notes; TODO; make configurable?
+	midi_clock_set_div(&midi_clock, 2); // 8th notes; TODO; make configurable?
 
 	key_state.key1 = key_state.key2 = key_state.front = 0;
 	key_state.normaled = !gpio_get_pin_value(B10);
@@ -1041,7 +1052,7 @@ static void arp_clock_pulse(uint8_t phase) {
 void clock_midi_arp(uint8_t phase) {
 	// internal clock timer callback, pulse clock if we are not being
 	// driven externally
-	if (!external_clock) {
+	if (sync_source == eClockInternal) {
 		arp_clock_pulse(phase);
 	}
 }
@@ -1060,9 +1071,12 @@ void handler_ArpKey(s32 data) {
 		key_state.key1 = 0;
 		break;
 	case 1:
-		// key 1 press: tap tempo
+		// key 1 press: tap tempo / force internal clock
 		key_state.key1 = 1;
 		if (tapped) {
+			if (sync_source == eClockMidi) {
+				sync_source = eClockInternal;
+			}
 			tapped = false;
 			now = time_now();
 			now = uclip(now >> 1, 23, 1000); // range in ms
@@ -1077,10 +1091,10 @@ void handler_ArpKey(s32 data) {
 		}
 		break;
 	case 2:
-		// key 2 release: nothing
 		key_state.key2 = 0;
 		break;
 	case 3:
+		// key 2 press: arp mode switch
 		key_state.key2 = 1;
 		arp_next_style();
 		break;
@@ -1109,10 +1123,9 @@ void handler_ArpTr(s32 data) {
 		break;
 	case 3:
 		// tr 2 hi; reset
-		arp_player_reset(&player[0], &player_behavior);
-		arp_player_reset(&player[1], &player_behavior);
-		arp_player_reset(&player[2], &player_behavior);
-		arp_player_reset(&player[3], &player_behavior);
+		for (u8 i = 0; i < 4; i++) {
+			arp_player_reset(&player[i], &player_behavior);
+		}
 		break;
 	}
 }
@@ -1124,11 +1137,11 @@ void handler_ArpTrNormal(s32 data) {
 	switch (data) {
 	case 0:
 		key_state.normaled = 0;
-		external_clock = false;
+		sync_source = eClockInternal;
 		break;
 	case 1:
 		key_state.normaled = 1;
-		external_clock = true;
+		sync_source = eClockExternal;
 		break;
 	}
 }
@@ -1160,10 +1173,10 @@ void init_arp(void) {
 	active_behavior.channel_pressure = NULL;
 	active_behavior.pitch_bend = &arp_pitch_bend;
 	active_behavior.control_change = &arp_control_change;
-	active_behavior.clock_tick = NULL;
-	active_behavior.seq_start = NULL;
-	active_behavior.seq_stop = NULL;
-	active_behavior.seq_continue = NULL;
+	active_behavior.clock_tick = &arp_rt_tick;
+	active_behavior.seq_start = &arp_rt_start;
+	active_behavior.seq_stop = &arp_rt_stop;
+	active_behavior.seq_continue = &arp_rt_continue;
 	active_behavior.panic = NULL;
 
 	player_behavior.note_on = &player_note_on;
@@ -1211,7 +1224,7 @@ static void arp_control_change(u8 ch, u8 num, u8 val) {
 	switch (num) {
 	case 16:
 		// clock mod
-		if (!external_clock) {
+		if (sync_source == eClockInternal) {
 			// clock speed; 1000ms - 23ms (same range as ww)
 			period = 25000 / ((val << 3) + 25);
 			//print_dbg("\r\n arp clock ms: ");
@@ -1237,6 +1250,50 @@ static void arp_control_change(u8 ch, u8 num, u8 val) {
 			//print_dbg(" ");
 			arp_player_set_division(&player[i], t, &player_behavior);
 		}
+	}
+}
+
+static void arp_rt_tick(void) {
+	u32 now;
+
+	if (sync_source != eClockMidi)
+		return;
+
+	now = time_now();
+	time_clear();
+
+	midi_clock_pulse(&midi_clock, now);
+
+	if (midi_clock.pulse_count == 0) {
+		arp_clock_pulse(1);
+	}
+	else if (midi_clock.pulse_count == (midi_clock.pulse_div_count >> 1)) {
+		arp_clock_pulse(0);
+	}
+}
+
+static void arp_rt_start(void) {
+	if (sync_source != eClockExternal) {
+		sync_source = eClockMidi;
+		midi_clock_start(&midi_clock);
+	}
+}
+
+static void arp_rt_stop(void) {
+	if (sync_source == eClockExternal) {
+		midi_clock_stop(&midi_clock);
+		for (u8 i = 0; i < 4; i++) {
+			arp_player_reset(&player[i], &player_behavior);
+		}
+	}
+}
+
+static void arp_rt_continue(void) {
+	// some devices appear to only send continue and stop messages, not
+	// start so continue messages will switch the sync to midi as well
+	if (sync_source != eClockExternal) {
+		sync_source = eClockMidi;
+		midi_clock_continue(&midi_clock);
 	}
 }
 
