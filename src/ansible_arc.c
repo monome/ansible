@@ -1,7 +1,5 @@
 /*
 
-levels "non-seq" mode? or all-pattern edit?
-
 
 
 CYCLE
@@ -351,6 +349,7 @@ void default_levels() {
 
 	for(i1=0;i1<4;i1++) {
 		l.mode[i1] = 0;
+		l.all[i1] = 0;
 		l.scale[i1] = 0;
 		l.octave[i1] = 0;
 		l.offset[i1] = 0;
@@ -380,6 +379,7 @@ void init_levels() {
 		for(i2=0;i2<16;i2++)
 			l.pattern[i1][i2] = f.levels_state.l[arc_preset].pattern[i1][i2];
 		l.mode[i1] = f.levels_state.l[arc_preset].mode[i1];
+		l.all[i1] = f.levels_state.l[arc_preset].all[i1];
 		l.scale[i1] = f.levels_state.l[arc_preset].scale[i1];
 		l.octave[i1] = f.levels_state.l[arc_preset].octave[i1];
 		l.offset[i1] = f.levels_state.l[arc_preset].offset[i1];
@@ -594,6 +594,9 @@ void handler_LevelsEnc(s32 data) {
 
 				l.note[n][l.now] = i;
 
+				if(l.all[n])
+					memset(l.note[n], i, 16);
+
 				if(!ext_clock) 
 					levels_dac_refresh();	
 			}
@@ -611,6 +614,10 @@ void handler_LevelsEnc(s32 data) {
 			else if(i > 0x3ff)
 				i = 0x3ff;
 			l.pattern[n][l.now] = i;
+
+			if(l.all[n])
+				for(uint8_t i1=0;i1<16;i1++)
+					l.pattern[n][i1] = i;
 
 			// print_dbg("\r\n time: ");
 			// print_dbg_ulong(tr_time[n] + tr_time_pw[n]);
@@ -679,30 +686,57 @@ void handler_LevelsEnc(s32 data) {
 		switch(mode_config) {
 		// volt/note mode
 		case LEVELS_CM_MODE:
-			l.mode[n] = delta > 0;
+			enc_count[n] += delta;
+			i = enc_count[n] >> 6;
+			enc_count[n] -= i << 6;
 
-			if(l.mode[n]) {
-				timer_remove( &auxTimer[n]);
-				clr_tr(TR1 + n);
-				tr_state[n] = 0;
-			}
-			else {
-				tr_state[n] = 0;
-				set_tr(TR1 + n);
+			if(i) {
+				if(l.mode[n] == 0) {
+					if(i < 0) {
+						l.all[n] = 1;
+					}
+					else if(l.all[n]) {
+						l.all[n] = 0;
+					}
+					else {
+						l.mode[n] = 1;
+					}
+				}
+				else {
+					if(i > 0) {
+						l.all[n] = 1;
+					}
+					else if(l.all[n]) {
+						l.all[n] = 0;
+					}
+					else {
+						l.mode[n] = 0;
+					}
+				}
 
-				switch(n) {
-				case 0:
-					timer_add(&auxTimer[0], tr_time[0] - tr_time_pw[0], &levels_timer_volt0, NULL );
-					break;
-				case 1:
-					timer_add(&auxTimer[1], tr_time[1] - tr_time_pw[1], &levels_timer_volt1, NULL );
-					break;
-				case 2:
-					timer_add(&auxTimer[2], tr_time[2] - tr_time_pw[2], &levels_timer_volt2, NULL );
-					break;
-				case 3:
-					timer_add(&auxTimer[3], tr_time[3] - tr_time_pw[3], &levels_timer_volt3, NULL );
-					break;
+				if(l.mode[n]) {
+					timer_remove( &auxTimer[n]);
+					clr_tr(TR1 + n);
+					tr_state[n] = 0;
+				}
+				else {
+					tr_state[n] = 0;
+					set_tr(TR1 + n);
+
+					switch(n) {
+					case 0:
+						timer_add(&auxTimer[0], tr_time[0] - tr_time_pw[0], &levels_timer_volt0, NULL );
+						break;
+					case 1:
+						timer_add(&auxTimer[1], tr_time[1] - tr_time_pw[1], &levels_timer_volt1, NULL );
+						break;
+					case 2:
+						timer_add(&auxTimer[2], tr_time[2] - tr_time_pw[2], &levels_timer_volt2, NULL );
+						break;
+					case 3:
+						timer_add(&auxTimer[3], tr_time[3] - tr_time_pw[3], &levels_timer_volt3, NULL );
+						break;
+					}
 				}
 			}
 			break;
@@ -920,6 +954,11 @@ void refresh_levels_config() {
 					monomeLedBuffer[i1*64 + 32 - i2] = (i2 & 1) * 7;
 				else
 					monomeLedBuffer[i1*64 + 32 - i2] = i2;
+			}
+
+			if(l.all[i1]) {
+				monomeLedBuffer[i1*64 + 12] = 7;
+				monomeLedBuffer[i1*64 + 13] = 7;
 			}
 		}
 		break;

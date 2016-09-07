@@ -8,6 +8,7 @@ typedef struct {
 	uint16_t pattern[4][16];
 	uint8_t note[4][16];
 	bool mode[4];
+	bool all[4];
 	uint8_t now;
 	uint8_t start;
 	int8_t len;
