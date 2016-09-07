@@ -1,27 +1,5 @@
 /*
-
-
-
-CYCLE
-
-key 1 short: add force
-key 1 long: friction
-in 1: add friction
-
-
-key 2 short: reset
-key 2 long: config
-	1: mode: mult vs. free
-	2: tri vs sine + range (left/right segments)
-	3: force
-	4: friction
-in 2: reset (no jack 1) or add force (jack 1 present)
-
-
-
-/////
-
-future features?
+possible future features for LEVELS
 	slew wants exponentiation
 	live slew indication
 */
@@ -329,7 +307,7 @@ void refresh_arc_preset(void) {
 ////////////////////////////////////////////////////////////////////////////////
 
 static inline uint16_t get_tr_time(uint8_t n) {
-	return ((0x3ff - l.pattern[n][l.now]) >> (2 - l.range[n])) + 40;
+	return ((0x3ff - l.pattern[n][play]) >> (2 - l.range[n])) + 40;
 }
 
 static inline int16_t get_tr_time_pw(uint8_t n) {
@@ -1302,7 +1280,7 @@ void resume_cycles() {
 	key_count_arc[0] = 0;
 	key_count_arc[1] = 0;
 
-	friction = friction_map[c.friction] + 192;
+	friction = friction_map[24 - c.friction] + 192;
 
 	ext_clock = !gpio_get_pin_value(B10);
 
@@ -1458,7 +1436,7 @@ void handler_CyclesEnc(s32 data) {
 					i = 24;
 				c.friction = i;
 
-				friction = friction_map[c.friction] + 192;
+				friction = friction_map[24 - c.friction] + 192;
 
 				// print_dbg("\r\nfriction: ");
 				// print_dbg_ulong(friction);
@@ -1498,7 +1476,7 @@ void handler_CyclesKey(s32 data) {
 		}
 		// LONG UP
 		else {
-			friction = friction_map[c.friction] + 192;
+			friction = friction_map[24 - c.friction] + 192;
 		}
 		break;
 	// key 1 DOWN
@@ -1541,10 +1519,10 @@ void handler_CyclesTr(s32 data) {
 
 	switch(data) {
 	case 0:
-		friction = friction_map[c.friction] + 192;
+		friction = friction_map[24 - c.friction] + 192;
 		break;
 	case 1:
-		friction = friction_map[c.friction >> 1] + 192;
+		friction = friction_map[(24 - c.friction) >> 1] + 192;
 		break;
 	case 2:
 		if(ext_clock)
@@ -1584,7 +1562,7 @@ static void key_long_cycles(uint8_t key) {
 		monomeFrameDirty++;
 	}
 	else {
-		friction = friction_map[c.friction >> 1] + 192;
+		friction = friction_map[(24 - c.friction) >> 1] + 192;
 	}
 }
 
@@ -1645,8 +1623,8 @@ void refresh_cycles_config(void) {
 	monomeLedBuffer[128 + 38 + (c.force * 2)] = 15;
 	monomeLedBuffer[128 + 39 + (c.force * 2)] = 15;
 
-	monomeLedBuffer[192] = 7;
-	monomeLedBuffer[192 + 40] = 7;
+	monomeLedBuffer[192] = 3;
+	memset(monomeLedBuffer + 232, 3, 24);
 	monomeLedBuffer[192 + ((c.friction + 40) & 0x3f)] = 15;
 	// uint16_t i = (c.friction * 3);
 	// i = (i + 640) & 0x3ff;

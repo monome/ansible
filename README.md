@@ -1,5 +1,53 @@
 # ansible
 
+
+far communicator. grid and arc and midi enabled.
+
+
+## LEVELS
+
+
+
+
+
+
+## CYCLES
+
+each ring spins with touch, outputting a position CV and phase TR.
+
+hold key 1 to apply a friction, bringing each ring to a stop. press key 2 quickly to reset positions to zero.
+
+hold key 2 to enter CONFIG mode. while holding key 2 you can change parameters by moving each ring:
+
+1: MODE (free vs. sync)
+2: SHAPE (triangle vs. saw)
+3: FORCE
+4: FRICTION
+
+
+
+---
+
+key 1 held: friction
+
+key 2 short: reset positions to zero
+key 2 held: CONFIG
+	1: mode: mult vs. free
+	2: shape: tri vs. saw
+	3: force
+	4: friction
+
+in 1: add friction
+in 2: 
+	(no jack 1 present) reset positions to zero
+	(jack 1 present) add force 
+
+
+
+
+
+
+
 http://msgpack.org/index.html
 https://github.com/hasegaw/msgpack-mcu
 
