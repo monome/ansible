@@ -120,11 +120,11 @@ softTimer_t auxTimer[4] = {
 	{ .next = NULL, .prev = NULL }
 };
 
+static uint8_t clock_phase;
+
 void handler_None(s32 data) { ;; }
 
 static void clockTimer_callback(void* o) {  
-	static uint8_t clock_phase;
-
 	clock_phase++;
 	if(clock_phase > 1)
 		clock_phase = 0;
@@ -448,8 +448,10 @@ void clock_set(uint32_t n) {
 	timer_set(&clockTimer, n);
 }
 
-void clock_reset_set(uint32_t n) {
-	timer_reset_set(&clockTimer, n);
+void clock_set_tr(uint32_t n, uint8_t phase) {
+	timer_set(&clockTimer, n);
+	clock_phase = phase;
+	timer_manual(&clockTimer);
 }
 
 static void ii_null(uint8_t *d, uint8_t l) {

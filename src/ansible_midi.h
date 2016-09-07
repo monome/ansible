@@ -1,5 +1,8 @@
 #pragma once
 
+// libavr32
+#include "arp.h"
+
 // standard midi modes
 typedef enum {
 	eVoicePoly = 0,
@@ -23,8 +26,10 @@ typedef struct {
 	fixed_mapping_t fixed;
 } midi_standard_state_t;
 
+// arp mode value saved to nvram
 typedef struct {
 	uint32_t clock_period;
+	u8 style;    // NB: not using arp_style as type because enums have vairable size
 } midi_arp_state_t;
 
 void set_mode_midi(void);
@@ -39,7 +44,6 @@ void handler_StandardKey(s32 data);
 void handler_StandardTr(s32 data);
 void handler_StandardTrNormal(s32 data);
 void handler_StandardMidiPacket(s32 data);
-
 
 void default_midi_arp(void);
 void clock_midi_arp(uint8_t phase);
