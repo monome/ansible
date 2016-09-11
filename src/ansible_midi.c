@@ -4,12 +4,16 @@
 
 #include "midi_common.h"
 #include "notes.h"
+#include "arp.h"
 #include "timers.h"
+#include "util.h"
 
 #include "monome.h"
 #include "i2c.h"
 #include "gpio.h"
 #include "dac.h"
+
+#include "conf_tc_irq.h"
 
 // this
 #include "main.h"
@@ -39,11 +43,17 @@ typedef struct {
 	u8 normaled : 1; // isn't this tracked elsewhere?
 } key_state_t;
 
+typedef enum {
+	eClockInternal,
+	eClockExternal,
+	eClockMidi
+} clock_source;
 
 //------------------------------
 //------ prototypes
 
 static void write_midi_standard(void);
+static void write_midi_arp(void);
 
 static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset);
 static void set_cv_velocity(uint16_t *cv, u8 vel);
@@ -88,6 +98,23 @@ static bool fixed_finalize_learning(bool cancel);
 static void fixed_note_on(u8 ch, u8 num, u8 vel);
 static void fixed_note_off(u8 ch, u8 num, u8 vel);
 static void fixed_control_change(u8 ch, u8 num, u8 val);
+
+static void init_arp(void);
+
+static void arp_rebuild(chord_t *c);
+static void arp_next_style(void);
+
+static void arp_note_on(u8 ch, u8 num, u8 vel);
+static void arp_note_off(u8 ch, u8 num, u8 vel);
+static void arp_pitch_bend(u8 ch, u16 bend);
+static void arp_control_change(u8 ch, u8 num, u8 val);
+static void arp_rt_tick(void);
+static void arp_rt_start(void);
+static void arp_rt_stop(void);
+static void arp_rt_continue(void);
+
+static void player_note_on(u8 ch, u8 num, u8 vel);
+static void player_note_off(u8 ch, u8 num, u8 vel);
 
 
 //-----------------------------
@@ -148,42 +175,48 @@ const u16 BEND1[512] = {
 	408, 408
 };
 
-// copy of nvram state for editing
-static midi_standard_state_t standard_state;
-static midi_arp_state_t *arp_state = NULL;
-
-static midi_behavior_t active_behavior = {
-	.note_on = NULL,
-	.note_off = NULL,
-	.channel_pressure = NULL,
-	.pitch_bend = NULL,
-	.control_change = NULL
+const arp_style player_styles[4] = {
+	eStyleUp, eStyleDown, eStyleUpDown, eStyleRandom
 };
 
+// copy of nvram state for editing
+static midi_standard_state_t standard_state;
+static midi_arp_state_t arp_state;
+
+static midi_behavior_t active_behavior = {0};
+static midi_behavior_t player_behavior = {0};
+
+// standard mode working state
 static fixed_learning_state_t fixed_learn;
 static note_pool_t notes[4];
 static voice_flags_t flags[4];
 static voice_state_t voice_state;
+
+// arp mode working state
+static chord_t chord;
+static arp_seq_t sequences[2];
+static arp_seq_t *active_seq;
+static arp_seq_t *next_seq;
+static arp_player_t player[4];
+
+// shared state
 static s16 pitch_offset[4];
-static uint16_t aout[4];
-
-static key_state_t key_state;
-
 static midi_clock_t midi_clock;
+static key_state_t key_state;
+static uint16_t aout[4];
+static clock_source sync_source;
+
+
 
 void set_mode_midi(void) {
 	switch(f.state.mode) {
 	case mMidiStandard:
 		print_dbg("\r\n> mode midi standard");
-
 		standard_state = f.midi_standard_state;
-		//print_standard_state(&standard_state);
-		
 		app_event_handlers[kEventKey] = &handler_StandardKey;
 		app_event_handlers[kEventTr] = &handler_StandardTr;
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
-
 		set_voice_allocation(standard_state.voicing);
 		clock_set(standard_state.clock_period);
 		process_ii = &ii_midi_standard;
@@ -191,13 +224,14 @@ void set_mode_midi(void) {
 		break;
 	case mMidiArp:
 		print_dbg("\r\n> mode midi arp");
+		arp_state = f.midi_arp_state;
 		app_event_handlers[kEventKey] = &handler_ArpKey;
 		app_event_handlers[kEventTr] = &handler_ArpTr;
 		app_event_handlers[kEventTrNormal] = &handler_ArpTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_ArpMidiPacket;
-
+		init_arp();
 		clock = &clock_midi_arp;
-		clock_set(f.midi_arp_state.clock_period);
+		clock_set(arp_state.clock_period);
 		process_ii = &ii_midi_arp;
 		update_leds(2);
 		break;
@@ -210,8 +244,10 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventFrontLong] = &handler_MidiFrontLong;
 	}
 
+	sync_source = eClockInternal;
+
 	midi_clock_init(&midi_clock);
-	midi_clock_set_div(&midi_clock, 4); // 16th notes; TODO; make configurable?
+	midi_clock_set_div(&midi_clock, 2); // 8th notes; TODO; make configurable?
 
 	key_state.key1 = key_state.key2 = key_state.front = 0;
 	key_state.normaled = !gpio_get_pin_value(B10);
@@ -234,6 +270,8 @@ void handler_MidiFrontShort(s32 data) {
 	}
 	else {
 		// mMidiArp
+		print_dbg("\r\n arp: wrote config");
+		write_midi_arp();
 	}
 }
 
@@ -379,7 +417,7 @@ void write_midi_standard(void) {
 }
 
 void clock_midi_standard(uint8_t phase) {
-	if(phase)
+	if (phase)
 		set_tr(TR4);
 	else
 		clr_tr(TR4);
@@ -390,21 +428,11 @@ void ii_midi_standard(uint8_t *d, uint8_t l) {
 }
 
 void handler_StandardKey(s32 data) { 
-	//print_dbg("\r\n> standard key");
-	//print_dbg_ulong(data);
-
-	// 0 == key 1 release
-	// 1 == key 1 press
-	// 2 == key 2 release
-	// 3 == key 2 press
-
 	switch (data) {
 
 	case 0: // key 1 release
 		key_state.key1 = 0;
-		//print_dbg("\r\n standard key1: release");
 		if (fixed_learn.learning == 1 ) {
-			//print_dbg("; canceling fixed mapping learning");
 			fixed_finalize_learning(true);
 		}
 		else {
@@ -419,10 +447,8 @@ void handler_StandardKey(s32 data) {
 
 	case 2: // key 2 release
 		key_state.key2 = 0;
-		//print_dbg("\r\n standard key2: release");
 		if (fixed_learn.learning == 1) {
 			// in learning mode; do nothing
-			//print_dbg("; noop, in learning mode");
 		}
 		else {
 			// switch voicing mode
@@ -441,14 +467,9 @@ void handler_StandardKey(s32 data) {
 }
 
 void handler_StandardTr(s32 data) {
-	print_dbg("\r\n> standard tr => ");
-	print_dbg_ulong(data);
 }
 
 void handler_StandardTrNormal(s32 data) { 
-	print_dbg("\r\n> standard tr normal => ");
-	print_dbg_ulong(data);
-	// FIXME: this will be wrong on power up if a cable is inserted
 	key_state.normaled = data;
 }
 
@@ -871,8 +892,6 @@ static void fixed_note_on(u8 ch, u8 num, u8 vel) {
 				initial_set = true;
 				standard_state.fixed.notes[fixed_learn.note_idx] = num;
 				multi_tr_set(fixed_learn.note_idx); // indicate mapping
-				//print_dbg("\n\r fln: ");
-				//print_dbg_ulong(fixed_learn.note_idx);
 			}
 
 			// different note; advance to next mapping
@@ -881,8 +900,6 @@ static void fixed_note_on(u8 ch, u8 num, u8 vel) {
 				if (fixed_learn.note_idx < 4) {
 					standard_state.fixed.notes[fixed_learn.note_idx] = num;
 					multi_tr_set(fixed_learn.note_idx); // indicate mapping
-					//print_dbg("\n\r fln: ");
-					//print_dbg_ulong(fixed_learn.note_idx);
 					if (fixed_learn.note_idx == 3) {
 						fixed_learn.note_idx++;
 					}
@@ -926,10 +943,6 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 			if (fixed_learn.cc_idx == 0 && initial_set == false) {
 				initial_set = true;
 				standard_state.fixed.cc[fixed_learn.cc_idx] = num;
-				//print_dbg("\n\r cc learn: assigned cc: ");
-				//print_dbg_ulong(num);
-				//print_dbg(" for ch: ");
-				//print_dbg_ulong(fixed_learn.cc_idx);
 			}
 
 			// different cc; advance to next mapping
@@ -937,10 +950,6 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 				fixed_learn.cc_idx++;
 				if (fixed_learn.cc_idx < 4) {
 					standard_state.fixed.cc[fixed_learn.cc_idx] = num;
-					//print_dbg("\n\r cc learn: assigned cc: ");
-					//print_dbg_ulong(num);
-					//print_dbg(" for ch: ");
-					//print_dbg_ulong(fixed_learn.cc_idx);
 					if (fixed_learn.cc_idx == 3) {
 						// immediately end learning instead of waiting around for
 						// a different cc to be sent..
@@ -953,8 +962,6 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 				aout[fixed_learn.cc_idx] = val << 5;
 				update_dacs(aout);
 			}
-			//print_dbg("\n\r flcc: ");
-			//print_dbg_ulong(fixed_learn.cc_idx);
 		}
 		if (fixed_finalize_learning(false)) {
 			// prepare for next learning pass
@@ -978,13 +985,76 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 
 void default_midi_arp() {
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period), 100, 4, true);
+	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
+}
+
+void write_midi_arp(void) {
+	flashc_memset32((void*)&(f.midi_arp_state.clock_period),
+									arp_state.clock_period, 4, true);
+	flashc_memset8((void*)&(f.midi_arp_state.style),
+								 arp_state.style, 1, true);
+}
+
+static void arp_next_style(void) {
+	arp_state.style++;
+	if (arp_state.style > eStyleRandom) {
+		arp_state.style = eStyleUp;
+	}
+	print_dbg("\r\n arp style: ");
+	print_dbg_ulong(arp_state.style);
+	arp_rebuild(&chord);
+}
+
+static bool arp_seq_switch_active(void) {
+	// TODO: better abstract this and move to arp.c
+	arp_seq_t *last_seq;
+	bool switched = false;
+
+	cpu_irq_disable_level(APP_TC_IRQ_PRIORITY);
+
+	if (next_seq->state == eSeqWaiting) {
+		next_seq->state = eSeqPlaying;
+		active_seq->state = eSeqFree;
+		last_seq = active_seq;
+		active_seq = next_seq;
+		next_seq = last_seq;
+		switched = true;
+	}
+
+	cpu_irq_enable_level(APP_TC_IRQ_PRIORITY);
+
+	return switched;
+}
+
+static void arp_clock_pulse(uint8_t phase) {
+	bool switched = false;
+
+	if (phase) {
+		switched = arp_seq_switch_active();
+		//if (switched) {
+		//	print_dbg("\r\n arp seq: ");
+		//	for (u8 i = 0; i < active_seq->length; i++) {
+		//		print_dbg_ulong(active_seq->notes[i].note.num);
+		//		print_dbg(" ");
+		//	}
+		//}
+	}
+
+	for (u8 i = 0; i < 4; i++) {
+		if (switched) {
+			arp_player_reset(&(player[i]), &player_behavior);
+		}
+		arp_player_pulse(&(player[i]), active_seq, &player_behavior, phase);
+	}
+	update_dacs(aout);
 }
 
 void clock_midi_arp(uint8_t phase) {
-	if(phase)
-		set_tr(TR1);
-	else
-		clr_tr(TR1);
+	// internal clock timer callback, pulse clock if we are not being
+	// driven externally
+	if (sync_source == eClockInternal) {
+		arp_clock_pulse(phase);
+	}
 }
 
 void ii_midi_arp(uint8_t *d, uint8_t l) {
@@ -992,21 +1062,252 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 }
 
 void handler_ArpKey(s32 data) { 
-	print_dbg("\r\n> arp key ");
-	print_dbg_ulong(data);
+	static bool tapped = false;
+	u32 now;
+
+	switch (data) {
+	case 0:
+		// key 1 release
+		key_state.key1 = 0;
+		break;
+	case 1:
+		// key 1 press: tap tempo / force internal clock
+		key_state.key1 = 1;
+		if (tapped) {
+			if (sync_source == eClockMidi) {
+				sync_source = eClockInternal;
+			}
+			tapped = false;
+			now = time_now();
+			now = uclip(now >> 1, 23, 1000); // range in ms
+			print_dbg("\r\n arp tap: ");
+			print_dbg_ulong(now);
+			arp_state.clock_period = now;
+			clock_set_tr(now, 0);
+		}
+		else {
+			tapped = true;
+			time_clear();
+		}
+		break;
+	case 2:
+		key_state.key2 = 0;
+		break;
+	case 3:
+		// key 2 press: arp mode switch
+		key_state.key2 = 1;
+		arp_next_style();
+		break;
+	}
 }
 
-void handler_ArpTr(s32 data) { 
-	print_dbg("\r\n> arp tr ");
-	print_dbg_ulong(data);
+void handler_ArpTr(s32 data) {
+	u32 now;
+
+	switch (data) {
+	case 0:
+		// tr 1 lo
+		arp_clock_pulse(0);
+		break;
+	case 1:
+		// tr 1 hi; sync internal clock timer
+		now = time_now();
+		time_clear();
+		now = now >> 1; // high/low phase
+		// TODO: clip now to low/high bounds?
+		clock_set_tr(now, 0);
+		arp_clock_pulse(1);
+		break;
+	case 2:
+		// tr 2 lo; nothing
+		break;
+	case 3:
+		// tr 2 hi; reset
+		for (u8 i = 0; i < 4; i++) {
+			arp_player_reset(&player[i], &player_behavior);
+		}
+		break;
+	}
 }
 
 void handler_ArpTrNormal(s32 data) { 
 	print_dbg("\r\n> arp tr normal ");
 	print_dbg_ulong(data);
+
+	switch (data) {
+	case 0:
+		key_state.normaled = 0;
+		sync_source = eClockInternal;
+		break;
+	case 1:
+		key_state.normaled = 1;
+		sync_source = eClockExternal;
+		break;
+	}
 }
 
 void handler_ArpMidiPacket(s32 data) {
-	print_dbg("\r\n> arp midi packet");
-	//midi_packet_parse(&midi_behavior_arp, (u32)data);
+	midi_packet_parse(&active_behavior, (u32)data);
+}
+
+void init_arp(void) {
+	chord_init(&chord);
+
+	// ping pong
+	active_seq = &sequences[0];
+	next_seq = &sequences[1];
+	arp_seq_init(active_seq);
+	arp_seq_init(next_seq);
+
+	// ensure style matches stored config
+	arp_seq_build(active_seq, arp_state.style, &chord);
+	arp_seq_build(next_seq, arp_state.style, &chord);
+	
+	for (u8 i = 0; i < 4; i++) {
+		arp_player_init(&(player[i]), i, i + 1);
+		arp_player_set_gate_width(&(player[i]), 0); // triggers
+	}
+
+	active_behavior.note_on = &arp_note_on;
+	active_behavior.note_off = &arp_note_off;
+	active_behavior.channel_pressure = NULL;
+	active_behavior.pitch_bend = &arp_pitch_bend;
+	active_behavior.control_change = &arp_control_change;
+	active_behavior.clock_tick = &arp_rt_tick;
+	active_behavior.seq_start = &arp_rt_start;
+	active_behavior.seq_stop = &arp_rt_stop;
+	active_behavior.seq_continue = &arp_rt_continue;
+	active_behavior.panic = NULL;
+
+	player_behavior.note_on = &player_note_on;
+	player_behavior.note_off = &player_note_off;
+	player_behavior.channel_pressure = NULL;
+	player_behavior.pitch_bend = NULL;
+	player_behavior.control_change = NULL;
+	player_behavior.clock_tick = NULL;
+	player_behavior.seq_start = NULL;
+	player_behavior.seq_stop = NULL;
+	player_behavior.seq_continue = NULL;
+	player_behavior.panic = NULL;
+}
+
+static void arp_rebuild(chord_t *c) {
+	arp_seq_state current_state = arp_seq_get_state(next_seq);
+	
+	if (current_state == eSeqFree || current_state == eSeqWaiting) {
+		arp_seq_set_state(next_seq, eSeqBuilding); // TODO: check return
+		arp_seq_build(next_seq, arp_state.style, &chord);
+		arp_seq_set_state(next_seq, eSeqWaiting);
+	}
+	else {
+		print_dbg("\r\n > arp: next seq busy, skipping build");
+	}
+}
+
+static void arp_note_on(u8 ch, u8 num, u8 vel) {
+	chord_note_add(&chord, num, vel);
+	arp_rebuild(&chord);
+}
+
+static void arp_note_off(u8 ch, u8 num, u8 vel) {
+	chord_note_release(&chord, num);
+	arp_rebuild(&chord);
+}
+
+static void arp_pitch_bend(u8 ch, u16 bend) {
+}
+
+static void arp_control_change(u8 ch, u8 num, u8 val) {
+	u16 period, t;
+	u8 i;
+
+	switch (num) {
+	case 16:
+		// clock mod
+		if (sync_source == eClockInternal) {
+			// clock speed; 1000ms - 23ms (same range as ww)
+			period = 25000 / ((val << 3) + 25);
+			//print_dbg("\r\n arp clock ms: ");
+			//print_dbg_ulong(period);
+			clock_set(period);
+		}
+		break;
+	case 17:
+		// gate mod
+		//print_dbg("\r\n arp gates: ");
+		for (i = 0; i < 4; i++) {
+			t = arp_player_set_gate_width(&player[i], val);
+			//print_dbg_ulong(t);
+			//print_dbg(" ");
+		}
+		break;
+	case 18:
+		// division mod
+		//print_dbg("\r\n arp divs: 1 ");
+		for (i = 1; i < 4; i++) {
+			t = (i + 1) + ((val >> 5) * (i + 1));
+			//print_dbg_ulong(t);
+			//print_dbg(" ");
+			arp_player_set_division(&player[i], t, &player_behavior);
+		}
+	}
+}
+
+static void arp_rt_tick(void) {
+	u32 now;
+
+	if (sync_source != eClockMidi)
+		return;
+
+	now = time_now();
+	time_clear();
+
+	midi_clock_pulse(&midi_clock, now);
+
+	if (midi_clock.pulse_count == 0) {
+		arp_clock_pulse(1);
+	}
+	else if (midi_clock.pulse_count == (midi_clock.pulse_div_count >> 1)) {
+		arp_clock_pulse(0);
+	}
+}
+
+static void arp_rt_start(void) {
+	if (sync_source != eClockExternal) {
+		sync_source = eClockMidi;
+		midi_clock_start(&midi_clock);
+	}
+}
+
+static void arp_rt_stop(void) {
+	if (sync_source == eClockExternal) {
+		midi_clock_stop(&midi_clock);
+		for (u8 i = 0; i < 4; i++) {
+			arp_player_reset(&player[i], &player_behavior);
+		}
+	}
+}
+
+static void arp_rt_continue(void) {
+	// some devices appear to only send continue and stop messages, not
+	// start so continue messages will switch the sync to midi as well
+	if (sync_source != eClockExternal) {
+		sync_source = eClockMidi;
+		midi_clock_continue(&midi_clock);
+	}
+}
+
+static void player_note_on(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
+	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
+	multi_tr_set(ch);
+}
+
+static void player_note_off(u8 ch, u8 num, u8 vel) {
+	if (ch > 3 || num > MIDI_NOTE_MAX)
+		return;
+
+	multi_tr_clr(ch);
 }
