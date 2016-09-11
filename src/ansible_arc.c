@@ -1,4 +1,5 @@
 /*
+
 possible future features for LEVELS
 	slew wants exponentiation
 	live slew indication
@@ -1225,7 +1226,8 @@ const uint8_t friction_map[25] = { 0, 12, 20, 26, 30, 34, 39, 42, 45,
 	48, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64};
 
 static uint16_t friction;
-static uint8_t add_force;
+static int8_t add_force[4];
+static bool cycle_dir[4];
 
 void default_cycles() {
 	uint8_t i1;
@@ -1275,6 +1277,8 @@ void resume_cycles() {
 	for(i1=0;i1<4;i1++) {
 		dac_set_slew(i1,DAC_RATE_CV << 2);
 		tr_state[i1] = 0;
+		cycle_dir[i1] = 1;
+		add_force[i1] = 0;
 	}
 
 	key_count_arc[0] = 0;
@@ -1292,8 +1296,28 @@ void resume_cycles() {
 void clock_cycles(uint8_t phase) {
 	uint8_t i1;
 
+	if(c.mode) {
+		c.speed[0] += add_force[0];
+
+		if(c.mult[1] > -1)
+			c.speed[1] = c.speed[0] >> c.mult[1];
+		else
+			c.speed[1] = c.speed[0] << -c.mult[1];
+
+		if(c.mult[2] > -1)
+			c.speed[2] = c.speed[0] >> c.mult[2];
+		else
+			c.speed[2] = c.speed[0] << -c.mult[2];
+
+		if(c.mult[3] > -1)
+			c.speed[3] = c.speed[0] >> c.mult[3];
+		else
+			c.speed[3] = c.speed[0] << -c.mult[3];
+	}
+
 	for(i1=0;i1<4;i1++) {
-		c.speed[i1] += add_force;
+		if(c.mode == 0)
+			c.speed[i1] += add_force[i1];
 		c.pos[i1] = (c.pos[i1] + c.speed[i1]) & 0x3fff;
 		c.speed[i1] = (c.speed[i1] * (friction)) / 256;
 		// c.speed[i1] = (c.speed[i1] * (friction)) >> 8;
@@ -1338,6 +1362,11 @@ void handler_CyclesEnc(s32 data) {
 				if(s < -MAX_SPEED)
 					s = -MAX_SPEED;
 				c.speed[0] = s;
+				
+				cycle_dir[0] = delta > 0;
+				cycle_dir[1] = delta > 0;
+				cycle_dir[2] = delta > 0;
+				cycle_dir[3] = delta > 0;
 
 				if(c.mult[1] > -1)
 					c.speed[1] = c.speed[0] >> c.mult[1];
@@ -1384,6 +1413,8 @@ void handler_CyclesEnc(s32 data) {
 			if(s < -MAX_SPEED)
 				s = -MAX_SPEED;
 			c.speed[n] = s;
+
+			cycle_dir[n] = delta > 0;
 
 			// print_dbg("\r\n");
 			// print_dbg_ulong(n);
@@ -1525,12 +1556,20 @@ void handler_CyclesTr(s32 data) {
 		friction = friction_map[(24 - c.friction) >> 1] + 192;
 		break;
 	case 2:
-		if(ext_clock)
-			add_force = 0;
+		if(ext_clock) {
+			add_force[0] = 0;
+			add_force[1] = 0;
+			add_force[2] = 0;
+			add_force[3] = 0;
+		}
 		break;
 	case 3:
-		if(ext_clock)
-			add_force = 1 << (c.force - 1);
+		if(ext_clock) {
+			add_force[0] = (cycle_dir[0] * 2 - 1) * (1 << (c.force - 1));
+			add_force[1] = (cycle_dir[1] * 2 - 1) * (1 << (c.force - 1));
+			add_force[2] = (cycle_dir[2] * 2 - 1) * (1 << (c.force - 1));
+			add_force[3] = (cycle_dir[3] * 2 - 1) * (1 << (c.force - 1));
+		}
 		else {
 			c.pos[0] = 0;
 			c.pos[1] = 0;

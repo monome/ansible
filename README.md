@@ -1,7 +1,38 @@
 # ansible
 
+far communicator, speaks openly.
 
-far communicator. grid and arc and midi enabled.
+grid- arc- teletype- midi- enabled. requires at least one of these.
+
+4hp
+
++12v - 200ma
+-12v - 19ma
++5v - none
+
+$280
+
+change modes by plugging different USB devices and a front panel key.
+
+kria (grid) - live step sequencer, polyphasic parameters, emergent patterns.
+meadowphysics (grid) - rhizomatic cascading counter.
+levels (arc) - rotational pattern instrument.
+cycles (arc) - physically manipulated waves.
+reach (teletype) - further ecosystem output and input.
+traffic (midi) - device voice allocation and various arpeggiation.
+
+outputs: 4 CV (0-10v) 4 TR (0-10v). 
+inputs: 2 TR (0-10v).
+
+function depends on mode.
+
+open source. firmware update cable included (usb a-a).
+
+further documentation: http://monome.org/docs/modular/ansible
+
+
+
+
 
 
 ## LEVELS
@@ -24,6 +55,17 @@ hold key 2 to enter CONFIG mode. while holding key 2 you can change parameters b
 3: FORCE
 4: FRICTION
 
+in FREE mode each ring is fully independent. in SYNC mode the leftmost ring dictates the base speed and the remaining rings run at a multiple. touching the right three rings changes this multiple, which is indicated by the faint lower block. south indicates a multiple of 1, matching speeds with the master. clockwise to half speed, counter-clockwise for ascending multiples.
+
+SHAPE can be triangle (default) or saw. this mapping is displayed on the ring itself in CONFIG mode. rotate the ring to change shape, which applies to all ring CV outputs.
+
+FORCE is ring touch sensitivity. higher FORCE will make rings more reactive to touch. you can also apply force when a jack is inserted in IN 1, by applying high input to IN 2.
+
+FRICTION is the rate at which speed diminishes. by default FRICTION is off. you can additionally apply friction manually by holding KEY 1 or applying a high input to IN 1.
+
+a short press of KEY 2 will reset all positions. a positive edge trigger to IN 2 (when IN 1 is not patched) will also reset positions.
+
+the TR output phase is a square wave. for each ring position the respective TR outputs positive on the right and zero on the left.
 
 
 ---
