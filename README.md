@@ -272,6 +272,7 @@ grid layout:
 	note
 	octave
 
+	(( TIME button (loop+speed) and PROB button??))
 	loop length
 		(ch sel not required in tr mode)
 	speed multiple
@@ -341,7 +342,7 @@ in 2: reset
 identical mp layout
 
 
-c.......oooooooo
+........oooooooo
 .aa.aaa.oooooooo
 .aa.aa..oooooooo
 .aa.a...oooooooo
@@ -349,6 +350,8 @@ c.......oooooooo
 ........oooooooo
 bbbbbbbboooooooo
 bbbbbbbboooooooo
+
+"sound mode" toggles brightness level of voice mode
 
 
 

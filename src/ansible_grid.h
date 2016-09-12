@@ -39,15 +39,18 @@ typedef struct {
 	u8 smin[8];
 	u8 smax[8];
 
-	u8 sound;
+	u8 glyph[8];
 
-	u8 glyph[4];
+	u8 scale;
 
 } mp_data_t;
 
 typedef struct {
 	uint32_t clock_period;
-	uint8_t last_preset;
+	uint8_t preset;
+	uint8_t sound;
+	uint8_t voice_mode;
+
 	mp_data_t m[GRID_PRESETS];
 } mp_state_t;
 

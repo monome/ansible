@@ -1,6 +1,29 @@
 /*
 
 
+MP TODO
+
+
+
+key 2: config
+	a: 8 trig / 1.2.4 voice
+	b: scale
+	c: trig on push
+in 2: reset
+
+
+c.......oooooooo
+.aa.aaa.oooooooo
+.aa.aa..oooooooo
+.aa.a...oooooooo
+.aa.a...oooooooo
+........oooooooo
+bbbbbbbboooooooo
+bbbbbbbboooooooo
+
+tr/gate/cv outs
+
+preset (revert to old version?)
 
 
 
@@ -8,6 +31,7 @@
 
 */
 
+#include "string.h"
 
 #include "print_funcs.h"
 #include "flashc.h"
@@ -15,6 +39,7 @@
 
 #include "monome.h"
 #include "i2c.h"
+#include "dac.h"
 #include "util.h" // rnd
 
 #include "main.h"
@@ -35,6 +60,11 @@ u8 key_times[128];
 bool clock_external;
 bool view_clock;
 bool view_config;
+uint32_t clock_period;
+uint8_t clock_count;
+uint8_t clock_mul;
+uint8_t ext_clock_count;
+uint8_t ext_clock_phase;
 
 uint8_t time_rough;
 uint8_t time_fine;
@@ -43,6 +73,8 @@ void (*grid_refresh)(void);
 
 
 mp_data_t m;
+u8 sound;
+u8 voice_mode;
 
 
 void set_mode_grid() {
@@ -118,19 +150,20 @@ void handler_GridFrontLong(s32 data) {
 void refresh_preset(void) {
 	u8 i1, i2;//, i3;
 
-	// clear grid
+	memset(monomeLedBuffer,0,128);
+
 	for(i1=0;i1<128;i1++)
 		monomeLedBuffer[i1] = 0;
 
-	for(i1=0;i1<GRID_PRESETS;i1++)
-		monomeLedBuffer[R1 + 4 + i1] = L0;
+	monomeLedBuffer[preset_select * 16] = 11;
 
-	for(i1=0;i1<4;i1++)
+	for(i1=0;i1<8;i1++)
 		for(i2=0;i2<8;i2++)
-			monomeLedBuffer[R4 + (i1 * R1) + 11 - i2] = ((m.glyph[i1] >> i2) & 1) * L1 + L0;
-	
+			if(m.glyph[i1] & (1<<i2))
+				monomeLedBuffer[i1*16+i2+8] = 11;
 
- 	monomeLedBuffer[R1 + 4 + preset_select] = L2;
+	monome_set_quadrant_flag(0);
+	monome_set_quadrant_flag(1);
 }
 
 void grid_keytimer(void) {
@@ -138,11 +171,15 @@ void grid_keytimer(void) {
 		if(key_times[held_keys[i1]])
 		if(--key_times[held_keys[i1]]==0) {
 			if(preset_mode == 1) {
-				if(held_keys[i1] > 19 && held_keys[i1] < 28) {
-					preset_select = held_keys[i1] - 20;
+				if(held_keys[i1] % 16 == 0) {
+					preset_select = held_keys[i1] / 16;
+
+					// WRITE PRESET
 
 					if(f.state.mode == mGridMP) {
-						flashc_memset8((void*)&(f.mp_state.last_preset), preset_select, 1, true);
+						flashc_memset8((void*)&(f.mp_state.preset), preset_select, 1, true);
+						flashc_memset8((void*)&(f.mp_state.sound), sound, 1, true);
+						flashc_memset8((void*)&(f.mp_state.voice_mode), voice_mode, 1, true);
 						flashc_memcpy((void *)&f.mp_state.m[preset_select], &m, sizeof(m), true);
 						preset_mode = false;
 						grid_refresh = &refresh_mp;
@@ -181,6 +218,8 @@ void resume_kria() {
 		clock = &clock_null;
 	else
 		clock = &clock_kria;
+
+	monomeFrameDirty++;
 }
 
 void clock_kria(uint8_t phase) {
@@ -235,12 +274,7 @@ void handler_KriaTrNormal(s32 data) {
 }
 
 void refresh_kria(void) {
-	for(uint8_t i1=0;i1<16;i1++) {
-		monomeLedBuffer[i1] = 0;
-		monomeLedBuffer[16+i1] = 0;
-		monomeLedBuffer[32+i1] = 4;
-		monomeLedBuffer[48+i1] = 0;
-	}
+	memset(monomeLedBuffer,0,128);
 
 	monomeLedBuffer[0] = 15;
 }
@@ -249,12 +283,19 @@ void refresh_kria(void) {
 ////////////////////////////////////////////////////////////////////////////////
 // MP
 
+#define MP_1V 0
+#define MP_2V 1
+#define MP_4V 2
+#define MP_8T 3
+
+
 u8 edit_row;
 u8 mode = 0;
 u8 prev_mode = 0;
 s8 kcount = 0;
 s8 scount[8];
 u8 state[8];
+u8 pstate[8];
 u8 clear[8]; 
 s8 position[8];		// current position in cycle
 u8 tick[8]; 		// position in speed countdown
@@ -270,11 +311,14 @@ const u8 sign[8][8] = {{0,0,0,0,0,0,0,0},       // o
        {0,126,126,102,102,126,126,0}};  		// [] sync
 
 
-
+void mp_note_on(uint8_t n);
+void mp_note_off(uint8_t n);
 
 void default_mp() {
 	flashc_memset32((void*)&(f.mp_state.clock_period), 55, 4, true);
-	flashc_memset8((void*)&(f.mp_state.last_preset), 0, 1, true);
+	flashc_memset8((void*)&(f.mp_state.preset), 0, 1, true);
+	flashc_memset8((void*)&(f.mp_state.sound), 0, 1, true);
+	flashc_memset8((void*)&(f.mp_state.voice_mode), 0, 1, true);
 
 	for(uint8_t i1=0;i1<8;i1++) {
 		m.count[i1] = 7+i1;
@@ -291,7 +335,7 @@ void default_mp() {
 		m.smax[i1] = 0;
 	}
 
-	for(uint8_t i1=0;i1<4;i1++)
+	for(uint8_t i1=0;i1<8;i1++)
 		m.glyph[i1] = 0;
 
 	for(uint8_t i1=0;i1<GRID_PRESETS;i1++)
@@ -299,7 +343,9 @@ void default_mp() {
 }
 
 void init_mp() {
-	preset_select = f.mp_state.last_preset;
+	preset_select = f.mp_state.preset;
+	sound = f.mp_state.sound;
+	voice_mode = f.mp_state.voice_mode;
 
 	for(uint8_t i1=0;i1<8;i1++) {
 		m.count[i1] = f.mp_state.m[preset_select].count[i1];
@@ -323,11 +369,16 @@ void init_mp() {
 		state[i1] = 0;
 	}
 
+	m.scale = f.mp_state.m[preset_select].scale;
+
 	for(uint8_t i1=0;i1<4;i1++)
 		m.glyph[i1] = f.mp_state.m[preset_select].glyph[i1];
 
-	time_rough = (f.mp_state.clock_period - 20) / 16;
-	time_fine = (f.mp_state.clock_period - 20) % 16;
+	clock_period = f.mp_state.clock_period;
+	time_rough = (clock_period - 20) / 16;
+	time_fine = (clock_period - 20) % 16;
+
+	clock_mul = 1;
 }
 
 void resume_mp() {
@@ -343,12 +394,20 @@ void resume_mp() {
 		clock = &clock_null;
 	else
 		clock = &clock_mp;
+
+	dac_set_slew(0,0);
+	dac_set_slew(1,0);
+	dac_set_slew(2,0);
+	dac_set_slew(3,0);
 }
 
 void clock_mp(uint8_t phase) {
 	static u8 i;
 
 	if(phase) {
+		clock_count++;
+
+		memcpy(pstate, state, 8);
 		// gpio_set_gpio_pin(B10);
 
 		for(i=0;i<8;i++) {
@@ -474,11 +533,13 @@ void clock_mp(uint8_t phase) {
 			else tick[i]--;
 		}
 
-		// for(i=0;i<8;i++)
-		// 	if(state[i])
-		// 		gpio_set_gpio_pin(outs[i]);
-		// 	else
-		// 		gpio_clr_gpio_pin(outs[i]);
+		for(i=0;i<8;i++)
+			if(state[i] && !pstate[i])
+				mp_note_on(i);
+				// gpio_set_gpio_pin(outs[i]);
+			else if(!state[i] && pstate[i])
+				mp_note_off(i);
+				// gpio_clr_gpio_pin(outs[i]);
 
 		monomeFrameDirty++;
 	}
@@ -487,12 +548,43 @@ void clock_mp(uint8_t phase) {
 
 		for(i=0;i<8;i++) {
 			if(clear[i]) {
+				mp_note_off(i);
 				// gpio_clr_gpio_pin(outs[i]);
 				state[i] = 0;
 			}
 			clear[i] = 0;
 		}
  	}
+}
+
+void mp_note_on(uint8_t n) {
+	// print_dbg("\r\nmp note on: ");
+	// print_dbg_ulong(n);
+	switch(voice_mode) {
+	case MP_8T:
+			if(n < 4)
+				set_tr(TR1 + n);
+			else
+				dac_set_value(n-4, DAC_10V);
+		break;
+	default:
+		break;
+	}
+}
+
+void mp_note_off(uint8_t n) {
+	// print_dbg("\r\nmp note off: ");
+	// print_dbg_ulong(n);
+	switch(voice_mode) {
+	case MP_8T:
+			if(n < 4)
+				clr_tr(TR1 + n);
+			else
+				dac_set_value(n-4, 0);
+		break;
+	default:
+		break;
+	}
 }
 
 void ii_mp(uint8_t *d, uint8_t l) {
@@ -528,25 +620,26 @@ void handler_MPGridKey(s32 data) {
 		// FAST PRESS
 		if(key_times[index] > 0) {
 			if(preset_mode) {
-				if(y == 1) {
-					if(x < 4 || x > 12) {
-						preset_mode = false;
-						grid_refresh = &refresh_mp;
-					}
-					else if(x - 4 != preset_select) {
-						preset_select = x - 4;
+				if(x == 0) {
+					if(y != preset_select) {
+						preset_select = y;
 
-						for(i1=0;i1<4;i1++)
+						for(i1=0;i1<8;i1++)
 							m.glyph[i1] = f.mp_state.m[preset_select].glyph[i1];
+
+						print_dbg("\r\npreset select:");
+						print_dbg_ulong(preset_select);
 					}
- 					else if(x - 4 == preset_select) {
+ 					else if(y == preset_select) {
  						// flash read
-						flashc_memset8((void*)&(f.mp_state.last_preset), preset_select, 1, true);
+						flashc_memset8((void*)&(f.mp_state.preset), preset_select, 1, true);
 						init_mp();
 
 						preset_mode = false;
 						grid_refresh = &refresh_mp;
 
+						print_dbg("\r\npreset RECALL:");
+						print_dbg_ulong(preset_select);
 					}
 				}
 
@@ -561,23 +654,107 @@ void handler_MPGridKey(s32 data) {
 
 	// PRESET SCREEN
 	if(preset_mode) {
-		// glyph magic
-		// if(z && x>7) {
-		// 	glyph[y] ^= 1<<(x-8);
-		// }
-		if(z && y > 3) {
-			if(x < 4 || x > 12) {
-				preset_mode = false;
-				grid_refresh = &refresh_mp;
-			}
-			else {
-				m.glyph[y-4] = m.glyph[y-4] ^ (1 << (11 - x));
-			}
-		}
+		// draw glyph
+		if(z && x>7)
+			m.glyph[y] ^= 1<<(x-8);
 
 		monomeFrameDirty++;	
 	}
-	// NOT PRESET
+	else if(view_clock) {
+		if(z) {
+			if(clock_external) {
+				if(y==1) {
+					clock_mul = x + 1;
+					monomeFrameDirty++;
+				}
+			}
+			else {
+				if(y==1)
+					time_rough = x;
+				else if(y==2)
+					time_fine = x;
+				else if(y==4) {
+					int i = 0;
+
+					switch(x) {
+					case 6:
+						i = -4;
+						break;
+					case 7:
+						i = -1;
+						break;
+					case 8:
+						i = 1;
+						break;
+					case 9:
+						i = 4;
+						break;
+					default:
+						break;
+					}
+
+					i += clock_period;
+					if(i < 20)
+						i = 20;
+					if(clock_period > 265)
+						clock_period = 265;
+					clock_period = i;
+
+					time_rough = (clock_period - 20) / 16;
+					time_fine = (clock_period - 20) % 16;
+				}
+
+				clock_period = 20 + (time_rough * 16) + time_fine;
+
+				clock_set(clock_period);
+
+				// print_dbg("\r\nperiod: ");
+				// print_dbg_ulong(clock_period);
+
+				monomeFrameDirty++;
+			}
+		}
+
+
+		// time_rough = (clock_period - 20) / 16;
+		// time_fine = (clock_period - 20) % 16;
+
+	}
+	else if(view_config) {
+		if(z) {
+			if(y < 6 && x < 8) {
+				switch(x) {
+				case 0:
+				case 1:
+				case 2:
+				case 3:
+					if(voice_mode == MP_8T)
+						sound ^= 1;
+					voice_mode = MP_8T;
+					break;
+				case 4:
+					if(voice_mode == MP_4V)
+						sound ^= 1;
+					voice_mode = MP_4V;
+					break;
+				case 5:
+					if(voice_mode == MP_2V)
+						sound ^= 1;
+					voice_mode = MP_2V;
+					break;
+				case 6:
+				case 7:
+					if(voice_mode == MP_1V)
+						sound ^= 1;
+					voice_mode = MP_1V;
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+	// NORMAL
 	else {
 		prev_mode = mode;
 
@@ -622,7 +799,7 @@ void handler_MPGridKey(s32 data) {
 				m.max[y] = x;
 				tick[y] = m.speed[y];
 
-				if(m.sound) {
+				if(sound) {
 					pushed[y] = 1;
 				}
 			}
@@ -668,7 +845,7 @@ void handler_MPGridKey(s32 data) {
 					m.toggle[edit_row] &= ~(1<<y);
 				}
 				else if(x == 4) {
-					m.sound ^= 1;
+					sound ^= 1;
 				}
 				else if(x == 2) {
 					if(position[y] == -1) {
@@ -749,10 +926,20 @@ void handler_MPTr(s32 data) {
 
 	switch(data) {
 	case 0:
-		clock_mp(0);
+		if(clock_mul == 1)
+			clock_mp(0);
 		break;
 	case 1:
-		clock_mp(1);
+		if(clock_mul == 1)
+			clock_mp(1);
+		else {
+			ext_clock_count++;
+			if(ext_clock_count >= clock_mul - 1) {
+				ext_clock_count = 0;
+				ext_clock_phase ^= 1;
+				clock_mp(ext_clock_phase);
+			}
+		}
 		break;
 	case 3:
 		// right jack upwards: RESET
@@ -783,37 +970,76 @@ void handler_MPTrNormal(s32 data) {
 }
 
 void refresh_clock(void) {
-	u8 i1;//, i2, i3;
-
 	// clear grid
-	for(i1=0;i1<128;i1++)
-		monomeLedBuffer[i1] = 0;
+	memset(monomeLedBuffer,0,128);
+
+	monomeLedBuffer[clock_count & 0xf] = L0;
 
 	if(clock_external) {
-		monomeLedBuffer[127] = 7;
+		memset(monomeLedBuffer + R1,3,16);
+		monomeLedBuffer[R1 + clock_mul - 1] = L2;
 	}
 	else {
+		monomeLedBuffer[R1 + time_rough] = L2;
 		monomeLedBuffer[R2 + time_fine] = L1;
-		monomeLedBuffer[R3 + time_rough] = L2;
+
+		monomeLedBuffer[R4+6] = 7;
+		monomeLedBuffer[R4+7] = 3;
+		monomeLedBuffer[R4+8] = 3;
+		monomeLedBuffer[R4+9] = 7;
+
 	}
 }
 
 void refresh_mp_config(void) {
 	u8 i1;//, i2, i3;
+	u8 c;
 
 	// clear grid
-	for(i1=0;i1<128;i1++)
-		monomeLedBuffer[i1] = 0;
+	memset(monomeLedBuffer,0,128);
 
-	monomeLedBuffer[0] = 15;
+	c = L0;
+	if(voice_mode == MP_8T)
+		c = L1 + (4 * sound);
+
+	monomeLedBuffer[R1 + 1] = c;
+	monomeLedBuffer[R1 + 2] = c;
+	monomeLedBuffer[R2 + 1] = c;
+	monomeLedBuffer[R2 + 2] = c;
+	monomeLedBuffer[R3 + 1] = c;
+	monomeLedBuffer[R3 + 2] = c;
+	monomeLedBuffer[R4 + 1] = c;
+	monomeLedBuffer[R4 + 2] = c;
+
+	c = L0;
+	if(voice_mode == MP_4V)
+		c = L1 + (4 * sound);
+
+	monomeLedBuffer[R1 + 4] = c;
+	monomeLedBuffer[R2 + 4] = c;
+	monomeLedBuffer[R3 + 4] = c;
+	monomeLedBuffer[R4 + 4] = c;
+
+	c = L0;
+	if(voice_mode == MP_2V)
+		c = L1 + (4 * sound);
+
+	monomeLedBuffer[R1 + 5] = c;
+	monomeLedBuffer[R2 + 5] = c;
+
+	c = L0;
+	if(voice_mode == MP_1V)
+		c = L1 + (4 * sound);
+
+	monomeLedBuffer[R1 + 6] = c;
+
 }
 
 void refresh_mp(void) {
 	u8 i1, i2, i3;
 
 	// clear grid
-	for(i1=0;i1<128;i1++)
-		monomeLedBuffer[i1] = 0;
+	memset(monomeLedBuffer,0,128);
 
 	// SHOW POSITIONS
 	if(mode == 0) {
@@ -840,7 +1066,7 @@ void refresh_mp(void) {
 
 			monomeLedBuffer[i1*16 + m.speed[i1]+8] = L1;
 
-			if(m.sound)
+			if(sound)
 				monomeLedBuffer[i1*16 + 4] = 2;
 
 			if(m.toggle[edit_row] & (1 << i1))
