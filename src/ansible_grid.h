@@ -55,7 +55,6 @@ typedef struct {
 } mp_state_t;
 
 
-
 void set_mode_grid(void);
 
 void handler_GridFrontShort(s32 data);

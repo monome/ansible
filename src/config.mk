@@ -78,6 +78,7 @@ CSRCS = \
        ../libavr32/src/init_common.c \
        ../libavr32/src/midi_common.c \
        ../libavr32/src/monome.c \
+       ../libavr32/src/music.c \
        ../libavr32/src/notes.c \
        ../libavr32/src/random.c \
        ../libavr32/src/timers.c \

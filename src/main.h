@@ -57,6 +57,7 @@ typedef const struct {
 	midi_standard_state_t midi_standard_state;
 	midi_arp_state_t midi_arp_state;
 	tt_state_t tt_state;
+	uint8_t scale[16][8];
 } nvram_data_t;
 
 extern nvram_data_t f;

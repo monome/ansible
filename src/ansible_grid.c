@@ -41,6 +41,7 @@ preset (revert to old version?)
 #include "i2c.h"
 #include "dac.h"
 #include "util.h" // rnd
+#include "music.h"
 
 #include "main.h"
 #include "ansible_grid.h"
@@ -68,6 +69,8 @@ uint8_t ext_clock_phase;
 
 uint8_t time_rough;
 uint8_t time_fine;
+
+uint8_t scale_data[16][8];
 
 void (*grid_refresh)(void);
 
@@ -181,6 +184,9 @@ void grid_keytimer(void) {
 						flashc_memset8((void*)&(f.mp_state.sound), sound, 1, true);
 						flashc_memset8((void*)&(f.mp_state.voice_mode), voice_mode, 1, true);
 						flashc_memcpy((void *)&f.mp_state.m[preset_select], &m, sizeof(m), true);
+						
+						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
+
 						preset_mode = false;
 						grid_refresh = &refresh_mp;
 					}
@@ -315,12 +321,14 @@ void mp_note_on(uint8_t n);
 void mp_note_off(uint8_t n);
 
 void default_mp() {
+	uint8_t i1, i2;
+
 	flashc_memset32((void*)&(f.mp_state.clock_period), 55, 4, true);
 	flashc_memset8((void*)&(f.mp_state.preset), 0, 1, true);
 	flashc_memset8((void*)&(f.mp_state.sound), 0, 1, true);
 	flashc_memset8((void*)&(f.mp_state.voice_mode), 0, 1, true);
 
-	for(uint8_t i1=0;i1<8;i1++) {
+	for(i1=0;i1<8;i1++) {
 		m.count[i1] = 7+i1;
 		m.speed[i1] = 0;
 		m.min[i1] = 7+i1;
@@ -335,11 +343,23 @@ void default_mp() {
 		m.smax[i1] = 0;
 	}
 
-	for(uint8_t i1=0;i1<8;i1++)
+	for(i1=0;i1<8;i1++)
 		m.glyph[i1] = 0;
 
-	for(uint8_t i1=0;i1<GRID_PRESETS;i1++)
+	for(i1=0;i1<GRID_PRESETS;i1++)
 		flashc_memcpy((void *)&f.mp_state.m[i1], &m, sizeof(m), true);
+
+	// default scales
+	for(i1=0;i1<7;i1++) {
+		flashc_memset8((void*)&(f.scale[i1][0]), 0, 1, true);
+		for(i2=0;i2<7;i2++)
+			flashc_memset8((void*)&(f.scale[i1][i2+1]), SCALE_INT[i1][i2], 1, true);
+	}
+	for(i1=7;i1<16;i1++) {
+		flashc_memset8((void*)&(f.scale[i1][0]), 0, 1, true);
+		for(i2=0;i2<7;i2++)
+			flashc_memset8((void*)&(f.scale[i1][i2+1]), 1, 1, true);
+	}
 }
 
 void init_mp() {
@@ -371,7 +391,9 @@ void init_mp() {
 
 	m.scale = f.mp_state.m[preset_select].scale;
 
-	for(uint8_t i1=0;i1<4;i1++)
+	memcpy(scale_data, f.scale, sizeof(scale_data));
+
+	for(uint8_t i1=0;i1<8;i1++)
 		m.glyph[i1] = f.mp_state.m[preset_select].glyph[i1];
 
 	clock_period = f.mp_state.clock_period;
@@ -752,6 +774,19 @@ void handler_MPGridKey(s32 data) {
 					break;
 				}
 			}
+			else if(voice_mode != MP_8T) {
+				if(x < 8) {
+					m.scale = (y - 6) * 8 + x;
+				}
+				else {
+					scale_data[m.scale][7-y] = x-8;
+				}
+
+				// recalc scale here
+
+			}
+
+			monomeFrameDirty++;
 		}
 	}
 	// NORMAL
@@ -998,6 +1033,7 @@ void refresh_mp_config(void) {
 	// clear grid
 	memset(monomeLedBuffer,0,128);
 
+	// voice mode + sound
 	c = L0;
 	if(voice_mode == MP_8T)
 		c = L1 + (4 * sound);
@@ -1033,6 +1069,18 @@ void refresh_mp_config(void) {
 
 	monomeLedBuffer[R1 + 6] = c;
 
+	// scale
+	if(voice_mode != MP_8T) {
+		for(i1=0;i1<8;i1++) {
+			monomeLedBuffer[8+16*i1] = L0;
+			monomeLedBuffer[R6 + i1] = 2;
+			monomeLedBuffer[R7 + i1] = 2;
+		}
+		monomeLedBuffer[R6 + (m.scale >> 3) * 16 + (m.scale & 0x7)] = L2;
+
+		for(i1=0;i1<8;i1++)
+			monomeLedBuffer[scale_data[m.scale][i1] + 8 + (7-i1)*16] = L1;
+	}
 }
 
 void refresh_mp(void) {

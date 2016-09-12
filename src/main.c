@@ -53,6 +53,7 @@ usb flash
 #include "ii.h"
 #include "dac.h"
 
+
 #include "conf_board.h"
 
 // absible
@@ -493,7 +494,6 @@ int main(void)
 		// store flash defaults
 		print_dbg("\r\nfirst run. ");
 		flash_unfresh();
-		preset_select = 0;
 		flashc_memset32((void*)&(f.state.mode), mTT, 4, true);
 		flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
 		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
