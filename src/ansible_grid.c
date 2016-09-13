@@ -307,6 +307,10 @@ s8 position[8];		// current position in cycle
 u8 tick[8]; 		// position in speed countdown
 u8 pushed[8];		// manual key reset
 
+s8 note_now[4];
+u16 note_age[4];
+u8 cur_scale[8];
+
 const u8 sign[8][8] = {{0,0,0,0,0,0,0,0},       // o
        {0,24,24,126,126,24,24,0},     			// +
        {0,0,0,126,126,0,0,0},       			// -
@@ -316,9 +320,10 @@ const u8 sign[8][8] = {{0,0,0,0,0,0,0,0},       // o
        {0,120,120,102,102,30,30,0},   			// <> up/down
        {0,126,126,102,102,126,126,0}};  		// [] sync
 
-
+uint8_t get_note_slot(uint8_t v);
 void mp_note_on(uint8_t n);
 void mp_note_off(uint8_t n);
+void calc_scale(void);
 
 void default_mp() {
 	uint8_t i1, i2;
@@ -393,6 +398,8 @@ void init_mp() {
 
 	memcpy(scale_data, f.scale, sizeof(scale_data));
 
+	calc_scale();
+
 	for(uint8_t i1=0;i1<8;i1++)
 		m.glyph[i1] = f.mp_state.m[preset_select].glyph[i1];
 
@@ -401,6 +408,10 @@ void init_mp() {
 	time_fine = (clock_period - 20) % 16;
 
 	clock_mul = 1;
+	note_now[0] = -1;
+	note_now[1] = -1;
+	note_now[2] = -1;
+	note_now[3] = -1;
 }
 
 void resume_mp() {
@@ -579,7 +590,33 @@ void clock_mp(uint8_t phase) {
  	}
 }
 
+uint8_t get_note_slot(uint8_t v) {
+	int8_t w = -1;
+
+	for(int i1=0;i1<v;i1++)
+		note_age[i1]++;
+
+	// find empty
+	for(int i1=0;i1<v;i1++)
+		if(note_now[i1] == -1) {
+			w = i1;
+			break;
+		}
+
+	if(w == -1) {
+		w = 0;
+		for(int i1=1;i1<v;i1++)
+			if(note_age[w] < note_age[i1])
+				w = i1;
+	}
+
+	note_age[w] = 1;
+
+	return w;
+}
+
 void mp_note_on(uint8_t n) {
+	uint8_t w;
 	// print_dbg("\r\nmp note on: ");
 	// print_dbg_ulong(n);
 	switch(voice_mode) {
@@ -588,6 +625,23 @@ void mp_note_on(uint8_t n) {
 				set_tr(TR1 + n);
 			else
 				dac_set_value(n-4, DAC_10V);
+		break;
+	case MP_1V:
+		note_now[0] = n;
+		dac_set_value(0, ET[cur_scale[7-n]] << 2);
+		set_tr(TR1);
+		break;
+	case MP_2V:
+		w = get_note_slot(2);
+		note_now[w] = n;
+		dac_set_value(w, ET[cur_scale[7-n]] << 2);
+		set_tr(TR1 + w);
+		break;
+	case MP_4V:
+		w = get_note_slot(4);
+		note_now[w] = n;
+		dac_set_value(w, ET[cur_scale[7-n]] << 2);
+		set_tr(TR1 + w);
 		break;
 	default:
 		break;
@@ -603,6 +657,28 @@ void mp_note_off(uint8_t n) {
 				clr_tr(TR1 + n);
 			else
 				dac_set_value(n-4, 0);
+		break;
+	case MP_1V:
+		if(note_now[0] == n) {
+			note_now[0] = -1;
+			clr_tr(TR1);
+		}
+		break;
+	case MP_2V:
+		for(int i1=0;i1<2;i1++) {
+			if(note_now[i1] == n) {
+				note_now[i1] = -1;
+				clr_tr(TR1 + i1);
+			}
+		}
+		break;
+	case MP_4V:
+		for(int i1=0;i1<4;i1++) {
+			if(note_now[i1] == n) {
+				note_now[i1] = -1;
+				clr_tr(TR1 + i1);
+			}
+		}
 		break;
 	default:
 		break;
@@ -782,8 +858,7 @@ void handler_MPGridKey(s32 data) {
 					scale_data[m.scale][7-y] = x-8;
 				}
 
-				// recalc scale here
-
+				calc_scale();
 			}
 
 			monomeFrameDirty++;
@@ -1171,5 +1246,17 @@ void refresh_mp(void) {
 					monomeLedBuffer[i1*16 + 8 + i2] = L2;
 			}
 		}
+	}
+}
+
+
+void calc_scale() {
+	cur_scale[0] = scale_data[m.scale][0];
+
+	for(u8 i1=1;i1<8;i1++) {
+		cur_scale[i1] = cur_scale[i1-1] + scale_data[m.scale][i1];
+		// print_dbg("\r\n ");
+		// print_dbg_ulong(cur_scale[i1]);
+		
 	}
 }
