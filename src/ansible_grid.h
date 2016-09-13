@@ -11,14 +11,42 @@
 
 #define GRID_PRESETS 8
 
-typedef struct {
-	uint32_t clock_period;
-	uint8_t pattern;
-} kria_state_t;
+#define KRIA_NUM_PARAMS 4
+#define KRIA_NUM_PATTERNS 16
 
 typedef struct {
-	uint8_t gate[16];
+	u8 tr[16];
+	u8 oct[16];
+	u8 note[16];
+	u8 dur[16];
+
+	u8 dur_mul;
+
+	u8 lstart[KRIA_NUM_PARAMS];
+	u8 lend[KRIA_NUM_PARAMS];
+	u8 llen[KRIA_NUM_PARAMS];
+	u8 lswap[KRIA_NUM_PARAMS];
+	u8 tmul[KRIA_NUM_PARAMS];
+} kria_track;
+
+typedef struct {
+	kria_track t[4];
+	u8 scale;
+} kria_pattern;
+
+typedef struct {
+	kria_pattern p[KRIA_NUM_PATTERNS];
+	u8 pattern;
+	u8 glyph[8];
 } kria_data_t;
+
+typedef struct {
+	uint32_t clock_period;
+	uint8_t preset;
+	kria_data_t k[GRID_PRESETS];
+} kria_state_t;
+
+
 
 
 typedef struct {
@@ -39,10 +67,8 @@ typedef struct {
 	u8 smin[8];
 	u8 smax[8];
 
-	u8 glyph[8];
-
 	u8 scale;
-
+	u8 glyph[8];
 } mp_data_t;
 
 typedef struct {
@@ -50,7 +76,6 @@ typedef struct {
 	uint8_t preset;
 	uint8_t sound;
 	uint8_t voice_mode;
-
 	mp_data_t m[GRID_PRESETS];
 } mp_state_t;
 

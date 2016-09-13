@@ -492,8 +492,7 @@ int main(void)
 
 	if(flash_is_fresh()) {
 		// store flash defaults
-		print_dbg("\r\nfirst run. ");
-		flash_unfresh();
+		print_dbg("\r\nfirst run.");
 		flashc_memset32((void*)&(f.state.mode), mTT, 4, true);
 		flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
 		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
@@ -509,6 +508,8 @@ int main(void)
 		default_midi_standard();
 		default_midi_arp();
 		default_tt();
+		
+		flash_unfresh();
 	}
 	else {
 		// load from flash at startup
@@ -518,6 +519,7 @@ int main(void)
 
 	init_levels();
 	init_cycles();
+	init_kria();
 	init_mp();
 
 	print_dbg("\r\ni2c addr: ");

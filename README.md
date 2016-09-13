@@ -286,6 +286,8 @@ grid layout:
 		(indicate blank vs. not)
 		hold + ch for mutes
 
+		PATTERN PLAY MODE. bank of steps.
+
 			  11 1 1
 	1234 6789 12 4 6
 		  
