@@ -161,7 +161,7 @@ LIBS =
 # Path relative to top level directory pointing to a linker script.
 # LINKER_SCRIPT = avr32/utils/linker_scripts/at32uc3b/0256/gcc/link_uc3b0256.lds
 # LINKER_SCRIPT = avr32/drivers/flashc/flash_example/at32uc3b0256_evk1101/link_uc3b0256.lds
-LINKER_SCRIPT = ../../libavr32/src/link_uc3b0256.lds
+LINKER_SCRIPT = ../../libavr32/src/link_uc3b0512.lds
 
 
 # Additional options for debugging. By default the common Makefile.in will

@@ -270,10 +270,10 @@ void default_kria() {
 	memset(k.p[0].t[0].oct, 0, 16);
 	memset(k.p[0].t[0].note, 0, 16);
 	memset(k.p[0].t[0].dur, 0, 16);
-	memset(k.p[0].t[0].ptr, 3, 16);
-	memset(k.p[0].t[0].poct, 3, 16);
-	memset(k.p[0].t[0].pnote, 3, 16);
-	memset(k.p[0].t[0].pdur, 3, 16);
+	// memset(k.p[0].t[0].ptr, 3, 16);
+	// memset(k.p[0].t[0].poct, 3, 16);
+	// memset(k.p[0].t[0].pnote, 3, 16);
+	// memset(k.p[0].t[0].pdur, 3, 16);
 	k.p[0].t[0].dur_mul = 4;
 	memset(k.p[0].t[0].lstart, 0, KRIA_NUM_PARAMS);
 	memset(k.p[0].t[0].lend, 5, KRIA_NUM_PARAMS);
@@ -680,7 +680,7 @@ void handler_KriaGridKey(s32 data) {
 					break;
 				case modProb:
 					if(z && y > 1 && y < 6) {
-						k.p[k.pattern].t[track].ptr[x] = 5 - y;
+						// k.p[k.pattern].t[track].ptr[x] = 5 - y;
 						monomeFrameDirty++;
 					}
 					break;
@@ -857,6 +857,13 @@ void handler_KriaGridKey(s32 data) {
 
 					monomeFrameDirty++;
 				}
+				break;
+			case mPattern:
+				if(z && y ==0) {
+					k.pattern = x;
+					pos_reset = true;
+				}
+				break;
 
 			default: break;
 			}
@@ -1055,9 +1062,9 @@ void refresh_kria(void) {
 			break;			
 		case modProb:
 			memset(monomeLedBuffer + R5, 3, 16);
-			for(i1=0;i1<16;i1++)
-				if(k.p[k.pattern].t[track].ptr[i1])
-					monomeLedBuffer[(5 - k.p[k.pattern].t[track].ptr[i1]) * 16 + i1] = 6;
+			// for(i1=0;i1<16;i1++)
+				// if(k.p[k.pattern].t[track].ptr[i1])
+					// monomeLedBuffer[(5 - k.p[k.pattern].t[track].ptr[i1]) * 16 + i1] = 6;
 			break;
 		default:
 			// steps
@@ -1194,299 +1201,13 @@ void refresh_kria(void) {
 				monomeLedBuffer[scale_data[k.p[k.pattern].scale][note[i1]] + 8 + (6-note[i1])*16]++;
 		}
 		break;
+	case mPattern:
+		memset(monomeLedBuffer, 3, 16);
+		for(i1=0;i1<16;i1++)
+			monomeLedBuffer[k.pattern] = L1;
+		break;
 	default: break;
 	}
-/*	
-	if(mode == mTr) {
-		if(mod_mode != modTime) {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-			
-			if(mod_mode == modLoop) {
-				if(k.kp[ch][p].lswap[tTr]) {
-					for(i1=0;i1<k.kp[ch][p].llen[tTr];i1++)
-						monomeLedBuffer[(i1+k.kp[ch][p].lstart[tTr])%16] = L0;
-				}
-				else {
-					for(i1=k.kp[ch][p].lstart[tTr];i1<=k.kp[ch][p].lend[tTr];i1++)
-						monomeLedBuffer[i1] = L0;
-				}
-				if(k.kp[ch][p].lswap[tAc]) {
-					for(i1=0;i1<k.kp[ch][p].llen[tAc];i1++)
-						monomeLedBuffer[16 + (i1 + k.kp[ch][p].lstart[tAc]) % 16] = L0;
-				}
-				else {
-					for(i1=k.kp[ch][p].lstart[tAc];i1<=k.kp[ch][p].lend[tAc];i1++)
-						monomeLedBuffer[16 + i1] = L0;
-				}
-			}
-			
-			for(i1=0;i1<16;i1++) {
-				if(k.kp[ch][p].tr[i1])
-					monomeLedBuffer[i1] = L1;
-
-				if(k.kp[ch][p].ac[i1])
-					monomeLedBuffer[16+i1] = L1;
-				
-				for(i2=0;i2<=k.kp[ch][p].oct[i1];i2++)
-					monomeLedBuffer[96-16*i2+i1] = L0;
-
-				if(i1 == pos[ch][tTr])
-					monomeLedBuffer[i1] += 4;
-				if(i1 == pos[ch][tAc])
-					monomeLedBuffer[16+i1] += 4;
-				if(i1 == pos[ch][tOct])
-					monomeLedBuffer[96 - k.kp[ch][p].oct[i1]*16 + i1] += 4;
-			}
-
-			if(k.kp[ch][p].lswap[tTr]) {
-				for(i1=0;i1<16;i1++)
-					if(monomeLedBuffer[i1])
-						if((i1 < k.kp[ch][p].lstart[tTr]) && (i1 > k.kp[ch][p].lend[tTr]))
-							monomeLedBuffer[i1] -= 6;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if(monomeLedBuffer[i1])
-						if((i1 < k.kp[ch][p].lstart[tTr]) || (i1 > k.kp[ch][p].lend[tTr]))
-							monomeLedBuffer[i1] -= 6;
-			}
-
-			if(k.kp[ch][p].lswap[tAc]) {
-				for(i1=0;i1<16;i1++)
-					if(monomeLedBuffer[16+i1])
-						if((i1 < k.kp[ch][p].lstart[tAc]) && (i1 > k.kp[ch][p].lend[tAc]))
-							monomeLedBuffer[16+i1] -= 6;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if(monomeLedBuffer[16+i1])
-						if((i1 < k.kp[ch][p].lstart[tAc]) || (i1 > k.kp[ch][p].lend[tAc]))
-							monomeLedBuffer[16+i1] -= 6;
-			}
-
-			if(k.kp[ch][p].lswap[tOct]) {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tOct]) && (i1 > k.kp[ch][p].lend[tOct]))
-						for(i2=0;i2<=k.kp[ch][p].oct[i1];i2++)
-							monomeLedBuffer[96-16*i2+i1] -= 2;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tOct]) || (i1 > k.kp[ch][p].lend[tOct]))
-						for(i2=0;i2<=k.kp[ch][p].oct[i1];i2++)
-							monomeLedBuffer[96-16*i2+i1] -= 2;
-			}
-		}
-		else {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			monomeLedBuffer[pos[ch][tTr]] = L0;
-			monomeLedBuffer[pos[ch][tTr]+16] = L0;
-			monomeLedBuffer[k.kp[ch][p].tmul[tTr] - 1] = L2;
-			monomeLedBuffer[k.kp[ch][p].tdiv[tTr] - 1 + 16] = L1;
-
-			monomeLedBuffer[pos[ch][tAc]+32] = L0;
-			monomeLedBuffer[pos[ch][tAc]+48] = L0;
-			monomeLedBuffer[k.kp[ch][p].tmul[tAc] - 1 + 32] = L2;
-			monomeLedBuffer[k.kp[ch][p].tdiv[tAc] - 1 + 48] = L1;
-
-			monomeLedBuffer[pos[ch][tOct]+64] = L0;
-			monomeLedBuffer[pos[ch][tOct]+80] = L0;
-			monomeLedBuffer[k.kp[ch][p].tmul[tOct] - 1 + 64] = L2;
-			monomeLedBuffer[k.kp[ch][p].tdiv[tOct] - 1 + 80] = L1;
-		}
-	}
-
-	else if(mode == mDur) {
-		if(mod_mode != modTime) {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			monomeLedBuffer[k.kp[ch][p].dur_mul - 1] = L1;
-
-			for(i1=0;i1<16;i1++) {
-				for(i2=0;i2<=k.kp[ch][p].dur[i1];i2++)
-					monomeLedBuffer[16+16*i2+i1] = L0;
-
-				if(i1 == pos[ch][tDur])
-					monomeLedBuffer[16+i1+16*k.kp[ch][p].dur[i1]] += 4;
-			}
-
-			if(k.kp[ch][p].lswap[tDur]) {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tDur]) && (i1 > k.kp[ch][p].lend[tDur]))
-						for(i2=0;i2<=k.kp[ch][p].dur[i1];i2++)
-							monomeLedBuffer[16+16*i2+i1] -= 2;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tDur]) || (i1 > k.kp[ch][p].lend[tDur]))
-						for(i2=0;i2<=k.kp[ch][p].dur[i1];i2++)
-							monomeLedBuffer[16+16*i2+i1] -= 2;
-			}
-		}
-		else {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			monomeLedBuffer[pos[ch][tDur]] = L0;
-			monomeLedBuffer[pos[ch][tDur]+16] = L0;
-
-			monomeLedBuffer[k.kp[ch][p].tmul[tDur] - 1] = L2;
-			monomeLedBuffer[k.kp[ch][p].tdiv[tDur] - 1 + 16] = L1;
-		}
-	}
-	else if(mode == mNote) {
-		if(mod_mode != modTime) {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-			for(i1=0;i1<16;i1++)
-				monomeLedBuffer[i1+(6-k.kp[ch][p].note[i1])*16] = L1;
-			monomeLedBuffer[pos[ch][tNote] + (6-k.kp[ch][p].note[pos[ch][tNote]])*16] += 4;
-
-			if(k.kp[ch][p].lswap[tNote]) {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tNote]) && (i1 > k.kp[ch][p].lend[tNote]))
-						monomeLedBuffer[i1+(6-k.kp[ch][p].note[i1])*16] -= 4;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tNote]) || (i1 > k.kp[ch][p].lend[tNote]))
-						monomeLedBuffer[i1+(6-k.kp[ch][p].note[i1])*16] -= 4;
-			}
-		}
-		else {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			monomeLedBuffer[pos[ch][tNote]] = L0;
-			monomeLedBuffer[pos[ch][tNote]+16] = L0;
-
-			monomeLedBuffer[k.kp[ch][p].tmul[tNote] - 1] = L2;
-			monomeLedBuffer[k.kp[ch][p].tdiv[tNote] - 1 + 16] = L1;
-		}
-	}
-	else if(mode == mScale) {
-		if(mod_mode != modTime) {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			for(i1=0;i1<16;i1++) {
-				for(i2=0;i2<=k.kp[ch][p].sc[i1];i2++)
-							monomeLedBuffer[16*i2+i1] = L0;
-
-				monomeLedBuffer[i1+16*k.kp[ch][p].sc[i1]] = L1;
-
-				if(i1 == pos[ch][tScale])
-					monomeLedBuffer[i1+16*k.kp[ch][p].sc[i1]] += 4;
-			}
-
-			if(k.kp[ch][p].lswap[tScale]) {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tScale]) && (i1 > k.kp[ch][p].lend[tScale]))
-						for(i2=0;i2<=k.kp[ch][p].sc[i1];i2++)
-							monomeLedBuffer[16*i2+i1] -= 4;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.kp[ch][p].lstart[tScale]) || (i1 > k.kp[ch][p].lend[tScale]))
-						for(i2=0;i2<=k.kp[ch][p].sc[i1];i2++)
-							monomeLedBuffer[16*i2+i1] -= 4;;
-			}
-		}
-		else {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			monomeLedBuffer[pos[ch][tScale]] = L0;
-			monomeLedBuffer[pos[ch][tScale]+16] = L0;
-
-			monomeLedBuffer[k.kp[ch][p].tmul[tScale] - 1] = L2;
-			monomeLedBuffer[k.kp[ch][p].tdiv[tScale] - 1 + 16] = L1;
-		}
-	}
-	else if(mode == mTrans) {
-		if(mod_mode != modTime) {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			if(mod_mode == modLoop) {
-				if(k.kp[ch][p].lswap[tTrans]) {
-					for(i1=0;i1<k.kp[ch][p].llen[tTrans];i1++)
-						monomeLedBuffer[(i1+k.kp[ch][p].lstart[tTrans])%16] = L0;
-				}
-				else {
-					for(i1=k.kp[ch][p].lstart[tTrans];i1<=k.kp[ch][p].lend[tTrans];i1++)
-						monomeLedBuffer[i1] = L0;
-				}
-			}
-
-			monomeLedBuffer[trans_edit] = L1;
-			monomeLedBuffer[pos[ch][tTrans]] += 4;
-
-			for(i1=0;i1<16;i1++) {
-				monomeLedBuffer[(k.kp[ch][p].trans[i1] & 0xf) + 16*(6-(k.kp[ch][p].trans[i1] >> 4))] = L0;
-			}
-
-			monomeLedBuffer[(k.kp[ch][p].trans[pos[ch][tTrans]] & 0xf) + 16*(6-(k.kp[ch][p].trans[pos[ch][tTrans]] >> 4))] += 4;
-			monomeLedBuffer[(k.kp[ch][p].trans[trans_edit] & 0xf) + 16*(6-(k.kp[ch][p].trans[trans_edit] >> 4))] = L2;
-		}
-		else {
-			for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-
-			monomeLedBuffer[pos[ch][tTrans]] = L0;
-			monomeLedBuffer[pos[ch][tTrans]+16] = L0;
-
-			monomeLedBuffer[k.kp[ch][p].tmul[tTrans] - 1] = L2;
-			monomeLedBuffer[k.kp[ch][p].tdiv[tTrans] - 1 + 16] = L1;
-		}
-	}
-	else if(mode==mScaleEdit) {
-		monomeLedBuffer[112] = L1;
-		monomeLedBuffer[113] = L1;
-
-		for(i1=0;i1<112;i1++)
-				monomeLedBuffer[i1] = 0;
-		for(i1=0;i1<7;i1++) {
-			monomeLedBuffer[i1*16] = 4;
-			monomeLedBuffer[97+i1] = L0;
-			monomeLedBuffer[8+16*i1] = L0;
-		}
-		monomeLedBuffer[k.kp[0][p].sc[pos[0][tScale]] * 16] = L1;
-		monomeLedBuffer[k.kp[1][p].sc[pos[1][tScale]] * 16] = L1;
-		monomeLedBuffer[pscale_edit * 16] = L2;
-
-		monomeLedBuffer[(k.pscale[pscale_edit] / 7) * 16 + 1 + (k.pscale[pscale_edit] % 7)] = L2;
-
-		for(i1=0;i1<7;i1++)
-			monomeLedBuffer[scales[k.pscale[pscale_edit]][i1] + 8 + (6-i1)*16] = L1;
-
-		if(sc[0] == pscale_edit && tr[0]) {
-			i1 = k.kp[0][p].note[pos[0][tNote]];
-			monomeLedBuffer[scales[k.pscale[pscale_edit]][i1] + 8 + (6-i1)*16] = L2;
-		}
-
-		if(sc[1] == pscale_edit && tr[1]) {
-			i1 = k.kp[1][p].note[pos[1][tNote]];
-			monomeLedBuffer[scales[k.pscale[pscale_edit]][i1] + 8 + (6-i1)*16] = L2;
-		}
-	}
-	else if(mode==mPattern) {
-		monomeLedBuffer[112] = L1;
-		monomeLedBuffer[113] = L1;
-		
-		for(i1=0;i1<112;i1++)
-			monomeLedBuffer[i1] = 0;
-		for(i1=0;i1<16;i1++)
-			monomeLedBuffer[i1] = L0;
-		if(p_next != p)
-			monomeLedBuffer[p_next] = L1;
-		monomeLedBuffer[p] = L2;
-	}
-*/
 }
 
 void refresh_kria_config(void) {

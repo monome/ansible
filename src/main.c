@@ -392,22 +392,22 @@ u8 flash_is_fresh(void) {
 }
 
 void flash_unfresh(void) {
-  flashc_memset8((void*)&(f.fresh), FIRSTRUN_KEY, 4, true);
+  flashc_memset8((void*)&(f.fresh), FIRSTRUN_KEY, 1, true);
 }
 
 void flash_write(void) {
 	print_dbg("\r\n> write preset ");
-	print_dbg_ulong(preset_select);
-	flashc_memset8((void*)&(f.preset_select), preset_select, 4, true);
+	// print_dbg_ulong(preset_select);
+	// flashc_memset8((void*)&(f.preset_select), preset_select, 4, true);
 
 	// flashc_memcpy((void *)&(f.state), &ansible_state, sizeof(ansible_state), true);
 }
 
 void flash_read(void) {
 	print_dbg("\r\n> read preset ");
-	print_dbg_ulong(preset_select);
+	// print_dbg_ulong(preset_select);
 
-	preset_select = f.preset_select;
+	// preset_select = f.preset_select;
 
 	// memcpy(&ansible_state, &f.state, sizeof(ansible_state));
 
@@ -473,6 +473,57 @@ int main(void)
 
 	init_dbg_rs232(FMCK_HZ);
 
+	print_dbg("\r\n\n// ansible //////////////////////////////// ");
+	print_dbg("\r\n== FLASH struct size: ");
+	print_dbg_ulong(sizeof(f));
+	print_dbg("\r\n");
+	print_dbg("\r\nfresh: ");
+	print_dbg_ulong(f.fresh);
+	print_dbg("\r\n");
+
+
+	if(flash_is_fresh()) {
+		// store flash defaults
+		print_dbg_ulong(f.fresh);
+		flash_unfresh();
+		print_dbg_ulong(f.fresh);
+		print_dbg("\r\nfirst run.");
+		flashc_memset32((void*)&(f.state.mode), mTT, 4, true);
+		print_dbg_ulong(flash_is_fresh());
+		flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
+		print_dbg_ulong(flash_is_fresh());
+		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
+		print_dbg_ulong(flash_is_fresh());
+		flashc_memset32((void*)&(f.state.arc_mode), mArcLevels, 4, true);
+		print_dbg_ulong(flash_is_fresh());
+		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
+		print_dbg_ulong(flash_is_fresh());
+		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
+		print_dbg_ulong(flash_is_fresh());
+		// flash_write();
+		// flashc_memset8((void*)&(f.preset_select), 0, 1, true);
+		default_kria();
+		print_dbg_ulong(flash_is_fresh());
+		default_mp();
+		print_dbg_ulong(flash_is_fresh());
+		default_levels();
+		print_dbg_ulong(flash_is_fresh());
+		default_cycles();
+		print_dbg_ulong(flash_is_fresh());
+		default_midi_standard();
+		print_dbg_ulong(flash_is_fresh());
+		default_midi_arp();
+		print_dbg_ulong(flash_is_fresh());
+		default_tt();
+		print_dbg_ulong(flash_is_fresh());
+		
+	}
+	else {
+		// load from flash at startup
+		// preset_select = f.preset_select;
+		// flash_read();
+	}
+
 	init_gpio();
 	assign_main_event_handlers();
 	init_events();
@@ -484,42 +535,9 @@ int main(void)
 	register_interrupts();
 	cpu_irq_enable();
 
-	init_dacs();
-
-	print_dbg("\r\n\n// ansible //////////////////////////////// ");
-	print_dbg("\r\n== FLASH struct size: ");
-	print_dbg_ulong(sizeof(f));
-
-	if(flash_is_fresh()) {
-		// store flash defaults
-		print_dbg("\r\nfirst run.");
-		flashc_memset32((void*)&(f.state.mode), mTT, 4, true);
-		flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
-		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
-		flashc_memset32((void*)&(f.state.arc_mode), mArcLevels, 4, true);
-		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
-		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
-		// flash_write();
-		// flashc_memset8((void*)&(f.preset_select), 0, 1, true);
-		default_kria();
-		default_mp();
-		default_levels();
-		default_cycles();
-		default_midi_standard();
-		default_midi_arp();
-		default_tt();
-		
-		flash_unfresh();
-	}
-	else {
-		// load from flash at startup
-		// preset_select = f.preset_select;
-		// flash_read();
-	}
-
 	init_levels();
 	init_cycles();
-	init_kria();
+	// init_kria();
 	init_mp();
 
 	print_dbg("\r\ni2c addr: ");
@@ -541,6 +559,7 @@ int main(void)
 	connected = conNONE;
 	set_mode(f.state.mode);
 
+	init_dacs();
 	init_usb_host();
 	init_monome();
 

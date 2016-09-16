@@ -20,10 +20,12 @@ typedef struct {
 	u8 note[16];
 	u8 dur[16];
 
-	u8 ptr[16];
-	u8 poct[16];
-	u8 pnote[16];
-	u8 pdur[16];
+	u8 p[KRIA_NUM_PARAMS][16];
+
+	// u8 ptr[16];
+	// u8 poct[16];
+	// u8 pnote[16];
+	// u8 pdur[16];
 
 	u8 dur_mul;
 

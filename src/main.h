@@ -47,8 +47,7 @@ typedef struct {
 
 // NVRAM data structure located in the flash array.
 typedef const struct {
-	u8 fresh;
-	u8 preset_select;
+	uint8_t fresh;
 	ansible_state_t state;
 	kria_state_t kria_state;
 	mp_state_t mp_state;
