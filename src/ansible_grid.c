@@ -78,7 +78,7 @@ u8 voice_mode;
 
 
 void set_mode_grid() {
-	switch(f.state.mode) {
+	switch(ansible_mode) {
 	case mGridKria:
 		print_dbg("\r\n> mode grid kria");
 		app_event_handlers[kEventKey] = &handler_KriaKey;
@@ -109,13 +109,13 @@ void set_mode_grid() {
 		break;
 	}
 	
-	if(connected == conGRID) {
+	// if(connected == conGRID) {
 		app_event_handlers[kEventFrontShort] = &handler_GridFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_GridFrontLong;
-	}
+	// }
 
-	flashc_memset32((void*)&(f.state.none_mode), f.state.mode, 4, true);
-	flashc_memset32((void*)&(f.state.grid_mode), f.state.mode, 4, true);
+	flashc_memset32((void*)&(f.state.none_mode), ansible_mode, 4, true);
+	flashc_memset32((void*)&(f.state.grid_mode), ansible_mode, 4, true);
 }
 
 
@@ -124,7 +124,7 @@ void handler_GridFrontShort(s32 data) {
 		print_dbg("\r\n> PRESET EXIT");
 		preset_mode = false;
 
-		if(f.state.mode == mGridMP)
+		if(ansible_mode == mGridMP)
 			grid_refresh = &refresh_mp;
 		else
 			grid_refresh = &refresh_kria;
@@ -141,7 +141,7 @@ void handler_GridFrontShort(s32 data) {
 }
 
 void handler_GridFrontLong(s32 data) {
-	if(f.state.mode == mGridKria)
+	if(ansible_mode == mGridKria)
 		set_mode(mGridMP);
 	else
 		set_mode(mGridKria);
@@ -157,7 +157,7 @@ void refresh_preset(void) {
 
 	monomeLedBuffer[preset * 16] = 11;
 
-	switch(f.state.mode) {
+	switch(ansible_mode) {
 	case mGridMP:
 		for(i1=0;i1<8;i1++)
 			for(i2=0;i2<8;i2++)
@@ -187,7 +187,7 @@ void grid_keytimer(void) {
 
 					// WRITE PRESET
 
-					if(f.state.mode == mGridMP) {
+					if(ansible_mode == mGridMP) {
 						flashc_memset8((void*)&(f.mp_state.preset), preset, 1, true);
 						flashc_memset8((void*)&(f.mp_state.sound), sound, 1, true);
 						flashc_memset8((void*)&(f.mp_state.voice_mode), voice_mode, 1, true);
@@ -197,7 +197,7 @@ void grid_keytimer(void) {
 
 						preset_mode = false;
 						grid_refresh = &refresh_mp;
-					} else if(f.state.mode == mGridKria) {
+					} else if(ansible_mode == mGridKria) {
 						flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
 						flashc_memcpy((void *)&f.kria_state.k[preset], &k, sizeof(k), true);
 						

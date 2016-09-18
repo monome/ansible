@@ -209,7 +209,7 @@ static clock_source sync_source;
 
 
 void set_mode_midi(void) {
-	switch(f.state.mode) {
+	switch(ansible_mode) {
 	case mMidiStandard:
 		print_dbg("\r\n> mode midi standard");
 		standard_state = f.midi_standard_state;
@@ -258,7 +258,7 @@ void set_mode_midi(void) {
 
 
 void handler_MidiFrontShort(s32 data) {
-	if (f.state.mode == mMidiStandard) {
+	if (ansible_mode == mMidiStandard) {
 		if (standard_state.voicing == eVoiceFixed && key_state.key2) {
 			fixed_start_learning();
 		}
@@ -276,7 +276,7 @@ void handler_MidiFrontShort(s32 data) {
 }
 
 void handler_MidiFrontLong(s32 data) {
-	if(f.state.mode == mMidiStandard)
+	if(ansible_mode == mMidiStandard)
 		set_mode(mMidiArp);
 	else
 		set_mode(mMidiStandard);

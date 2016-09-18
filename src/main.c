@@ -69,10 +69,11 @@ usb flash
 uint8_t front_timer;
 
 uint8_t preset_mode;
-uint8_t preset_select;
 
 __attribute__((__section__(".flash_nvram")))
 nvram_data_t f;
+
+ansible_mode_t ansible_mode;
 
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
@@ -170,7 +171,8 @@ void timers_unset_monome(void) {
 }
 
 void set_mode(ansible_mode_t m) {
-	flashc_memset32((void*)&(f.state.mode), m, 4, true);
+	ansible_mode = m;
+	// flashc_memset32((void*)&(f.state.mode), m, 4, true);
 	// print_dbg("\r\nset mode ");
 	// print_dbg_ulong(f.state.mode);
 
@@ -212,7 +214,7 @@ static void handler_FtdiDisconnect(s32 data) {
 	app_event_handlers[ kEventFrontShort ]	= &handler_FrontShort;
 	app_event_handlers[ kEventFrontLong ]	= &handler_FrontLong;
 	connected = conNONE;
-	set_mode(f.state.mode);
+	// set_mode(f.state.mode);
 }
 
 static void handler_MonomeConnect(s32 data) {
@@ -222,12 +224,14 @@ static void handler_MonomeConnect(s32 data) {
 	case eDeviceGrid:
 		print_dbg("GRID");
 		connected = conGRID;
-		set_mode(f.state.grid_mode);
+		if(ansible_mode != f.state.grid_mode)
+			set_mode(f.state.grid_mode);
 		break;
 	case eDeviceArc:
 		print_dbg("ARC");
 		connected = conARC;
-		set_mode(f.state.arc_mode);
+		if(ansible_mode != f.state.arc_mode)
+			set_mode(f.state.arc_mode);
 		break;
 	default:
 		break;
@@ -275,7 +279,7 @@ static void handler_Front(s32 data) {
 }
 
 static void handler_FrontShort(s32 data) {
-	if(f.state.mode == mTT)
+	if(ansible_mode == mTT)
 		set_mode(f.state.none_mode);
 	else
 		set_mode(mTT);
@@ -476,52 +480,24 @@ int main(void)
 	print_dbg("\r\n\n// ansible //////////////////////////////// ");
 	print_dbg("\r\n== FLASH struct size: ");
 	print_dbg_ulong(sizeof(f));
-	print_dbg("\r\n");
-	print_dbg("\r\nfresh: ");
-	print_dbg_ulong(f.fresh);
-	print_dbg("\r\n");
-
 
 	if(flash_is_fresh()) {
 		// store flash defaults
-		print_dbg_ulong(f.fresh);
-		flash_unfresh();
-		print_dbg_ulong(f.fresh);
 		print_dbg("\r\nfirst run.");
-		flashc_memset32((void*)&(f.state.mode), mTT, 4, true);
-		print_dbg_ulong(flash_is_fresh());
 		flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
-		print_dbg_ulong(flash_is_fresh());
 		flashc_memset32((void*)&(f.state.grid_mode), mGridKria, 4, true);
-		print_dbg_ulong(flash_is_fresh());
 		flashc_memset32((void*)&(f.state.arc_mode), mArcLevels, 4, true);
-		print_dbg_ulong(flash_is_fresh());
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
-		print_dbg_ulong(flash_is_fresh());
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
-		print_dbg_ulong(flash_is_fresh());
-		// flash_write();
-		// flashc_memset8((void*)&(f.preset_select), 0, 1, true);
 		default_kria();
-		print_dbg_ulong(flash_is_fresh());
 		default_mp();
-		print_dbg_ulong(flash_is_fresh());
 		default_levels();
-		print_dbg_ulong(flash_is_fresh());
 		default_cycles();
-		print_dbg_ulong(flash_is_fresh());
 		default_midi_standard();
-		print_dbg_ulong(flash_is_fresh());
 		default_midi_arp();
-		print_dbg_ulong(flash_is_fresh());
 		default_tt();
-		print_dbg_ulong(flash_is_fresh());
 		
-	}
-	else {
-		// load from flash at startup
-		// preset_select = f.preset_select;
-		// flash_read();
+		flash_unfresh();
 	}
 
 	init_gpio();
@@ -537,7 +513,7 @@ int main(void)
 
 	init_levels();
 	init_cycles();
-	// init_kria();
+	init_kria();
 	init_mp();
 
 	print_dbg("\r\ni2c addr: ");
@@ -557,7 +533,7 @@ int main(void)
 	timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
 
 	connected = conNONE;
-	set_mode(f.state.mode);
+	set_mode(mTT);
 
 	init_dacs();
 	init_usb_host();

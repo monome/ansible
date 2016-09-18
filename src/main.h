@@ -36,7 +36,6 @@ typedef enum {
 
 typedef struct {
 	connected_t connected;
-	ansible_mode_t mode;
 	ansible_mode_t arc_mode;
 	ansible_mode_t grid_mode;
 	ansible_mode_t midi_mode;
@@ -60,6 +59,7 @@ typedef const struct {
 } nvram_data_t;
 
 extern nvram_data_t f;
+extern ansible_mode_t ansible_mode;
 
 extern softTimer_t auxTimer[4];
 

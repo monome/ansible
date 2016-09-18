@@ -73,7 +73,7 @@ static int16_t tr_time_pw[4];
 
 
 void set_mode_arc(void) {
-	switch(f.state.mode) {
+	switch(ansible_mode) {
 	case mArcLevels:
 		print_dbg("\r\n> mode arc levels");
 		app_event_handlers[kEventKey] = &handler_LevelsKey;
@@ -106,20 +106,20 @@ void set_mode_arc(void) {
 		break;
 	}
 	
-	if(connected == conARC) {
+	// if(connected == conARC) {
 		app_event_handlers[kEventFrontShort] = &handler_ArcFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
-	}
+	// }
 
-	flashc_memset32((void*)&(f.state.none_mode), f.state.mode, 4, true);
-	flashc_memset32((void*)&(f.state.arc_mode), f.state.mode, 4, true);
+	flashc_memset32((void*)&(f.state.none_mode), ansible_mode, 4, true);
+	flashc_memset32((void*)&(f.state.arc_mode), ansible_mode, 4, true);
 }
 
 
 static inline void arc_leave_preset(void) {
 	arc_preset_mode = 0;
 
-	switch(f.state.mode) {
+	switch(ansible_mode) {
 	case mArcLevels:
 		mode = 0;
 		app_event_handlers[kEventMonomeRingEnc] = &handler_LevelsEnc;
@@ -162,7 +162,7 @@ void handler_ArcFrontShort(s32 data) {
 }
 
 void handler_ArcFrontLong(s32 data) {
-	if(f.state.mode == mArcLevels)
+	if(ansible_mode == mArcLevels)
 		set_mode(mArcCycles);
 	else
 		set_mode(mArcLevels);
@@ -190,7 +190,7 @@ const uint8_t delta_acc[16] = {0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 9
 void arc_keytimer(void) {
 	if(key_count_arc[0]) {
 		if(key_count_arc[0] == 1) {
-			switch(f.state.mode) {
+			switch(ansible_mode) {
 			case mArcLevels:
 				key_long_levels(0);
 				break;
@@ -206,7 +206,7 @@ void arc_keytimer(void) {
 
 	if(key_count_arc[1]) {
 		if(key_count_arc[1] == 1) {
-			switch(f.state.mode) {
+			switch(ansible_mode) {
 			case mArcLevels:
 				key_long_levels(1);
 				break;
@@ -244,7 +244,7 @@ void handler_ArcPresetKey(s32 data) {
 		arc_preset = arc_preset_select;
 		print_dbg("\r\nread preset: ");
 		print_dbg_ulong(arc_preset);
-		switch(f.state.mode) {
+		switch(ansible_mode) {
 		case mArcLevels:
 			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
 			init_levels();
@@ -265,7 +265,7 @@ void handler_ArcPresetKey(s32 data) {
 		arc_preset = arc_preset_select;
 		print_dbg("\r\nwrite preset: ");
 		print_dbg_ulong(arc_preset);
-		switch(f.state.mode) {
+		switch(ansible_mode) {
 		case mArcLevels:
 			flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
 			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
