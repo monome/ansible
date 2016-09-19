@@ -1,24 +1,13 @@
 /*
 
-MP
-
-col 4 sound obsolete
-
 
 
 KRIA
 
-
-modProb
-
-PATTERN
-
 sync mode-- tr + note linked in editing
 
 
-
-
-loop helper display for oct/dur
+loop helper display for oct/dur and probs
 ext clock mul slightly f'd
 
 */
@@ -270,6 +259,7 @@ void default_kria() {
 	memset(k.p[0].t[0].oct, 0, 16);
 	memset(k.p[0].t[0].note, 0, 16);
 	memset(k.p[0].t[0].dur, 0, 16);
+	memset(k.p[0].t[0].p, 3, 16 * KRIA_NUM_PARAMS);
 	// memset(k.p[0].t[0].ptr, 3, 16);
 	// memset(k.p[0].t[0].poct, 3, 16);
 	// memset(k.p[0].t[0].pnote, 3, 16);
@@ -320,6 +310,8 @@ void resume_kria() {
 	view_clock = false;
 	view_config = false;
 
+	preset = f.kria_state.preset;
+
 	calc_scale(k.p[k.pattern].scale);
 
 	// re-check clock jack
@@ -347,7 +339,6 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 	pos_mul[t][p]++;
 
 	if(pos_mul[t][p] >= k.p[k.pattern].t[t].tmul[p]) {
-		// TURN PROBS into 2d array
 		if(pos[t][p] == k.p[k.pattern].t[t].lend[p])
 			pos[t][p] = k.p[k.pattern].t[t].lstart[p];
 		else {
@@ -356,7 +347,20 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 				pos[t][p] = 0;
 		}
 		pos_mul[t][p] = 0;
-		return true;
+		switch(k.p[k.pattern].t[t].p[p][pos[t][p]]) {
+		case 0:
+			return false;
+		case 1:
+			// ~50%
+			return (rnd() & 0xff) > 128;
+		case 2:
+			// ~75%
+			return (rnd() & 0xff) > 64;
+		case 3:
+			return true;
+		default:
+			return true;
+		}
 	}
 	else
 		return false;
@@ -680,7 +684,7 @@ void handler_KriaGridKey(s32 data) {
 					break;
 				case modProb:
 					if(z && y > 1 && y < 6) {
-						// k.p[k.pattern].t[track].ptr[x] = 5 - y;
+						k.p[k.pattern].t[track].p[mTr][x] = 5 - y;
 						monomeFrameDirty++;
 					}
 					break;
@@ -733,7 +737,10 @@ void handler_KriaGridKey(s32 data) {
 					}
 					break;
 				case modProb:
-
+					if(z && y > 1 && y < 6) {
+						k.p[k.pattern].t[track].p[mNote][x] = 5 - y;
+						monomeFrameDirty++;
+					}
 					break;
 				default: break;
 				}
@@ -784,7 +791,10 @@ void handler_KriaGridKey(s32 data) {
 					}
 					break;
 				case modProb:
-
+					if(z && y > 1 && y < 6) {
+						k.p[k.pattern].t[track].p[mOct][x] = 5 - y;
+						monomeFrameDirty++;
+					}
 					break;
 				default: break;
 				}
@@ -839,7 +849,10 @@ void handler_KriaGridKey(s32 data) {
 					}
 					break;
 				case modProb:
-
+					if(z && y > 1 && y < 6) {
+						k.p[k.pattern].t[track].p[mDur][x] = 5 - y;
+						monomeFrameDirty++;
+					}
 					break;
 				default: break;
 				}
@@ -1062,9 +1075,9 @@ void refresh_kria(void) {
 			break;			
 		case modProb:
 			memset(monomeLedBuffer + R5, 3, 16);
-			// for(i1=0;i1<16;i1++)
-				// if(k.p[k.pattern].t[track].ptr[i1])
-					// monomeLedBuffer[(5 - k.p[k.pattern].t[track].ptr[i1]) * 16 + i1] = 6;
+			for(i1=0;i1<16;i1++)
+				if(k.p[k.pattern].t[track].p[mTr][i1])
+					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mTr][i1]) * 16 + i1] = 6;
 			break;
 		default:
 			// steps
@@ -1074,6 +1087,7 @@ void refresh_kria(void) {
 						monomeLedBuffer[i2*16 + i1] = 3;
 				}
 				// playhead
+				// if(tr[i2])
 				monomeLedBuffer[i2*16 + pos[i2][mTr]] += 4;
 			}
 
@@ -1098,6 +1112,10 @@ void refresh_kria(void) {
 			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mNote] - 1] = L1;
 			break;			
 		case modProb:
+			memset(monomeLedBuffer + R5, 3, 16);
+			for(i1=0;i1<16;i1++)
+				if(k.p[k.pattern].t[track].p[mNote][i1])
+					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mNote][i1]) * 16 + i1] = 6;
 			break;
 		default:
 			for(i1=0;i1<16;i1++)
@@ -1125,6 +1143,10 @@ void refresh_kria(void) {
 			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mOct] - 1] = L1;
 			break;			
 		case modProb:
+			memset(monomeLedBuffer + R5, 3, 16);
+			for(i1=0;i1<16;i1++)
+				if(k.p[k.pattern].t[track].p[mOct][i1])
+					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mOct][i1]) * 16 + i1] = 6;
 			break;
 		default:
 			for(i1=0;i1<16;i1++) {
@@ -1157,6 +1179,10 @@ void refresh_kria(void) {
 			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mDur] - 1] = L1;
 			break;			
 		case modProb:
+			memset(monomeLedBuffer + R5, 3, 16);
+			for(i1=0;i1<16;i1++)
+				if(k.p[k.pattern].t[track].p[mDur][i1])
+					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mDur][i1]) * 16 + i1] = 6;
 			break;
 		default:
 			monomeLedBuffer[k.p[k.pattern].t[track].dur_mul - 1] = L1;
@@ -1297,9 +1323,10 @@ void default_mp() {
 }
 
 void init_mp() {
-	preset = f.mp_state.preset;
 	sound = f.mp_state.sound;
 	voice_mode = f.mp_state.voice_mode;
+
+	preset = f.mp_state.preset;
 
 	for(uint8_t i1=0;i1<8;i1++) {
 		m = f.mp_state.m[preset];
@@ -1345,6 +1372,8 @@ void resume_mp() {
 	view_clock = false;
 	view_config = false;
 	preset_mode = false;
+
+	preset = f.mp_state.preset;
 
 	// re-check clock jack
 	clock_external = !gpio_get_pin_value(B10);

@@ -378,6 +378,8 @@ void resume_levels() {
 
 	arc_refresh = &refresh_levels;
 
+	arc_preset = f.levels_state.preset;
+
 	for(i1=0;i1<4;i1++) {
 		dac_set_slew(i1,l.slew[i1]);
 		generate_scales(i1);
@@ -1273,6 +1275,8 @@ void resume_cycles() {
 	mode = 0;
 
 	arc_refresh = &refresh_cycles;
+
+	arc_preset = f.cycles_state.preset;
 
 	for(i1=0;i1<4;i1++) {
 		dac_set_slew(i1,DAC_RATE_CV << 2);
