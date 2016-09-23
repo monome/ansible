@@ -50,6 +50,7 @@ typedef struct {
 typedef struct {
 	uint32_t clock_period;
 	uint8_t preset;
+	bool sync_mode;
 	kria_data_t k[GRID_PRESETS];
 } kria_state_t;
 

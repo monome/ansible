@@ -19,7 +19,15 @@ void set_mode_tt(void) {
 	process_ii = &ii_tt;
 	update_leds(0);
 
-	dac_set_slew(0,500);
+	clr_tr(TR1);
+	clr_tr(TR2);
+	clr_tr(TR3);
+	clr_tr(TR4);
+
+	dac_set_slew(0,0);
+	dac_set_slew(1,0);
+	dac_set_slew(2,0);
+	dac_set_slew(3,0);
 }
 
 void default_tt() {
@@ -37,10 +45,11 @@ void clock_tt(uint8_t phase) {
 
 	// update_dacs(d);
 
-	if(phase)
-		set_tr(TR4);
-	else
-		clr_tr(TR4);
+	// if(phase)
+		// set_tr(TR4);
+	// else
+		// clr_tr(TR4);
+	;;
 }
 
 void ii_tt(uint8_t *d, uint8_t l) {
@@ -60,7 +69,7 @@ void ii_tt(uint8_t *d, uint8_t l) {
 				clr_tr(TR1 + d[1]);
 		}
 
-		else if(d[0] == 128) {
+		else if(d[0] == 129) {
 			ii_tx_queue(get_tr(TR1 + d[1]));
 		}
 	}

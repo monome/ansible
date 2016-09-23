@@ -227,6 +227,8 @@ u8 loop_first;
 s8 loop_last;
 u8 loop_edit;
 
+bool sync_mode;
+
 u8 pos[4][KRIA_NUM_PARAMS];
 u8 pos_mul[4][KRIA_NUM_PARAMS];
 bool pos_reset;
@@ -250,7 +252,8 @@ void default_kria() {
 	uint8_t i1;
 
 	flashc_memset32((void*)&(f.kria_state.clock_period), 100, 4, true);
-	flashc_memset32((void*)&(f.kria_state.preset), 0, 1, true);
+	flashc_memset8((void*)&(f.kria_state.preset), 0, 1, true);
+	flashc_memset8((void*)&(f.kria_state.sync_mode), true, 1, true);
 
 	for(i1=0;i1<8;i1++)
 		k.glyph[i1] = 0;
@@ -289,6 +292,8 @@ void init_kria() {
 	track = 0;
 	k_mode = mTr;
 	k_mod_mode = modNone;
+
+	sync_mode = f.kria_state.sync_mode;
 
 	preset = f.kria_state.preset;
 
@@ -583,7 +588,11 @@ void handler_KriaGridKey(s32 data) {
 		// time_fine = (clock_period - 20) % 16;
 	}
 	else if(view_config) {
-		;;
+		if(z) {
+			sync_mode ^= 1;
+			flashc_memset8((void*)&(f.kria_state.sync_mode), sync_mode, 1, true);
+			monomeFrameDirty++;
+		}
 	}
 	// NORMAL
 	else {

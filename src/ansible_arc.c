@@ -1327,9 +1327,9 @@ void clock_cycles(uint8_t phase) {
 		// c.speed[i1] = (c.speed[i1] * (friction)) >> 8;
 
 		if(c.pos[i1] & 0x2000)
-			clr_tr(TR1 + i1);
-		else
 			set_tr(TR1 + i1);
+		else
+			clr_tr(TR1 + i1);
 
 		if(c.shape)
 			dac_set_value(i1, c.pos[i1]);
