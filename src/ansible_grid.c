@@ -5,8 +5,7 @@ KRIA
 loop helper display for oct/dur and probs
 ext clock mul slightly f'd
 
-pattern copy
-pattern play
+pattern play mode
 
 */
 
@@ -56,8 +55,22 @@ void calc_scale(uint8_t s);
 
 void (*grid_refresh)(void);
 
-
+// KRIA
 kria_data_t k;
+
+typedef enum {
+	mTr, mDur, mNote, mOct, mScale, mPattern
+} kria_modes_t;
+
+typedef enum {
+	modNone, modLoop, modTime, modProb
+} kria_mod_modes_t;
+
+kria_modes_t k_mode;
+kria_mod_modes_t k_mod_mode;
+
+
+// MP
 
 mp_data_t m;
 u8 sound;
@@ -196,6 +209,15 @@ void grid_keytimer(void) {
 					
 				}
 			}
+			else if(ansible_mode == mGridKria) {
+				if(k_mode == mPattern) {
+					if(held_keys[i1] < 16) {
+						memcpy((void *)&k.p[held_keys[i1]], &k.p[k.pattern], sizeof(k.p[k.pattern]));
+						k.pattern = held_keys[i1];
+						// pos_reset = true;
+					}
+				}
+			}
 
 			// print_dbg("\rlong press: "); 
 			// print_dbg_ulong(held_keys[i1]);
@@ -206,17 +228,6 @@ void grid_keytimer(void) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // KRIA
-
-typedef enum {
-	mTr, mDur, mNote, mOct, mScale, mPattern
-} kria_modes_t;
-
-typedef enum {
-	modNone, modLoop, modTime, modProb
-} kria_mod_modes_t;
-
-kria_modes_t k_mode;
-kria_mod_modes_t k_mod_mode;
 
 u8 track;
 
@@ -517,6 +528,12 @@ void handler_KriaGridKey(s32 data) {
 						print_dbg("\r\npreset RECALL:");
 						print_dbg_ulong(preset);
 					}
+				}
+			}
+			else if(k_mode == mPattern) {
+				if(y ==0) {
+					k.pattern = x;
+					pos_reset = true;
 				}
 			}
 		}
@@ -917,12 +934,12 @@ void handler_KriaGridKey(s32 data) {
 					monomeFrameDirty++;
 				}
 				break;
-			case mPattern:
-				if(z && y ==0) {
-					k.pattern = x;
-					pos_reset = true;
-				}
-				break;
+			// case mPattern:
+			// 	if(z && y ==0) {
+			// 		k.pattern = x;
+			// 		pos_reset = true;
+			// 	}
+			// 	break;
 
 			default: break;
 			}
