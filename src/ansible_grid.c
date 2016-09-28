@@ -2,8 +2,6 @@
 
 KRIA
 
-note sync mode-- tr + note linked in editing
-
 loop helper display for oct/dur and probs
 ext clock mul slightly f'd
 
@@ -254,7 +252,7 @@ static void update_loop_end(u8 t, u8 x, u8 m);
 void default_kria() {
 	uint8_t i1;
 
-	flashc_memset32((void*)&(f.kria_state.clock_period), 100, 4, true);
+	flashc_memset32((void*)&(f.kria_state.clock_period), 60, 4, true);
 	flashc_memset8((void*)&(f.kria_state.preset), 0, 1, true);
 	flashc_memset8((void*)&(f.kria_state.note_sync), true, 1, true);
 	flashc_memset8((void*)&(f.kria_state.loop_sync), 2, 1, true);
@@ -405,7 +403,7 @@ void clock_kria(uint8_t phase) {
 
 			if(kria_next_step(i1, mTr)) {
 				if(k.p[k.pattern].t[i1].tr[pos[i1][mTr]]) {
-					dac_set_value(i1, ET[cur_scale[note[i1]] + (oct[0] * 12)] << 2);
+					dac_set_value(i1, ET[cur_scale[note[i1]] + (oct[i1] * 12)] << 2);
 					gpio_set_gpio_pin(TR1 + i1);
 
 					switch(i1) {
@@ -596,20 +594,29 @@ void handler_KriaGridKey(s32 data) {
 		if(z) {
 			if(x<8) {
 				note_sync ^= 1;
+				if(loop_sync == 0)
+					loop_sync = 1;
 				flashc_memset8((void*)&(f.kria_state.note_sync), note_sync, 1, true);
+				flashc_memset8((void*)&(f.kria_state.loop_sync), loop_sync, 1, true);
 			}
 			else if(y == 3) {
-				if(loop_sync == 1)
+				if(loop_sync == 1) {
 					loop_sync = 0;
+					note_sync = 0;
+				}
 				else loop_sync = 1;
 
+				flashc_memset8((void*)&(f.kria_state.note_sync), note_sync, 1, true);
 				flashc_memset8((void*)&(f.kria_state.loop_sync), loop_sync, 1, true);
 			}
 			else if(y == 5) {
-				if(loop_sync == 2)
+				if(loop_sync == 2) {
 					loop_sync = 0;
+					note_sync = 0;
+				}
 				else loop_sync = 2;
 
+				flashc_memset8((void*)&(f.kria_state.note_sync), note_sync, 1, true);
 				flashc_memset8((void*)&(f.kria_state.loop_sync), loop_sync, 1, true);
 			}
 			monomeFrameDirty++;
@@ -726,7 +733,16 @@ void handler_KriaGridKey(s32 data) {
 				switch(k_mod_mode) {
 				case modNone:
 					if(z) {
-						k.p[k.pattern].t[track].note[x] = 6-y;
+						if(note_sync) {
+							if(k.p[k.pattern].t[track].tr[x] && k.p[k.pattern].t[track].note[x] == 6-y)
+								k.p[k.pattern].t[track].tr[x] = 0;
+							else {
+								k.p[k.pattern].t[track].tr[x] = 1;
+								k.p[k.pattern].t[track].note[x] = 6-y;
+							}
+						}
+						else 
+							k.p[k.pattern].t[track].note[x] = 6-y;
 						monomeFrameDirty++;
 					}
 					break;
@@ -973,6 +989,7 @@ static void update_loop_start(u8 t, u8 x, u8 m) {
 				adjust_loop_start(i2,x,i1);
 			break;
 		case 0:
+			adjust_loop_start(t,x,m);
 			break;
 		default:
 			break;
@@ -992,6 +1009,7 @@ static void update_loop_end(u8 t, u8 x, u8 m) {
 				adjust_loop_end(i2,x,i1);
 			break;
 		case 0:
+			adjust_loop_end(t,x,m);
 			break;
 		default:
 			break;
@@ -1186,8 +1204,15 @@ void refresh_kria(void) {
 					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mNote][i1]) * 16 + i1] = 6;
 			break;
 		default:
-			for(i1=0;i1<16;i1++)
-				monomeLedBuffer[i1 + (6 - k.p[k.pattern].t[track].note[i1] ) * 16] = 3;
+			if(note_sync) {
+				for(i1=0;i1<16;i1++)
+					monomeLedBuffer[i1 + (6 - k.p[k.pattern].t[track].note[i1] ) * 16] = 
+						k.p[k.pattern].t[track].tr[i1] * 3;
+			}
+			else {
+				for(i1=0;i1<16;i1++)
+					monomeLedBuffer[i1 + (6 - k.p[k.pattern].t[track].note[i1] ) * 16] = 3;
+			}
 
 			monomeLedBuffer[pos[track][mNote] + (6-k.p[k.pattern].t[track].note[pos[track][mNote]])*16] += 4;
 
