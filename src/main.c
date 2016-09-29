@@ -515,6 +515,7 @@ int main(void)
 	init_cycles();
 	init_kria();
 	init_mp();
+	init_tt();
 
 	print_dbg("\r\ni2c addr: ");
 	print_dbg_hex(f.state.i2c_addr);
