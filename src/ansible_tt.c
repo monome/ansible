@@ -4,12 +4,15 @@
 #include "monome.h"
 #include "i2c.h"
 #include "dac.h"
+#include "ii.h"
 
 #include "main.h"
 #include "ansible_tt.h"
 
 uint8_t tr_pol[4];
 uint16_t tr_time[4];
+
+bool input[4];
 
 void set_mode_tt(void) {
 	print_dbg("\r\n> mode tt");
@@ -61,13 +64,6 @@ void clock_tt(uint8_t phase) {
 	;;
 }
 
-#define II_ANSIBLE_ADDR       0xA0
-#define II_GET                128
-#define II_ANSIBLE_TR         1
-#define II_ANSIBLE_TR_TOG     2
-#define II_ANSIBLE_TR_PULSE   3
-#define II_ANSIBLE_TR_TIME    4
-#define II_ANSIBLE_TR_POL     5
 
 void tr_pulse0(void* o) {
 	if(tr_pol[0]) clr_tr(TR1);
@@ -158,6 +154,33 @@ void ii_tt(uint8_t *d, uint8_t l) {
 			default: break;
 			}
 			break;
+		case II_ANSIBLE_CV:
+			dac_set_value(d[1], (d[2] << 8) + d[3]);
+			break;
+		case II_ANSIBLE_CV + II_GET:
+			ii_tx_queue(dac_get_value(d[1]) >> 8);
+			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			break;
+		case II_ANSIBLE_CV_SLEW:
+			dac_set_slew(d[1], (d[2] << 8) + d[3]);
+			break;
+		case II_ANSIBLE_CV_SLEW + II_GET:
+			ii_tx_queue(dac_get_slew(d[1]) >> 8);
+			ii_tx_queue(dac_get_slew(d[1]) & 0xff);
+			break;
+		case II_ANSIBLE_CV_OFF:
+			dac_set_off(d[1], (d[2] << 8) + d[3]);
+			break;
+		case II_ANSIBLE_CV_OFF + II_GET:
+			ii_tx_queue(dac_get_off(d[1]) >> 8);
+			ii_tx_queue(dac_get_off(d[1]) & 0xff);
+			break;
+		case II_ANSIBLE_CV_SET:
+			dac_set_value_noslew(d[1], (d[2] << 8) + d[3]);
+			break;
+		case II_ANSIBLE_INPUT + II_GET:
+			ii_tx_queue(input[d[1]]);
+			break;
 		default: break;
 		}
 	}
@@ -170,36 +193,46 @@ void handler_TTKey(s32 data) {
 
 	switch(data) {
 	case 0:
-		// dac_set_value(0,0);
+		input[2] = 0;
 		break;
 	case 1:
-		// dac_set_value(0,DAC_10V);
-		dac_set_value(0, 1636);
-		dac_set_value(1, 1636);
-		dac_set_value(2, 1636);
-		dac_set_value(3, 1636);
+		input[2] = 1;
 		break;
 	case 2:
-		// dac_set_value_noslew(0,0);
+		input[3] = 0;
 		break;
 	case 3:
-		dac_set_value(0, 0);
-		dac_set_value(1, 0);
-		dac_set_value(2, 0);
-		dac_set_value(3, 0);
-		// dac_set_value_noslew(0,DAC_10V);
+		input[3] = 1;
+		break;
+	default:
+		break;
+	}
+
+}
+
+void handler_TTTr(s32 data) { 
+	print_dbg("\r\n> TT tr");
+	print_dbg_ulong(data);
+
+	switch(data) {
+	case 0:
+		input[0] = 0;
+		break;
+	case 1:
+		input[0] = 1;
+		break;
+	case 2:
+		input[1] = 0;
+		break;
+	case 3:
+		input[1] = 1;
 		break;
 	default:
 		break;
 	}
 }
 
-void handler_TTTr(s32 data) { 
-	print_dbg("\r\n> TT tr");
-	print_dbg_ulong(data);
-}
-
 void handler_TTTrNormal(s32 data) { 
-	print_dbg("\r\n> TT tr normal ");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> TT tr normal ");
+	// print_dbg_ulong(data);
 }
