@@ -56,7 +56,7 @@ usb flash
 
 #include "conf_board.h"
 
-// absible
+// ansible
 #include "main.h"
 #include "ansible_grid.h"
 #include "ansible_arc.h"
