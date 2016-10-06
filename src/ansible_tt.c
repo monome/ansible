@@ -91,13 +91,13 @@ void tr_pulse3(void* o) {
 
 
 void ii_tt(uint8_t *d, uint8_t l) {
-	print_dbg("\r\nii/tele (");
-	print_dbg_ulong(l);
-	print_dbg(") ");
-	for(int i=0;i<l;i++) {
-		print_dbg_ulong(d[i]);
-		print_dbg(" ");
-	}
+	// print_dbg("\r\nii/tele (");
+	// print_dbg_ulong(l);
+	// print_dbg(") ");
+	// for(int i=0;i<l;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
 
 	if(l) {
 		switch(d[0]) {
@@ -188,8 +188,8 @@ void ii_tt(uint8_t *d, uint8_t l) {
 
 
 void handler_TTKey(s32 data) { 
-	print_dbg("\r\n> TT key");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> TT key");
+	// print_dbg_ulong(data);
 
 	switch(data) {
 	case 0:
@@ -211,8 +211,8 @@ void handler_TTKey(s32 data) {
 }
 
 void handler_TTTr(s32 data) { 
-	print_dbg("\r\n> TT tr");
-	print_dbg_ulong(data);
+	// print_dbg("\r\n> TT tr");
+	// print_dbg_ulong(data);
 
 	switch(data) {
 	case 0:

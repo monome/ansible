@@ -596,8 +596,8 @@ void handler_KriaGridKey(s32 data) {
 
 				clock_set(clock_period);
 
-				// print_dbg("\r\nperiod: ");
-				// print_dbg_ulong(clock_period);
+				print_dbg("\r\nperiod: ");
+				print_dbg_ulong(clock_period);
 
 				monomeFrameDirty++;
 			}

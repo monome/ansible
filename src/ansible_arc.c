@@ -334,8 +334,10 @@ void default_levels() {
 		l.offset[i1] = 0;
 		l.range[i1] = 2;
 		l.slew[i1] = 20;
-		for(i2=0;i2<16;i2++)
+		for(i2=0;i2<16;i2++) {
 			l.pattern[i1][i2] = 0;
+			l.note[i1][i2] = 0;
+		}
 	}
 
 	for(i1=0;i1<8;i1++)
@@ -355,8 +357,11 @@ void init_levels() {
 	l.dir = f.levels_state.l[arc_preset].dir;
 
 	for(i1=0;i1<4;i1++) {
-		for(i2=0;i2<16;i2++)
+		for(i2=0;i2<16;i2++) {
 			l.pattern[i1][i2] = f.levels_state.l[arc_preset].pattern[i1][i2];
+			l.note[i1][i2] = f.levels_state.l[arc_preset].note[i1][i2];
+		}
+
 		l.mode[i1] = f.levels_state.l[arc_preset].mode[i1];
 		l.all[i1] = f.levels_state.l[arc_preset].all[i1];
 		l.scale[i1] = f.levels_state.l[arc_preset].scale[i1];
@@ -1243,6 +1248,7 @@ void default_cycles() {
 		c.pos[i1] = 0;
 		c.speed[i1] = 0;
 		c.mult[i1] = 0;
+		c.range[i1] = 64;
 	}
 
 	for(i1=0;i1<8;i1++)
@@ -1266,6 +1272,7 @@ void init_cycles() {
 		c.pos[i1] = f.cycles_state.c[arc_preset].pos[i1];
 		c.speed[i1] = f.cycles_state.c[arc_preset].speed[i1];
 		c.mult[i1] = f.cycles_state.c[arc_preset].mult[i1];
+		c.range[i1] = f.cycles_state.c[arc_preset].range[i1];
 	}
 }
 
@@ -1332,10 +1339,10 @@ void clock_cycles(uint8_t phase) {
 			clr_tr(TR1 + i1);
 
 		if(c.shape)
-			dac_set_value(i1, c.pos[i1]);
+			dac_set_value(i1, (c.pos[i1] * c.range[i1]) >> 6);
 			// dac_set_value(i1, c.pos[i1] << 2);
 		else
-			dac_set_value(i1, abs(0x2000 - c.pos[i1]) << 1);
+			dac_set_value(i1, (abs(0x2000 - c.pos[i1]) << 1) * c.range[i1] >> 6);
 	}
 
 	monomeFrameDirty++;
@@ -1355,7 +1362,8 @@ void handler_CyclesEnc(s32 data) {
 
 	monome_ring_enc_parse_event_data(data, &n, &delta);
 
-	if(mode == 0) {
+	switch(mode) {
+	case 0:
 		// sync
 		if(c.mode) {
 			if(n == 0) {
@@ -1425,10 +1433,9 @@ void handler_CyclesEnc(s32 data) {
 			// print_dbg(" ");
 			// print_dbg_ulong(s);
 		}
+		break;
 
-
-	}
-	else {
+	case 1:
 		switch(n) {
 		// mode
 		case 0:
@@ -1479,8 +1486,24 @@ void handler_CyclesEnc(s32 data) {
 
 			break;
 		}
-
 		monomeFrameDirty++;
+		break;
+	case 2:
+		// range
+		enc_count[n] += delta;
+		i = enc_count[n] >> 4;
+		enc_count[n] -= i << 4;
+
+		if(i) {
+			i += c.range[n];
+			if(i < 1)
+				i = 1;
+			else if(i > 64)
+				i = 64;
+			c.range[n] = i;
+		}
+		break;
+	default: break;
 	}
 }
 
@@ -1516,7 +1539,17 @@ void handler_CyclesKey(s32 data) {
 		break;
 	// key 1 DOWN
 	case 1:
-		key_count_arc[0] = KEY_HOLD_TIME;	
+		if(mode == 1) {
+			mode = 2;
+			enc_count[0] = 0;
+			enc_count[1] = 0;
+			enc_count[2] = 0;
+			enc_count[3] = 0;
+			arc_refresh = &refresh_cycles_config_range;
+			monomeFrameDirty++;
+		}
+		else 
+			key_count_arc[0] = KEY_HOLD_TIME;	
 		break;
 	// key 2 UP
 	case 2:
@@ -1672,7 +1705,15 @@ void refresh_cycles_config(void) {
 	// uint16_t i = (c.friction * 3);
 	// i = (i + 640) & 0x3ff;
 	// arc_draw_point(3, i);
+}
 
+void refresh_cycles_config_range(void) {
+	uint8_t i1, i2;
+	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+
+	for(i1=0;i1<4;i1++)
+		for(i2=0;i2<c.range[i1];i2++)
+			monomeLedBuffer[i1*64 + ((32 + i2) & 0x3f)] = 3;
 }
 
 

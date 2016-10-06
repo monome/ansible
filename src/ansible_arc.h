@@ -31,6 +31,7 @@ typedef struct {
 	uint16_t pos[4];
 	int16_t speed[4];
 	int8_t mult[4];
+	uint8_t range[4];
 	uint8_t mode;
 	uint8_t shape;
 	uint8_t friction;
@@ -72,6 +73,7 @@ void clock_cycles(uint8_t phase);
 void ii_cycles(uint8_t *d, uint8_t l);
 void refresh_cycles(void);
 void refresh_cycles_config(void);
+void refresh_cycles_config_range(void);
 void handler_CyclesEnc(s32 data);
 void handler_CyclesRefresh(s32 data);
 void handler_CyclesKey(s32 data);
