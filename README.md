@@ -1,5 +1,7 @@
 # ansible
 
+[![Build Status](https://travis-ci.org/monome/ansible.svg?branch=master)](https://travis-ci.org/monome/ansible)
+
 http://monome.org/docs/modular/ansible
 
 far communicator, speaks openly.
