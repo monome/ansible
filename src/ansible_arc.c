@@ -107,8 +107,8 @@ void set_mode_arc(void) {
 	}
 	
 	// if(connected == conARC) {
-		app_event_handlers[kEventFrontShort] = &handler_ArcFrontShort;
-		app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
+	// 	app_event_handlers[kEventFrontShort] = &handler_ArcFrontShort;
+	// 	app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
 	// }
 
 	flashc_memset32((void*)&(f.state.none_mode), ansible_mode, 4, true);
@@ -410,6 +410,8 @@ void resume_levels() {
 	levels_dac_refresh();
 
 	monomeFrameDirty++;
+
+	print_dbg("\r\nresume levels");
 }
 
 static void levels_timer_volt0(void* o) {

@@ -110,8 +110,8 @@ void set_mode_grid() {
 	}
 	
 	// if(connected == conGRID) {
-		app_event_handlers[kEventFrontShort] = &handler_GridFrontShort;
-		app_event_handlers[kEventFrontLong] = &handler_GridFrontLong;
+	// 	app_event_handlers[kEventFrontShort] = &handler_GridFrontShort;
+	// 	app_event_handlers[kEventFrontLong] = &handler_GridFrontLong;
 	// }
 
 	flashc_memset32((void*)&(f.state.none_mode), ansible_mode, 4, true);

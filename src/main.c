@@ -226,12 +226,18 @@ static void handler_MonomeConnect(s32 data) {
 		connected = conGRID;
 		if(ansible_mode != f.state.grid_mode)
 			set_mode(f.state.grid_mode);
+		monomeFrameDirty++;
+		app_event_handlers[kEventFrontShort] = &handler_GridFrontShort;
+		app_event_handlers[kEventFrontLong] = &handler_GridFrontLong;
 		break;
 	case eDeviceArc:
 		print_dbg("ARC");
 		connected = conARC;
 		if(ansible_mode != f.state.arc_mode)
 			set_mode(f.state.arc_mode);
+		monomeFrameDirty++;
+		app_event_handlers[kEventFrontShort] = &handler_ArcFrontShort;
+		app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
 		break;
 	default:
 		break;
