@@ -97,7 +97,7 @@ void set_mode_arc(void) {
 		app_event_handlers[kEventMonomeRefresh] = &handler_CyclesRefresh;
 		clock = &clock_cycles;
 		// 24
-		clock_set(DAC_RATE_CV << 2);
+		clock_set(DAC_RATE_CV << 3);
 		process_ii = &ii_cycles;
 		resume_cycles();
 		update_leds(2);
@@ -1288,7 +1288,7 @@ void resume_cycles() {
 	arc_preset = f.cycles_state.preset;
 
 	for(i1=0;i1<4;i1++) {
-		dac_set_slew(i1,DAC_RATE_CV << 2);
+		dac_set_slew(i1,DAC_RATE_CV << 3);
 		tr_state[i1] = 0;
 		cycle_dir[i1] = 1;
 		add_force[i1] = 0;
