@@ -87,7 +87,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeGridKey] = &handler_KriaGridKey;
 		app_event_handlers[kEventMonomeRefresh] = &handler_KriaRefresh;
 		clock = &clock_kria;
-		clock_set(f.kria_state.clock_period);
+		clock_set(clock_period);
 		process_ii = &ii_kria;
 		resume_kria();
 		update_leds(1);
@@ -100,7 +100,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeGridKey] = &handler_MPGridKey;
 		app_event_handlers[kEventMonomeRefresh] = &handler_MPRefresh;
 		clock = &clock_mp;
-		clock_set(f.mp_state.clock_period);
+		clock_set(clock_period);
 		process_ii = &ii_mp;
 		resume_mp();
 		update_leds(2);
@@ -206,7 +206,9 @@ void grid_keytimer(void) {
 						preset_mode = false;
 						grid_refresh = &refresh_kria;
 					}
-					
+
+					flashc_memset32((void*)&(f.kria_state.clock_period), clock_period, 4, true);
+
 				}
 			}
 			else if(ansible_mode == mGridKria) {
@@ -596,8 +598,8 @@ void handler_KriaGridKey(s32 data) {
 
 				clock_set(clock_period);
 
-				print_dbg("\r\nperiod: ");
-				print_dbg_ulong(clock_period);
+				// print_dbg("\r\nperiod: ");
+				// print_dbg_ulong(clock_period);
 
 				monomeFrameDirty++;
 			}
@@ -1054,10 +1056,10 @@ void handler_KriaKey(s32 data) {
 		break;
 	case 1:
 		grid_refresh = &refresh_clock;
-		print_dbg("\r\ntime: ");
-		print_dbg_ulong(time_fine);
-		print_dbg(" ");
-		print_dbg_ulong(time_rough);
+		// print_dbg("\r\ntime: ");
+		// print_dbg_ulong(time_fine);
+		// print_dbg(" ");
+		// print_dbg_ulong(time_rough);
 		view_clock = true;
 		view_config = false;
 		break;
@@ -1419,7 +1421,6 @@ void mp_note_off(uint8_t n);
 void default_mp() {
 	uint8_t i1, i2;
 
-	flashc_memset32((void*)&(f.mp_state.clock_period), 55, 4, true);
 	flashc_memset8((void*)&(f.mp_state.preset), 0, 1, true);
 	flashc_memset8((void*)&(f.mp_state.sound), 0, 1, true);
 	flashc_memset8((void*)&(f.mp_state.voice_mode), 0, 1, true);
@@ -1821,8 +1822,8 @@ void handler_MPGridKey(s32 data) {
 						for(i1=0;i1<8;i1++)
 							m.glyph[i1] = f.mp_state.m[preset].glyph[i1];
 
-						print_dbg("\r\npreset select:");
-						print_dbg_ulong(preset);
+						// print_dbg("\r\npreset select:");
+						// print_dbg_ulong(preset);
 					}
  					else if(y == preset) {
  						// flash read
@@ -1832,8 +1833,8 @@ void handler_MPGridKey(s32 data) {
 						preset_mode = false;
 						grid_refresh = &refresh_mp;
 
-						print_dbg("\r\npreset RECALL:");
-						print_dbg_ulong(preset);
+						// print_dbg("\r\npreset RECALL:");
+						// print_dbg_ulong(preset);
 					}
 				}
 
@@ -2103,10 +2104,10 @@ void handler_MPKey(s32 data) {
 		break;
 	case 1:
 		grid_refresh = &refresh_clock;
-		print_dbg("\r\ntime: ");
-		print_dbg_ulong(time_fine);
-		print_dbg(" ");
-		print_dbg_ulong(time_rough);
+		// print_dbg("\r\ntime: ");
+		// print_dbg_ulong(time_fine);
+		// print_dbg(" ");
+		// print_dbg_ulong(time_rough);
 		view_clock = true;
 		view_config = false;
 		break;

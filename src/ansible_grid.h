@@ -81,7 +81,6 @@ typedef struct {
 } mp_data_t;
 
 typedef struct {
-	uint32_t clock_period;
 	uint8_t preset;
 	uint8_t sound;
 	uint8_t voice_mode;
