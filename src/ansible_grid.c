@@ -2,10 +2,32 @@
 
 KRIA
 
-loop helper display for oct/dur and probs
-ext clock mul slightly f'd
-
 pattern play mode
+
+loop helper display for oct/dur and probs
+ext clock mul fix
+
+
+
+II/kria
+
+preset
+pattern
+scale
+period
+position tr param SET
+loop.st tr param SET
+loop.len tr param SET
+*reset 0/1-4
+
+
+II/mp
+
+preset
+*reset 0/1-8
+*stop 0/1-8
+scale
+period
 
 */
 

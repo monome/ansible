@@ -540,7 +540,7 @@ int main(void)
 	timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
 
 	connected = conNONE;
-	set_mode(mTT);
+	set_mode(f.state.none_mode);
 
 	init_dacs();
 	init_usb_host();
