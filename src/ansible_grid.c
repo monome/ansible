@@ -42,6 +42,8 @@ period
 #include "dac.h"
 #include "util.h" // rnd
 #include "music.h"
+#include "init_common.h"
+#include "ii.h"
 
 #include "main.h"
 #include "ansible_grid.h"
@@ -81,7 +83,7 @@ void (*grid_refresh)(void);
 kria_data_t k;
 
 typedef enum {
-	mTr, mDur, mNote, mOct, mScale, mPattern
+	mTr, mNote, mOct, mDur, mScale, mPattern
 } kria_modes_t;
 
 typedef enum {
@@ -110,6 +112,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_KriaRefresh;
 		clock = &clock_kria;
 		clock_set(clock_period);
+		init_i2c_slave(II_KR_ADDR);
 		process_ii = &ii_kria;
 		resume_kria();
 		update_leds(1);
@@ -123,6 +126,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_MPRefresh;
 		clock = &clock_mp;
 		clock_set(clock_period);
+		init_i2c_slave(II_MP_ADDR);
 		process_ii = &ii_mp;
 		resume_mp();
 		update_leds(2);
@@ -280,8 +284,10 @@ static void kria_off3(void* o);
 bool kria_next_step(uint8_t t, uint8_t p);
 static void adjust_loop_start(u8 t, u8 x, u8 m);
 static void adjust_loop_end(u8 t, u8 x, u8 m);
+static void adjust_loop_len(u8 t, u8 x, u8 m);
 static void update_loop_start(u8 t, u8 x, u8 m);
 static void update_loop_end(u8 t, u8 x, u8 m);
+static void jump_pos(u8 t, u8 x, u8 m);
 
 
 void default_kria() {
@@ -496,8 +502,314 @@ static void kria_off3(void* o) {
 
 
 void ii_kria(uint8_t *d, uint8_t l) {
-	;;
+	// print_dbg("\r\nii/kria (");
+	// print_dbg_ulong(l);
+	// print_dbg(") ");
+	// for(int i=0;i<l;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
+
+	int n;
+
+	if(l) {
+		switch(d[0]) {
+		case II_KR_PRESET:
+			if(d[1] > -1 && d[1] < 8) {
+				preset = d[1];
+				flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
+				init_kria();
+			}
+			break;
+		case II_KR_PRESET + II_GET:
+			ii_tx_queue(preset);
+			break;
+		case II_KR_PATTERN:
+			if(d[1] > -1 && d[1] < 16) {
+				k.pattern = d[1];
+				pos_reset = true;
+			}
+			break;
+		case II_KR_PATTERN + II_GET:
+			ii_tx_queue(k.pattern);
+			break;
+		case II_KR_SCALE:
+			if(d[1] > -1 && d[1] < 16) {
+				k.p[k.pattern].scale = d[1];
+				calc_scale(k.p[k.pattern].scale);
+			}
+			break;
+		case II_KR_SCALE + II_GET:
+			ii_tx_queue(k.p[k.pattern].scale);
+			break;
+		case II_KR_PERIOD:
+			n = (d[1] << 8) + d[2];
+			if(n > 19) {
+				clock_period = n;
+				time_rough = (clock_period - 20) / 16;
+				time_fine = (clock_period - 20) % 16;
+				clock_set(clock_period);
+			}
+			break;
+		case II_KR_PERIOD + II_GET:
+			ii_tx_queue(clock_period >> 8);
+			ii_tx_queue(clock_period & 0xff);
+			break;
+		case II_KR_RESET:
+			switch(loop_sync) {
+			case 2:
+				for(int i1=0;i1<4;i1++)
+				for(int i2=0;i2<4;i2++) {
+					pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
+					pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
+				}
+				break;
+			case 1:
+				if(d[1] == 0) {
+					for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++) {
+						pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
+						pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
+					}
+				}
+				else if(d[1] < 5) {
+					for(int i1=0;i1<4;i1++) {
+						pos[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].lend[i1];
+						pos_mul[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].tmul[i1];
+					}
+				}
+				break;
+			case 0:
+				if(d[1] == 0 && d[2] == 0) {
+					for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++) {
+						pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
+						pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
+					}
+				}
+				else if(d[1] == 0 && d[2] < 5) {
+					for(int i1=0;i1<4;i1++) {
+						pos[i1][d[2]-1] = k.p[k.pattern].t[i1].lend[d[2]-1];
+						pos_mul[i1][d[2]-1] = k.p[k.pattern].t[i1].tmul[d[2]-1];
+					}
+				}
+				else if(d[2] == 0 && d[1] < 5) {
+					for(int i1=0;i1<4;i1++) {
+						pos[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].lend[i1];
+						pos_mul[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].tmul[i1];
+					}
+				}	
+				else if(d[1] < 5 && d[2] < 5) {
+					pos[d[1]-1][d[2]-1] = k.p[k.pattern].t[d[1]-1].lend[d[2]-1];
+					pos_mul[d[1]-1][d[2]-1] = k.p[k.pattern].t[d[1]-1].tmul[d[2]-1];
+				}
+				break;
+			default: 
+				break;
+			}
+			break;
+		case II_KR_LOOP_ST:
+			if(d[3] < 16)
+			switch(loop_sync) {
+			case 2:
+				for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++)
+						adjust_loop_start(i1, d[3], i2);
+				break;
+			case 1:
+				if(d[1] == 0) {
+					for(int i1=0;i1<4;i1++)
+						for(int i2=0;i2<4;i2++) 
+							adjust_loop_start(i1, d[3], i2);
+				}
+				else if(d[1] < 5) {
+					for(int i1=0;i1<4;i1++)
+						adjust_loop_start(d[1]-1, d[3], i1);
+				}
+				break;
+			case 0:
+				if(d[1] == 0 && d[2] == 0) {
+					for(int i1=0;i1<4;i1++)
+						for(int i2=0;i2<4;i2++)
+							adjust_loop_start(i1, d[3], i2);
+				}
+				else if(d[1] == 0 && d[2] < 5) {
+					for(int i1=0;i1<4;i1++)
+						adjust_loop_start(i1, d[3], d[2]-1);
+				}
+				else if(d[2] == 0 && d[1] < 5) {
+					for(int i1=0;i1<4;i1++)
+						adjust_loop_start(d[1]-1, d[3], i1);
+				}	
+				else if(d[1] < 5 && d[2] < 5) {
+					adjust_loop_start(d[1]-1, d[3], d[2]-1);
+				}
+				break;
+			default: 
+				break;
+			}
+			break;
+		case II_KR_LOOP_ST + II_GET:
+			if(d[1]==0 && d[2] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++)
+						n += k.p[k.pattern].t[i1].lstart[i2];
+				ii_tx_queue(n>>4);
+			}
+			else if(d[1] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					n += k.p[k.pattern].t[i1].lstart[d[2]-1];
+				ii_tx_queue(n>>2);
+			}
+			else if(d[2] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					n += k.p[k.pattern].t[d[1]-1].lstart[i1];
+				ii_tx_queue(n>>2);
+			}
+			else {
+				ii_tx_queue(k.p[k.pattern].t[d[1]-1].lstart[d[2]-1]);
+			}
+			break;
+		case II_KR_LOOP_LEN:
+			if(d[3] < 17 && d[3] > 0)
+			switch(loop_sync) {
+			case 2:
+				for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++)
+						adjust_loop_len(i1, d[3], i2);
+				break;
+			case 1:
+				if(d[1] == 0) {
+					for(int i1=0;i1<4;i1++)
+						for(int i2=0;i2<4;i2++) 
+							adjust_loop_len(i1, d[3], i2);
+				}
+				else if(d[1] < 5) {
+					for(int i1=0;i1<4;i1++)
+						adjust_loop_len(d[1]-1, d[3], i1);
+				}
+				break;
+			case 0:
+				if(d[1] == 0 && d[2] == 0) {
+					for(int i1=0;i1<4;i1++)
+						for(int i2=0;i2<4;i2++)
+							adjust_loop_len(i1, d[3], i2);
+				}
+				else if(d[1] == 0 && d[2] < 5) {
+					for(int i1=0;i1<4;i1++)
+						adjust_loop_len(i1, d[3], d[2]-1);
+				}
+				else if(d[2] == 0 && d[1] < 5) {
+					for(int i1=0;i1<4;i1++)
+						adjust_loop_len(d[1]-1, d[3], i1);
+				}	
+				else if(d[1] < 5 && d[2] < 5) {
+					adjust_loop_len(d[1]-1, d[3], d[2]-1);
+				}
+				break;
+			default: 
+				break;
+			}
+			break;
+		case II_KR_LOOP_LEN + II_GET:
+			if(d[1]==0 && d[2] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++)
+						n += k.p[k.pattern].t[i1].llen[i2];
+				ii_tx_queue(n>>4);
+			}
+			else if(d[1] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					n += k.p[k.pattern].t[i1].llen[d[2]-1];
+				ii_tx_queue(n>>2);
+			}
+			else if(d[2] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					n += k.p[k.pattern].t[d[1]-1].llen[i1];
+				ii_tx_queue(n>>2);
+			}
+			else {
+				ii_tx_queue(k.p[k.pattern].t[d[1]-1].llen[d[2]-1]);
+			}
+			break;
+		case II_KR_POS:
+			if(d[3] < 17)
+			switch(loop_sync) {
+			case 2:
+				for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++)
+						jump_pos(i1, d[3], i2);
+				break;
+			case 1:
+				if(d[1] == 0) {
+					for(int i1=0;i1<4;i1++)
+						for(int i2=0;i2<4;i2++) 
+							jump_pos(i1, d[3], i2);
+				}
+				else if(d[1] < 5) {
+					for(int i1=0;i1<4;i1++)
+						jump_pos(d[1]-1, d[3], i1);
+				}
+				break;
+			case 0:
+				if(d[1] == 0 && d[2] == 0) {
+					for(int i1=0;i1<4;i1++)
+						for(int i2=0;i2<4;i2++)
+							jump_pos(i1, d[3], i2);
+				}
+				else if(d[1] == 0 && d[2] < 5) {
+					for(int i1=0;i1<4;i1++)
+						jump_pos(i1, d[3], d[2]-1);
+				}
+				else if(d[2] == 0 && d[1] < 5) {
+					for(int i1=0;i1<4;i1++)
+						jump_pos(d[1]-1, d[3], i1);
+				}	
+				else if(d[1] < 5 && d[2] < 5) {
+					jump_pos(d[1]-1, d[3], d[2]-1);
+				}
+				break;
+			default: 
+				break;
+			}
+			break;
+		case II_KR_POS + II_GET:
+			if(d[1]==0 && d[2] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					for(int i2=0;i2<4;i2++)
+						n += pos[i1][i2];
+				ii_tx_queue(n>>4);
+			}
+			else if(d[1] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					n += pos[i1][d[2]-1];
+				ii_tx_queue(n>>2);
+			}
+			else if(d[2] == 0) {
+				int n = 0;
+				for(int i1=0;i1<4;i1++)
+					n += pos[d[1]-1][i1];
+				ii_tx_queue(n>>2);
+			}
+			else {
+				ii_tx_queue(pos[d[1]-1][d[2]-1]);
+			}
+			break;
+		default:
+			break;
+		}
+	}
 }
+
+
 
 
 void handler_KriaGridKey(s32 data) { 
@@ -1017,6 +1329,10 @@ static void adjust_loop_end(u8 t, u8 x, u8 m) {
 	}
 }
 
+static void adjust_loop_len(u8 t, u8 x, u8 m) {
+	adjust_loop_end(t, (x - 1 + k.p[k.pattern].t[t].lstart[m]) & 0xf, m);
+}
+
 static void update_loop_start(u8 t, u8 x, u8 m) {
 	int i1, i2;
 	switch(loop_sync) {
@@ -1055,6 +1371,10 @@ static void update_loop_end(u8 t, u8 x, u8 m) {
 		default:
 			break;
 	}
+}
+
+static void jump_pos(u8 t, u8 x, u8 m) {
+	pos[t][m] = (x + 15) & 0xf;
 }
 
 void handler_KriaRefresh(s32 data) { 
@@ -1805,7 +2125,75 @@ void mp_note_off(uint8_t n) {
 }
 
 void ii_mp(uint8_t *d, uint8_t l) {
-	;;
+	print_dbg("\r\nii/mp (");
+	print_dbg_ulong(l);
+	print_dbg(") ");
+	for(int i=0;i<l;i++) {
+		print_dbg_ulong(d[i]);
+		print_dbg(" ");
+	}
+
+	int n;
+
+	if(l) {
+		switch(d[0]) {
+		case II_MP_PRESET:
+			if(d[1] > -1 && d[1] < 8) {
+				preset = d[1];
+				flashc_memset8((void*)&(f.mp_state.preset), preset, 1, true);
+				init_mp();
+			}
+			break;
+		case II_MP_PRESET + II_GET:
+			ii_tx_queue(preset);
+			break;
+		case II_MP_SCALE:
+			if(d[1] > -1 && d[1] < 16) {
+				m.scale = d[1];
+				calc_scale(m.scale);
+			}
+			break;
+		case II_MP_SCALE + II_GET:
+			ii_tx_queue(m.scale);
+			break;
+		case II_MP_PERIOD:
+			n = (d[1] << 8) + d[2];
+			if(n > 19) {
+				clock_period = n;
+				time_rough = (clock_period - 20) / 16;
+				time_fine = (clock_period - 20) % 16;
+				clock_set(clock_period);
+			}
+			break;
+		case II_MP_PERIOD + II_GET:
+			ii_tx_queue(clock_period >> 8);
+			ii_tx_queue(clock_period & 0xff);
+			break;
+		case II_MP_RESET:
+			if(d[1] == 0) {
+				for(int n=0;n<8;n++) {
+					position[n] = m.count[n];
+					tick[n] = m.speed[n];
+				}
+			}
+			else if(d[1] < 9) {
+				position[d[1]-1] = m.count[d[1]-1];
+				tick[d[1]-1] = m.speed[d[1]-1];
+			}
+			break;
+		case II_MP_STOP:
+			if(d[1] == 0) {
+				for(int n=0;n<8;n++) 
+					position[n] =  -1;
+			}
+			else if(d[1] < 9) {
+				position[d[1]-1] = -1;
+			}
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 void handler_MPGridKey(s32 data) { 

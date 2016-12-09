@@ -3,6 +3,7 @@
 
 #include "monome.h"
 #include "i2c.h"
+#include "init_common.h"
 #include "dac.h"
 #include "ii.h"
 
@@ -21,6 +22,7 @@ void set_mode_tt(void) {
 	app_event_handlers[kEventTrNormal] = &handler_TTTrNormal;
 	clock = &clock_tt;
 	clock_set(f.tt_state.clock_period);
+	init_i2c_slave(f.state.i2c_addr);
 	process_ii = &ii_tt;
 	update_leds(0);
 
@@ -91,13 +93,13 @@ void tr_pulse3(void* o) {
 
 
 void ii_tt(uint8_t *d, uint8_t l) {
-	// print_dbg("\r\nii/tele (");
-	// print_dbg_ulong(l);
-	// print_dbg(") ");
-	// for(int i=0;i<l;i++) {
-	// 	print_dbg_ulong(d[i]);
-	// 	print_dbg(" ");
-	// }
+	print_dbg("\r\nii/tele (");
+	print_dbg_ulong(l);
+	print_dbg(") ");
+	for(int i=0;i<l;i++) {
+		print_dbg_ulong(d[i]);
+		print_dbg(" ");
+	}
 
 	if(l) {
 		switch(d[0]) {

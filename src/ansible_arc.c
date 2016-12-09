@@ -32,6 +32,9 @@ range 0/1-4 SET
 #include "monome.h"
 #include "i2c.h"
 #include "music.h"
+#include "ii.h"
+#include "i2c.h"
+#include "init_common.h"
 
 #include "main.h"
 #include "ansible_arc.h"
@@ -100,6 +103,7 @@ void set_mode_arc(void) {
 		clock = &clock_null;
 		// clock = &clock_levels;
 		// clock_set(f.levels_state.clock_period);
+		init_i2c_slave(II_LV_ADDR);
 		process_ii = &ii_levels;
 		resume_levels();
 		update_leds(1);
@@ -114,6 +118,7 @@ void set_mode_arc(void) {
 		clock = &clock_cycles;
 		// 24
 		clock_set(DAC_RATE_CV << 3);
+		init_i2c_slave(II_CY_ADDR);
 		process_ii = &ii_cycles;
 		resume_cycles();
 		update_leds(2);
