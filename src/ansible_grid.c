@@ -104,7 +104,7 @@ u8 voice_mode;
 void set_mode_grid() {
 	switch(ansible_mode) {
 	case mGridKria:
-		print_dbg("\r\n> mode grid kria");
+		// print_dbg("\r\n> mode grid kria");
 		app_event_handlers[kEventKey] = &handler_KriaKey;
 		app_event_handlers[kEventTr] = &handler_KriaTr;
 		app_event_handlers[kEventTrNormal] = &handler_KriaTrNormal;
@@ -118,7 +118,7 @@ void set_mode_grid() {
 		update_leds(1);
 		break;
 	case mGridMP:
-		print_dbg("\r\n> mode grid mp");
+		// print_dbg("\r\n> mode grid mp");
 		app_event_handlers[kEventKey] = &handler_MPKey;
 		app_event_handlers[kEventTr] = &handler_MPTr;
 		app_event_handlers[kEventTrNormal] = &handler_MPTrNormal;
@@ -147,7 +147,7 @@ void set_mode_grid() {
 
 void handler_GridFrontShort(s32 data) {
 	if(preset_mode) {
-		print_dbg("\r\n> PRESET EXIT");
+		// print_dbg("\r\n> PRESET EXIT");
 		preset_mode = false;
 
 		if(ansible_mode == mGridMP)
@@ -158,7 +158,7 @@ void handler_GridFrontShort(s32 data) {
 		view_clock = false;
 	}
 	else {
-		print_dbg("\r\n> PRESET ENTER");
+		// print_dbg("\r\n> PRESET ENTER");
 		preset_mode = true;
 		grid_refresh = &refresh_preset;
 		view_config = false;
@@ -850,8 +850,8 @@ void handler_KriaGridKey(s32 data) {
 						for(i1=0;i1<8;i1++)
 							k.glyph[i1] = f.kria_state.k[preset].glyph[i1];
 
-						print_dbg("\r\npreset select:");
-						print_dbg_ulong(preset);
+						// print_dbg("\r\npreset select:");
+						// print_dbg_ulong(preset);
 					}
  					else if(y == preset) {
  						// flash read
@@ -861,8 +861,8 @@ void handler_KriaGridKey(s32 data) {
 						preset_mode = false;
 						grid_refresh = &refresh_kria;
 
-						print_dbg("\r\npreset RECALL:");
-						print_dbg_ulong(preset);
+						// print_dbg("\r\npreset RECALL:");
+						// print_dbg_ulong(preset);
 					}
 				}
 			}
@@ -2125,13 +2125,13 @@ void mp_note_off(uint8_t n) {
 }
 
 void ii_mp(uint8_t *d, uint8_t l) {
-	print_dbg("\r\nii/mp (");
-	print_dbg_ulong(l);
-	print_dbg(") ");
-	for(int i=0;i<l;i++) {
-		print_dbg_ulong(d[i]);
-		print_dbg(" ");
-	}
+	// print_dbg("\r\nii/mp (");
+	// print_dbg_ulong(l);
+	// print_dbg(") ");
+	// for(int i=0;i<l;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
 
 	int n;
 

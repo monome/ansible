@@ -94,7 +94,7 @@ static int16_t tr_time_pw[4];
 void set_mode_arc(void) {
 	switch(ansible_mode) {
 	case mArcLevels:
-		print_dbg("\r\n> mode arc levels");
+		// print_dbg("\r\n> mode arc levels");
 		app_event_handlers[kEventKey] = &handler_LevelsKey;
 		app_event_handlers[kEventTr] = &handler_LevelsTr;
 		app_event_handlers[kEventTrNormal] = &handler_LevelsTrNormal;
@@ -109,7 +109,7 @@ void set_mode_arc(void) {
 		update_leds(1);
 		break;
 	case mArcCycles:
-		print_dbg("\r\n> mode arc cycles");
+		// print_dbg("\r\n> mode arc cycles");
 		app_event_handlers[kEventKey] = &handler_CyclesKey;
 		app_event_handlers[kEventTr] = &handler_CyclesTr;
 		app_event_handlers[kEventTrNormal] = &handler_CyclesTrNormal;
@@ -160,8 +160,8 @@ static inline void arc_leave_preset(void) {
 }
 
 void handler_ArcFrontShort(s32 data) {
-	print_dbg("\r\n> PRESET ");
-	print_dbg_ulong(arc_preset);
+	// print_dbg("\r\n> PRESET ");
+	// print_dbg_ulong(arc_preset);
 	if(arc_preset_mode) {
 		arc_leave_preset();
 	}
@@ -263,8 +263,8 @@ void handler_ArcPresetKey(s32 data) {
 	switch(data) {
 	case 1:
 		arc_preset = arc_preset_select;
-		print_dbg("\r\nread preset: ");
-		print_dbg_ulong(arc_preset);
+		// print_dbg("\r\nread preset: ");
+		// print_dbg_ulong(arc_preset);
 		switch(ansible_mode) {
 		case mArcLevels:
 			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
@@ -284,8 +284,8 @@ void handler_ArcPresetKey(s32 data) {
 		break;
 	case 3:
 		arc_preset = arc_preset_select;
-		print_dbg("\r\nwrite preset: ");
-		print_dbg_ulong(arc_preset);
+		// print_dbg("\r\nwrite preset: ");
+		// print_dbg_ulong(arc_preset);
 		switch(ansible_mode) {
 		case mArcLevels:
 			flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
@@ -432,7 +432,7 @@ void resume_levels() {
 
 	monomeFrameDirty++;
 
-	print_dbg("\r\nresume levels");
+	// print_dbg("\r\nresume levels");
 }
 
 static void levels_timer_volt0(void* o) {
@@ -567,8 +567,91 @@ void clock_levels(uint8_t phase) {
 	// 	clr_tr(TR1);
 }
 
-void ii_levels(uint8_t *d, uint8_t l) {
-	;;
+void ii_levels(uint8_t *d, uint8_t len) {
+	if(len) {
+		switch(d[0]) {
+		case II_LV_PRESET:
+			if(d[1] > -1 && d[1] < 8) {
+				arc_preset = d[1];
+				flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+				init_levels();
+				monomeFrameDirty++;
+			}
+			break;
+		case II_LV_PRESET + II_GET:
+			ii_tx_queue(arc_preset);
+			break;
+		case II_LV_POS:
+			if(d[1] > -1 && d[1] < 16) {
+				pattern_pos_play = d[1] % l.len;
+				if(l.dir)
+					play = (16 + l.start - pattern_pos_play) & 0xf;
+				else
+					play = (pattern_pos_play + l.start) & 0xf;
+				levels_dac_refresh();
+				if(l.mode[0])
+					tr_note0();
+				if(l.mode[1])
+					tr_note1();
+				if(l.mode[2])
+					tr_note2();
+				if(l.mode[3])
+					tr_note3();
+				monomeFrameDirty++;
+			}
+			break;
+		case II_LV_POS + II_GET:
+			ii_tx_queue(play);
+			break;
+		case II_LV_L_ST:
+			if(d[1] > -1 && d[1] < 16) {
+				l.start = d[1];
+				monomeFrameDirty++;
+			}
+			break;
+		case II_LV_L_ST + II_GET:
+			ii_tx_queue(l.start);
+			break;
+		case II_LV_L_LEN:
+			if(d[1] > -1 && d[1] < 16) {
+				l.len = d[1];
+				monomeFrameDirty++;
+			}
+			break;
+		case II_LV_L_LEN + II_GET:
+			ii_tx_queue(l.len);
+			break;
+		case II_LV_L_DIR:
+			if(d[1] > -1 && d[1] < 2) {
+				l.dir = d[1];
+				monomeFrameDirty++;
+			}
+			break;
+		case II_LV_L_DIR + II_GET:
+			ii_tx_queue(l.dir);
+			break;
+		case II_LV_RESET:
+			if(d[0] == 0)
+				ext_reset = true;
+			else {
+				play = l.start;
+				levels_dac_refresh();
+				if(l.mode[0])
+					tr_note0();
+				if(l.mode[1])
+					tr_note1();
+				if(l.mode[2])
+					tr_note2();
+				if(l.mode[3])
+					tr_note3();
+				monomeFrameDirty++;
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
 }
 
 void handler_LevelsEnc(s32 data) { 
@@ -1190,7 +1273,7 @@ void handler_LevelsTr(s32 data) {
 		}
 		else
 			levels_play_next();
-			levels_dac_refresh();
+		levels_dac_refresh();
 		break;
 	case 3:
 		ext_reset = true;
@@ -1371,8 +1454,59 @@ void clock_cycles(uint8_t phase) {
 	monomeFrameDirty++;
 }
 
-void ii_cycles(uint8_t *d, uint8_t l) {
-	;;
+void ii_cycles(uint8_t *d, uint8_t len) {
+	if(len) {
+		switch(d[0]) {
+		case II_CY_PRESET:
+			if(d[1] > -1 && d[1] < 8) {
+				arc_preset = d[1];
+				flashc_memset8((void*)&(f.cycles_state.preset), arc_preset, 1, true);
+				init_cycles();
+				monomeFrameDirty++;
+			}
+			break;
+		case II_CY_PRESET + II_GET:
+			ii_tx_queue(arc_preset);
+		case II_CY_RESET:
+			if(d[1] == 0) {
+				c.pos[0] = 0;
+				c.pos[1] = 0;
+				c.pos[2] = 0;
+				c.pos[3] = 0;
+			}
+			else if(d[1] < 5)
+				c.pos[d[1]-1] = 0;
+			break;
+		case II_CY_POS:
+			if(d[1] == 0) {
+				c.pos[0] = d[2] << 6;
+				c.pos[1] = d[2] << 6;
+				c.pos[2] = d[2] << 6;
+				c.pos[3] = d[2] << 6;
+			}
+			else if(d[1] < 5)
+				c.pos[d[1]-1] = d[2] << 8;
+			monomeFrameDirty++;
+			break;
+		case II_CY_POS + II_GET:
+			if(d[1] == 0)
+				ii_tx_queue(((c.pos[0] >> 6) + (c.pos[1] >> 6) + (c.pos[2] >> 6) + (c.pos[3] >> 6)) >> 2);
+			if(d[1] < 5)
+				ii_tx_queue(c.pos[d[1]-1] >> 6);
+		case II_CY_REV:
+			if(d[1] == 0) {
+				c.speed[0] = -c.speed[0];
+				c.speed[1] = -c.speed[1];
+				c.speed[2] = -c.speed[2];
+				c.speed[3] = -c.speed[3];
+			}
+			else if(d[1] < 5)
+				c.speed[d[1]-1] = -c.speed[d[1]-1];
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 #define MAX_SPEED 2000
