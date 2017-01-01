@@ -1467,6 +1467,7 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 			break;
 		case II_CY_PRESET + II_GET:
 			ii_tx_queue(arc_preset);
+			break;
 		case II_CY_RESET:
 			if(d[1] == 0) {
 				c.pos[0] = 0;
@@ -1493,6 +1494,7 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 				ii_tx_queue(((c.pos[0] >> 6) + (c.pos[1] >> 6) + (c.pos[2] >> 6) + (c.pos[3] >> 6)) >> 2);
 			if(d[1] < 5)
 				ii_tx_queue(c.pos[d[1]-1] >> 6);
+			break;
 		case II_CY_REV:
 			if(d[1] == 0) {
 				c.speed[0] = -c.speed[0];
