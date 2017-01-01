@@ -350,8 +350,6 @@ void init_kria() {
 	clock_period = f.kria_state.clock_period;
 	time_rough = (clock_period - 20) / 16;
 	time_fine = (clock_period - 20) % 16;
-
-	clock_mul = 1;
 }
 
 void resume_kria() {
@@ -519,6 +517,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				preset = d[1];
 				flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
 				init_kria();
+				resume_kria();
 			}
 			break;
 		case II_KR_PRESET + II_GET:
@@ -528,6 +527,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			if(d[1] > -1 && d[1] < 16) {
 				k.pattern = d[1];
 				pos_reset = true;
+				calc_scale(k.p[k.pattern].scale);
 			}
 			break;
 		case II_KR_PATTERN + II_GET:
@@ -857,6 +857,7 @@ void handler_KriaGridKey(s32 data) {
  						// flash read
 						flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
 						init_kria();
+						resume_kria();
 
 						preset_mode = false;
 						grid_refresh = &refresh_kria;
@@ -870,6 +871,7 @@ void handler_KriaGridKey(s32 data) {
 				if(y ==0) {
 					k.pattern = x;
 					pos_reset = true;
+					calc_scale(k.p[k.pattern].scale);
 				}
 			}
 		}
@@ -1259,7 +1261,8 @@ void handler_KriaGridKey(s32 data) {
 			case mScale:
 				if(z) {
 					if(x < 8) {
-						k.p[k.pattern].scale = (y - 5) * 8 + x;
+						if(y > 4)
+							k.p[k.pattern].scale = (y - 5) * 8 + x;
 					}
 					else {
 						scale_data[k.p[k.pattern].scale][6-y] = x-8;
