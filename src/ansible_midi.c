@@ -102,6 +102,7 @@ static void fixed_control_change(u8 ch, u8 num, u8 val);
 static void init_arp(void);
 
 static void arp_rebuild(chord_t *c);
+static void arp_reset(void);
 static void arp_next_style(void);
 
 static void arp_note_on(u8 ch, u8 num, u8 vel);
@@ -194,6 +195,8 @@ static voice_state_t voice_state;
 
 // arp mode working state
 static chord_t chord;
+static u8 chord_held_notes;
+static bool chord_should_reset;
 static arp_seq_t sequences[2];
 static arp_seq_t *active_seq;
 static arp_seq_t *next_seq;
@@ -986,6 +989,9 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 void default_midi_arp() {
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period), 100, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.hold), false, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.steps), 2, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.offset), 12, 1, true);
 }
 
 void write_midi_arp(void) {
@@ -993,6 +999,12 @@ void write_midi_arp(void) {
 									arp_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style),
 								 arp_state.style, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.hold),
+								 arp_state.hold, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.steps),
+								 arp_state.steps, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.offset),
+								 arp_state.offset, 1, true);
 }
 
 static void arp_next_style(void) {
@@ -1071,32 +1083,45 @@ void handler_ArpKey(s32 data) {
 		key_state.key1 = 0;
 		break;
 	case 1:
-		// key 1 press: tap tempo / force internal clock
+		// key 1 press: tap tempo / force internal clock or toggle hold
 		key_state.key1 = 1;
-		if (tapped) {
-			if (sync_source == eClockMidi) {
-				sync_source = eClockInternal;
-			}
-			tapped = false;
-			now = time_now();
-			now = uclip(now >> 1, 23, 1000); // range in ms
-			print_dbg("\r\n arp tap: ");
-			print_dbg_ulong(now);
-			arp_state.clock_period = now;
-			clock_set_tr(now, 0);
+		if (key_state.key2 == 1) {
+			arp_state.hold = !arp_state.hold;
+			print_dbg("\r\n arp hold: ");
+			print_dbg_ulong(arp_state.hold);
+			arp_reset();
+			key_state.key2 = 0; // goofy; use this to signal to case 2 that style should change
 		}
 		else {
-			tapped = true;
-			time_clear();
+			if (tapped) {
+				if (sync_source == eClockMidi) {
+					sync_source = eClockInternal;
+				}
+				tapped = false;
+				now = time_now();
+				now = uclip(now >> 1, 23, 1000); // range in ms
+				print_dbg("\r\n arp tap: ");
+				print_dbg_ulong(now);
+				arp_state.clock_period = now;
+				clock_set_tr(now, 0);
+			}
+			else {
+				tapped = true;
+				time_clear();
+			}
 		}
 		break;
 	case 2:
+		// key 2 release
+		if (key_state.key1 == 0 && key_state.key2 == 1) {
+			// arp mode swetch on release if not toggling hold mode
+			arp_next_style();
+		}
 		key_state.key2 = 0;
 		break;
 	case 3:
-		// key 2 press: arp mode switch
+		// key 2 press
 		key_state.key2 = 1;
-		arp_next_style();
 		break;
 	}
 }
@@ -1152,6 +1177,8 @@ void handler_ArpMidiPacket(s32 data) {
 
 void init_arp(void) {
 	chord_init(&chord);
+	chord_held_notes = 0;
+	chord_should_reset = false;
 
 	// ping pong
 	active_seq = &sequences[0];
@@ -1204,14 +1231,41 @@ static void arp_rebuild(chord_t *c) {
 	}
 }
 
+static void arp_reset(void) {
+	// used when exiting held mode
+	chord_should_reset = false;
+	chord_init(&chord);
+	arp_rebuild(&chord);
+}
+
 static void arp_note_on(u8 ch, u8 num, u8 vel) {
+	if (arp_state.hold) {
+		if (chord_should_reset) {
+			//print_dbg("\r\n > arp: hold chord resetting");
+			chord_init(&chord);
+			chord_should_reset = false;
+		}
+		chord_held_notes++;
+
+		//print_dbg("\r\n > arp: chord held: ");
+		//print_dbg_ulong(chord_held_notes);
+	}
 	chord_note_add(&chord, num, vel);
 	arp_rebuild(&chord);
 }
 
 static void arp_note_off(u8 ch, u8 num, u8 vel) {
-	chord_note_release(&chord, num);
-	arp_rebuild(&chord);
+	if (arp_state.hold && chord_contains(&chord, num)) {
+		chord_held_notes--;
+		if (chord_held_notes == 0) {
+			//print_dbg("\r\n > arp chord should reset");
+			chord_should_reset = true;
+		}
+	}
+	else {
+		chord_note_release(&chord, num);
+		arp_rebuild(&chord);
+	}
 }
 
 static void arp_pitch_bend(u8 ch, u16 bend) {
@@ -1300,6 +1354,13 @@ static void arp_rt_continue(void) {
 static void player_note_on(u8 ch, u8 num, u8 vel) {
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
+
+	/*
+	if (ch == 0) {
+		print_dbg("\r\n >> p note on: ");
+		print_dbg_ulong(num);
+	}
+	*/
 
 	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
 	multi_tr_set(ch);

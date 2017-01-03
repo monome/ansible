@@ -30,6 +30,9 @@ typedef struct {
 typedef struct {
 	uint32_t clock_period;
 	u8 style;    // NB: not using arp_style as type because enums have vairable size
+	bool hold;   // if true new notes add to chord if at least one note in chord is still held
+	u8 steps;    // number of steps (repeats?) of the arp pattern
+	s8 offset;   // number of semitones to transpose by per step; [-24,24] or voltage offsets?
 } midi_arp_state_t;
 
 void set_mode_midi(void);
