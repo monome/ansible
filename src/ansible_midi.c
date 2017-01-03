@@ -19,7 +19,6 @@
 #include "main.h"
 #include "ansible_midi.h"
 
-#define MIDI_NOTE_MAX 120
 
 #define MONO_PITCH_CV &(aout[0])
 #define MONO_VELOCITY_CV &(aout[1])
@@ -990,7 +989,7 @@ void default_midi_arp() {
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period), 100, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
 	flashc_memset8((void*)&(f.midi_arp_state.hold), false, 1, true);
-	flashc_memset8((void*)&(f.midi_arp_state.steps), 2, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.steps), 0, 1, true);
 	flashc_memset8((void*)&(f.midi_arp_state.offset), 12, 1, true);
 }
 
@@ -1089,7 +1088,15 @@ void handler_ArpKey(s32 data) {
 			arp_state.hold = !arp_state.hold;
 			print_dbg("\r\n arp hold: ");
 			print_dbg_ulong(arp_state.hold);
-			arp_reset();
+
+			if (arp_state.hold) {
+				// entering hold mode, preserve chord
+				chord_held_notes = chord.note_count;
+			}
+			else {
+				// existing hold mode, reset arp
+				arp_reset();
+			}
 			key_state.key2 = 0; // goofy; use this to signal to case 2 that style should change
 		}
 		else {
@@ -1176,6 +1183,8 @@ void handler_ArpMidiPacket(s32 data) {
 }
 
 void init_arp(void) {
+	arp_player_t *p;
+
 	chord_init(&chord);
 	chord_held_notes = 0;
 	chord_should_reset = false;
@@ -1191,8 +1200,11 @@ void init_arp(void) {
 	arp_seq_build(next_seq, arp_state.style, &chord);
 	
 	for (u8 i = 0; i < 4; i++) {
-		arp_player_init(&(player[i]), i, i + 1);
-		arp_player_set_gate_width(&(player[i]), 0); // triggers
+		p = &(player[i]);
+		arp_player_init(p, i, i + 1);
+		arp_player_set_gate_width(p, 0); // triggers
+		arp_player_set_steps(p, arp_state.steps);
+		arp_player_set_offset(p, arp_state.offset);
 	}
 
 	active_behavior.note_on = &arp_note_on;
