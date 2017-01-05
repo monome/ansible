@@ -9,11 +9,14 @@
 #include "util.h"
 
 #include "monome.h"
+#include "ii.h"
 #include "i2c.h"
 #include "gpio.h"
 #include "dac.h"
 
+#include "init_common.h"
 #include "conf_tc_irq.h"
+
 
 // this
 #include "main.h"
@@ -99,6 +102,8 @@ static void fixed_note_off(u8 ch, u8 num, u8 vel);
 static void fixed_control_change(u8 ch, u8 num, u8 val);
 
 static void init_arp(void);
+
+static void arp_state_set_hold(bool hold);
 
 static void arp_rebuild(chord_t *c);
 static void arp_reset(void);
@@ -200,6 +205,8 @@ static arp_seq_t sequences[2];
 static arp_seq_t *active_seq;
 static arp_seq_t *next_seq;
 static arp_player_t player[4];
+static arp_seq_t *player_seq[4];
+static s16 voice_transpose[4];
 
 // shared state
 static s16 pitch_offset[4];
@@ -234,6 +241,7 @@ void set_mode_midi(void) {
 		init_arp();
 		clock = &clock_midi_arp;
 		clock_set(arp_state.clock_period);
+		init_i2c_slave(II_ARP_ADDR);
 		process_ii = &ii_midi_arp;
 		update_leds(2);
 		break;
@@ -289,7 +297,7 @@ void handler_MidiFrontLong(s32 data) {
 ///// common cv utilities
 
 static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset) {
-	*cv = SEMI[num] + offset;
+	*cv = sclip(SEMI[num] + offset, 0, 4095);
 }
 
 static void set_cv_velocity(uint16_t *cv, u8 vel) {
@@ -1069,7 +1077,149 @@ void clock_midi_arp(uint8_t phase) {
 }
 
 void ii_midi_arp(uint8_t *d, uint8_t l) {
-	;;
+	u8 i, v;
+	s16 s;
+
+	if (l) {
+		switch (d[0]) {
+		case II_ARP_STYLE:
+			print_dbg("\r\narp ii style: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_ulong(d[2]);
+
+			// TODO: allow each player to have a different sequence
+			v = uclip(d[2], eStyleUp, eStyleRandom);
+			arp_state.style = v;
+			arp_rebuild(&chord);
+			break;
+			
+		case II_ARP_HOLD:
+			print_dbg("\r\narp ii hold: ");
+			print_dbg_ulong(d[1]);
+			arp_state_set_hold(d[1] > 0);
+			break;
+			
+		case II_ARP_STEPS:
+			print_dbg("\r\narp ii steps: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			v = uclip(d[2], 0, 8);
+			print_dbg_ulong(v);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_steps(&(player[i]), v);
+			}
+			else {
+				arp_player_set_steps(&(player[d[1]-1]), v);
+			}
+			break;
+			
+		case II_ARP_DIST:
+			s = (d[2] << 8) | d[3];
+			print_dbg("\r\narp ii dist: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_hex(s);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_offset(&(player[i]), s);
+			}
+			else {
+				arp_player_set_offset(&(player[d[1]-1]), s);
+			}
+			break;
+			
+		case II_ARP_GATE:
+			print_dbg("\r\narp ii gate: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_ulong(d[2]);
+			// FIXME: the gate width input range is 0-127, should tt range be non-midi like say 0-100?
+			v = uclip(d[2], 0, 127);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_gate_width(&(player[i]), v);
+			}
+			else {
+				arp_player_set_gate_width(&(player[d[1]-1]), v);
+			}
+			break;
+
+		case II_ARP_DIV:
+			print_dbg("\r\narp ii div: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_ulong(d[2]);
+			v = uclip(d[2], 0, 16);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_division(&(player[i]), v, &player_behavior);
+			}
+			else {
+				arp_player_set_division(&(player[d[1]-1]), v, &player_behavior);
+			}
+			break;
+
+		case II_ARP_ROT:
+			print_dbg("\r\narp ii rot: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_ulong(d[2]);
+			// TODO
+			break;
+
+		case II_ARP_SLEW:
+			print_dbg("\r\narp ii slew: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_ulong(d[2]);
+			// TODO
+			break;
+
+		case II_ARP_PULSE:
+			print_dbg("\r\narp ii pulse: ");
+			print_dbg_ulong(d[1]);
+			// TODO - ack can't do this without a phase value 
+			break;
+
+		case II_ARP_RESET:
+			print_dbg("\r\narp ii reset: ");
+			print_dbg_ulong(d[1]);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_reset(&(player[i]), &player_behavior);
+			}
+			else {
+				arp_player_reset(&(player[d[1]-1]), &player_behavior);
+			}
+			break;
+
+		case II_ARP_TRANS:
+			// NB: tt pitch is represented as signed 14 bit. the midi logic
+			// is using 12 bit representations so we shift the unpacked
+			// value from 14 to 12 bit.
+			s = ((d[2] << 8) | d[3]) >> 2;
+
+			print_dbg("\r\narp ii trans: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_hex(s);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					voice_transpose[i] = s;
+			}
+			else {
+				voice_transpose[d[1]-1] = s;
+			}
+			break;
+
+		default:
+			print_dbg("\r\narp ii; unknown command: ");
+			print_dbg_ulong(d[0]);
+			break;
+		}
+	}
 }
 
 void handler_ArpKey(s32 data) { 
@@ -1085,18 +1235,7 @@ void handler_ArpKey(s32 data) {
 		// key 1 press: tap tempo / force internal clock or toggle hold
 		key_state.key1 = 1;
 		if (key_state.key2 == 1) {
-			arp_state.hold = !arp_state.hold;
-			print_dbg("\r\n arp hold: ");
-			print_dbg_ulong(arp_state.hold);
-
-			if (arp_state.hold) {
-				// entering hold mode, preserve chord
-				chord_held_notes = chord.note_count;
-			}
-			else {
-				// existing hold mode, reset arp
-				arp_reset();
-			}
+			arp_state_set_hold(!arp_state.hold);
 			key_state.key2 = 0; // goofy; use this to signal to case 2 that style should change
 		}
 		else {
@@ -1205,6 +1344,8 @@ void init_arp(void) {
 		arp_player_set_gate_width(p, 0); // triggers
 		arp_player_set_steps(p, arp_state.steps);
 		arp_player_set_offset(p, arp_state.offset);
+
+		voice_transpose[i] = 0;
 	}
 
 	active_behavior.note_on = &arp_note_on;
@@ -1228,6 +1369,23 @@ void init_arp(void) {
 	player_behavior.seq_stop = NULL;
 	player_behavior.seq_continue = NULL;
 	player_behavior.panic = NULL;
+}
+
+static void arp_state_set_hold(bool hold) {
+	if (hold != arp_state.hold) {
+		arp_state.hold = hold;
+		print_dbg("\r\n arp hold: ");
+		print_dbg_ulong(arp_state.hold);
+
+		if (arp_state.hold) {
+			// entering hold mode, preserve chord
+			chord_held_notes = chord.note_count;
+		}
+		else {
+			// existing hold mode, reset arp
+			arp_reset();
+		}
+	}
 }
 
 static void arp_rebuild(chord_t *c) {
@@ -1374,7 +1532,7 @@ static void player_note_on(u8 ch, u8 num, u8 vel) {
 	}
 	*/
 
-	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
+	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch] + voice_transpose[ch]);
 	multi_tr_set(ch);
 }
 
