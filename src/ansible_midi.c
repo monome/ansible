@@ -221,7 +221,6 @@ static arp_player_t player[4];
 
 // shared state
 static s16 pitch_offset[4];
-static s16 voice_transpose[4];
 static midi_clock_t midi_clock;
 static key_state_t key_state;
 static clock_source sync_source;
@@ -272,7 +271,7 @@ void set_mode_midi(void) {
 	key_state.normaled = !gpio_get_pin_value(B10);
 
 	for (u8 i = 0; i < 4; i++) {
-		pitch_offset[i] = voice_transpose[i] = 0;
+		pitch_offset[i] = 0;
 		dac_set_value_noslew(i, 0);
 	}
 	dac_update_now();
@@ -415,6 +414,7 @@ static void restore_standard(void) {
 
 	for (u8 i = 0; i < 4; i++) {
 		dac_set_slew(i, 0);
+		dac_set_off(i, 0);
 	}
 }
 
@@ -553,7 +553,7 @@ static void poly_pitch_bend(u8 ch, u16 bend) {
 	for (u8 i = 0; i < voice_state.count; i++) {
 		if (voice_slot_active(&voice_state, i)) {
 			dac_set_value(i, pitch_cv(voice_slot_num(&voice_state, i),
-																pitch_offset[0] + voice_transpose[0]));
+																pitch_offset[0]));
 		}
 	}
 	dac_update_now();
@@ -598,7 +598,7 @@ static void mono_note_on(u8 ch, u8 num, u8 vel) {
 
 	// keep track of held notes for legato and pitch bend
 	notes_hold(&notes[0], num, vel);
-	dac_set_value(MONO_PITCH_CV, pitch_cv(num, pitch_offset[0] + voice_transpose[0]));
+	dac_set_value(MONO_PITCH_CV, pitch_cv(num, pitch_offset[0]));
 	dac_set_value_noslew(MONO_VELOCITY_CV, velocity_cv(vel));
 	dac_update_now();
 	set_tr(TR1);
@@ -614,7 +614,7 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 		notes_release(&notes[0], num);
 		prior = notes_get(&notes[0], kNotePriorityLast);
 		if (prior) {
-			dac_set_value(MONO_PITCH_CV, pitch_cv(prior->num, pitch_offset[0] + voice_transpose[0]));
+			dac_set_value(MONO_PITCH_CV, pitch_cv(prior->num, pitch_offset[0]));
 			dac_set_value(MONO_VELOCITY_CV, velocity_cv(prior->vel));
 			dac_update_now();
 		}
@@ -641,7 +641,7 @@ static void mono_pitch_bend(u8 ch, u16 bend) {
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[0]), kNotePriorityLast);
 	if (active) {
-		dac_set_value(MONO_PITCH_CV, pitch_cv(active->num, pitch_offset[0] + voice_transpose[0]));
+		dac_set_value(MONO_PITCH_CV, pitch_cv(active->num, pitch_offset[0]));
 		dac_update_now();
 	}
 }
@@ -782,7 +782,7 @@ static void multi_note_on(u8 ch, u8 num, u8 vel) {
 		return;
 
 	notes_hold(&notes[ch], num, vel);
-	dac_set_value(ch, pitch_cv(num, pitch_offset[ch] + voice_transpose[ch]));
+	dac_set_value(ch, pitch_cv(num, pitch_offset[ch]));
 	dac_update_now();
 	multi_tr_set(ch);
 }
@@ -798,7 +798,7 @@ static void multi_note_off(u8 ch, u8 num, u8 vel) {
 		if (flags[ch].legato) {
 			prior = notes_get(&notes[ch], kNotePriorityLast);
 			if (prior) {
-				dac_set_value(ch, pitch_cv(prior->num, pitch_offset[ch] + voice_transpose[ch]));
+				dac_set_value(ch, pitch_cv(prior->num, pitch_offset[ch]));
 				dac_update_now();
 			}
 			else {
@@ -832,7 +832,7 @@ static void multi_pitch_bend(u8 ch, u16 bend) {
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[ch]), kNotePriorityLast);
 	if (active) {
-		dac_set_value(ch, pitch_cv(active->num, pitch_offset[ch] + voice_transpose[ch]));
+		dac_set_value(ch, pitch_cv(active->num, pitch_offset[ch]));
 		dac_update_now();
 	}
 }
@@ -1188,7 +1188,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			break;
 
 		case II_ARP_SLEW:
-			s = sclip((d[2] << 8) | d[3], 0, 2000);
+			s = sclip((d[2] << 8) + d[3], 0, 2000);
 			print_dbg("\r\narp ii slew: ");
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
@@ -1221,21 +1221,17 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			break;
 
 		case II_ARP_TRANS:
-			// NB: tt pitch is represented as signed 14 bit. the midi logic
-			// is using 12 bit representations so we shift the unpacked
-			// value from 14 to 12 bit.
-			s = ((d[2] << 8) | d[3]) >> 2;
-
+			s = (d[2] << 8) + d[3];
 			print_dbg("\r\narp ii trans: ");
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
 			print_dbg_hex(s);
 			if (d[1] == 0) {
 				for (i = 0; i < 4; i++)
-					voice_transpose[i] = s;
+					dac_set_off(i, s);
 			}
 			else {
-				voice_transpose[d[1]-1] = s;
+				dac_set_off(d[1]-1, s);
 			}
 			break;
 
@@ -1370,8 +1366,7 @@ void restore_arp(void) {
 		arp_player_set_steps(p, arp_state.steps);
 		arp_player_set_offset(p, arp_state.offset);
 
-		voice_transpose[i] = 0;
-
+		dac_set_off(i, 0);
 		dac_set_slew(i, 0);
 	}
 
@@ -1559,7 +1554,7 @@ static void player_note_on(u8 ch, u8 num, u8 vel) {
 	}
 	*/
 
-	dac_set_value(ch, SEMI14[num] + voice_transpose[ch]);
+	dac_set_value(ch, SEMI14[num]);
 	multi_tr_set(ch);
 }
 
