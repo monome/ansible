@@ -297,7 +297,7 @@ void handler_MidiFrontShort(s32 data) {
 }
 
 void handler_MidiFrontLong(s32 data) {
-	if(ansible_mode == mMidiStandard)
+	if (ansible_mode == mMidiStandard)
 		set_mode(mMidiArp);
 	else
 		set_mode(mMidiStandard);
@@ -1134,7 +1134,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			break;
 			
 		case II_ARP_DIST:
-			s = (d[2] << 8) | d[3];
+			s = sclip((int16_t)((d[2] << 8) + d[3]), -24, 24);
 			print_dbg("\r\narp ii dist: ");
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
@@ -1153,7 +1153,8 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
 			print_dbg_ulong(d[2]);
-			// FIXME: the gate width input range is 0-127, should tt range be non-midi like say 0-100?
+			// FIXME: the gate width input range is 0-127, should tt range
+			// be non-midi like say 0-100?
 			v = uclip(d[2], 0, 127);
 			if (d[1] == 0) {
 				for (i = 0; i < 4; i++)
@@ -1188,7 +1189,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			break;
 
 		case II_ARP_SLEW:
-			s = sclip((d[2] << 8) + d[3], 0, 2000);
+			s = sclip((int16_t)((d[2] << 8) + d[3]), 0, 2000);
 			print_dbg("\r\narp ii slew: ");
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
@@ -1221,7 +1222,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			break;
 
 		case II_ARP_TRANS:
-			s = (d[2] << 8) + d[3];
+			s = (int16_t)((d[2] << 8) + d[3]);
 			print_dbg("\r\narp ii trans: ");
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
