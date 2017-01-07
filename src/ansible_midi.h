@@ -1,5 +1,12 @@
 #pragma once
 
+// NB: NOTE_POOL_SIZE and CHORD_MAX_NOTES (in libavr32) need to match
+// in order for the as played arp logic to work correctly.
+//
+// the defines represent the maximum number of notes tracked in legato
+// note handling and the maximum number of (input) notes to the arp
+// logic respectively.
+
 // libavr32
 #include "arp.h"
 

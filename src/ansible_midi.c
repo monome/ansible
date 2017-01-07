@@ -3,8 +3,8 @@
 #include "flashc.h"
 
 #include "midi_common.h"
-#include "notes.h"
 #include "arp.h"
+#include "notes.h"
 #include "timers.h"
 #include "util.h"
 
@@ -191,10 +191,6 @@ const u16 BEND1_14[512] = {
 	1548, 1552, 1555, 1558, 1561, 1564, 1568, 1571, 1574, 1577, 1580,
 	1584, 1587, 1590, 1593, 1596, 1600, 1603, 1606, 1609, 1612, 1616,
 	1619, 1622, 1625, 1628, 1632, 1635
-};
-
-const arp_style player_styles[4] = {
-	eStyleUp, eStyleDown, eStyleUpDown, eStyleRandom
 };
 
 // copy of nvram state for editing
@@ -1016,7 +1012,7 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 
 void default_midi_arp() {
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period), 100, 4, true);
-	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.style), eStylePlayed, 1, true);
 	flashc_memset8((void*)&(f.midi_arp_state.hold), false, 1, true);
 	flashc_memset8((void*)&(f.midi_arp_state.steps), 0, 1, true);
 	flashc_memset8((void*)&(f.midi_arp_state.offset), 12, 1, true);
@@ -1038,7 +1034,7 @@ void write_midi_arp(void) {
 static void arp_next_style(void) {
 	arp_state.style++;
 	if (arp_state.style > eStyleRandom) {
-		arp_state.style = eStyleUp;
+		arp_state.style = eStylePlayed;
 	}
 	print_dbg("\r\n arp style: ");
 	print_dbg_ulong(arp_state.style);
@@ -1107,7 +1103,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg_ulong(d[2]);
 
 			// TODO: allow each player to have a different sequence
-			v = uclip(d[2], eStyleUp, eStyleRandom);
+			v = uclip(d[2], eStylePlayed, eStyleRandom);
 			arp_state.style = v;
 			arp_rebuild(&chord);
 			break;
@@ -1357,8 +1353,8 @@ void restore_arp(void) {
 	arp_seq_init(next_seq);
 
 	// ensure style matches stored config
-	arp_seq_build(active_seq, arp_state.style, &chord);
-	arp_seq_build(next_seq, arp_state.style, &chord);
+	arp_seq_build(active_seq, arp_state.style, &chord, &(notes[0]));
+	arp_seq_build(next_seq, arp_state.style, &chord, &(notes[0]));
 	
 	for (u8 i = 0; i < 4; i++) {
 		p = &(player[i]);
@@ -1416,7 +1412,7 @@ static void arp_rebuild(chord_t *c) {
 	
 	if (current_state == eSeqFree || current_state == eSeqWaiting) {
 		arp_seq_set_state(next_seq, eSeqBuilding); // TODO: check return
-		arp_seq_build(next_seq, arp_state.style, &chord);
+		arp_seq_build(next_seq, arp_state.style, &chord, &(notes[0]));
 		arp_seq_set_state(next_seq, eSeqWaiting);
 	}
 	else {
@@ -1428,6 +1424,7 @@ static void arp_reset(void) {
 	// used when exiting held mode
 	chord_should_reset = false;
 	chord_init(&chord);
+	notes_init(&(notes[0]));
 	arp_rebuild(&chord);
 }
 
@@ -1435,8 +1432,9 @@ static void arp_note_on(u8 ch, u8 num, u8 vel) {
 	if (arp_state.hold) {
 		if (chord_should_reset) {
 			//print_dbg("\r\n > arp: hold chord resetting");
-			chord_init(&chord);
 			chord_should_reset = false;
+			chord_init(&chord);
+			notes_init(&(notes[0]));
 		}
 		chord_held_notes++;
 
@@ -1444,6 +1442,7 @@ static void arp_note_on(u8 ch, u8 num, u8 vel) {
 		//print_dbg_ulong(chord_held_notes);
 	}
 	chord_note_add(&chord, num, vel);
+	notes_hold(&(notes[0]), num, vel);
 	arp_rebuild(&chord);
 }
 
@@ -1457,6 +1456,7 @@ static void arp_note_off(u8 ch, u8 num, u8 vel) {
 	}
 	else {
 		chord_note_release(&chord, num);
+		notes_release(&(notes[0]), num);
 		arp_rebuild(&chord);
 	}
 }
