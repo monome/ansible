@@ -93,13 +93,13 @@ void tr_pulse3(void* o) {
 
 
 void ii_tt(uint8_t *d, uint8_t l) {
-	print_dbg("\r\nii/tele (");
-	print_dbg_ulong(l);
-	print_dbg(") ");
-	for(int i=0;i<l;i++) {
-		print_dbg_ulong(d[i]);
-		print_dbg(" ");
-	}
+	// print_dbg("\r\ni2c:");
+	// print_dbg_ulong(l);
+	// print_dbg(" ");
+	// for(int i=0;i<l;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
 
 	if(l) {
 		switch(d[0]) {
