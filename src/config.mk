@@ -72,6 +72,8 @@ CSRCS = \
        ../libavr32/src/adc.c     \
        ../libavr32/src/arp.c     \
        ../libavr32/src/dac.c     \
+       ../libavr32/src/euclidean/data.c \
+       ../libavr32/src/euclidean/euclidean.c \
        ../libavr32/src/events.c     \
        ../libavr32/src/i2c.c     \
        ../libavr32/src/init_ansible.c \
@@ -105,8 +107,8 @@ CSRCS = \
        avr32/utils/debug/print_funcs.c                    \
        common/services/usb/class/msc/host/uhi_msc.c       \
        common/services/usb/class/msc/host/uhi_msc_mem.c   \
-       common/services/spi/uc3_spi/spi_master.c \
-       common/services/usb/uhc/uhc.c \
+       common/services/spi/uc3_spi/spi_master.c           \
+       common/services/usb/uhc/uhc.c                      \
        common/services/clock/uc3b0_b1/sysclk.c  
 
 # List of assembler source files.
@@ -117,14 +119,14 @@ ASSRCS = \
 
 # List of include paths.
 INC_PATH = \
-       ../../src           \
-       ../src                                        \
-       ../src/usb \
-       ../src/usb/ftdi \
-       ../src/usb/hid \
-       ../src/usb/midi \
-       ../conf      \
-       ../conf/trilogy \
+       ../../src                                          \
+       ../src                                             \
+       ../src/usb                                         \
+       ../src/usb/ftdi                                    \
+       ../src/usb/hid                                     \
+       ../src/usb/midi                                    \
+       ../conf                                            \
+       ../conf/trilogy                                    \
        avr32/boards                                       \
        avr32/drivers/cpu/cycle_counter                    \
        avr32/drivers/flashc                               \
@@ -140,16 +142,16 @@ INC_PATH = \
        avr32/utils/debug                                  \
        avr32/utils/preprocessor                           \
        common/boards                                      \
-       common/boards/user_board \
+       common/boards/user_board                           \
        common/services/storage/ctrl_access                \
        common/services/clock                              \
        common/services/delay                              \
-       common/services/usb/ \
-       common/services/usb/uhc \
+       common/services/usb/                               \
+       common/services/usb/uhc                            \
        common/services/usb/class/msc                      \
        common/services/usb/class/msc/host                 \
        common/services/usb/class/hid                      \
-       common/services/spi/uc3_spi \
+       common/services/spi/uc3_spi                        \
        common/utils                                       
 
 # Additional search paths for libraries.

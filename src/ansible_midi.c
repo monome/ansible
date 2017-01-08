@@ -17,7 +17,6 @@
 #include "init_common.h"
 #include "conf_tc_irq.h"
 
-
 // this
 #include "main.h"
 #include "ansible_midi.h"
@@ -1166,13 +1165,28 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
 			print_dbg_ulong(d[2]);
-			v = uclip(d[2], 0, 16);
+			v = uclip(d[2], 1, 32);  // NB: 32 is maximum for euclidean tables
 			if (d[1] == 0) {
 				for (i = 0; i < 4; i++)
 					arp_player_set_division(&(player[i]), v, &player_behavior);
 			}
 			else {
 				arp_player_set_division(&(player[d[1]-1]), v, &player_behavior);
+			}
+			break;
+
+		case II_ARP_FILL:
+			print_dbg("\r\narp ii fill: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_ulong(d[2]);
+			v = uclip(d[2], 0, 32);  // NB: 32 is maximum for euclidean tables
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_fill(&(player[i]), v);
+			}
+			else {
+				arp_player_set_fill(&(player[d[1]-1]), v);
 			}
 			break;
 
