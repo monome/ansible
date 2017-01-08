@@ -1090,7 +1090,8 @@ void clock_midi_arp(uint8_t phase) {
 }
 
 void ii_midi_arp(uint8_t *d, uint8_t l) {
-	u8 i, v;
+	arp_player_t *p;
+	u8 i, v1, v2, v3;
 	s16 s;
 
 	if (l) {
@@ -1102,8 +1103,8 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg_ulong(d[2]);
 
 			// TODO: allow each player to have a different sequence
-			v = uclip(d[2], eStylePlayed, eStyleRandom);
-			arp_state.style = v;
+			v1 = uclip(d[2], eStylePlayed, eStyleRandom);
+			arp_state.style = v1;
 			arp_rebuild(&chord);
 			break;
 			
@@ -1117,14 +1118,14 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg("\r\narp ii steps: ");
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
-			v = uclip(d[2], 0, 8);
-			print_dbg_ulong(v);
+			v1 = uclip(d[2], 0, 8);
+			print_dbg_ulong(v1);
 			if (d[1] == 0) {
 				for (i = 0; i < 4; i++)
-					arp_player_set_steps(&(player[i]), v);
+					arp_player_set_steps(&(player[i]), v1);
 			}
 			else {
-				arp_player_set_steps(&(player[d[1]-1]), v);
+				arp_player_set_steps(&(player[d[1]-1]), v1);
 			}
 			break;
 			
@@ -1150,13 +1151,13 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg_ulong(d[2]);
 			// FIXME: the gate width input range is 0-127, should tt range
 			// be non-midi like say 0-100?
-			v = uclip(d[2], 0, 127);
+			v1 = uclip(d[2], 0, 127);
 			if (d[1] == 0) {
 				for (i = 0; i < 4; i++)
-					arp_player_set_gate_width(&(player[i]), v);
+					arp_player_set_gate_width(&(player[i]), v1);
 			}
 			else {
-				arp_player_set_gate_width(&(player[d[1]-1]), v);
+				arp_player_set_gate_width(&(player[d[1]-1]), v1);
 			}
 			break;
 
@@ -1165,13 +1166,13 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
 			print_dbg_ulong(d[2]);
-			v = uclip(d[2], 1, 32);  // NB: 32 is maximum for euclidean tables
+			v1 = uclip(d[2], 1, 32);  // NB: 32 is maximum for euclidean tables
 			if (d[1] == 0) {
 				for (i = 0; i < 4; i++)
-					arp_player_set_division(&(player[i]), v, &player_behavior);
+					arp_player_set_division(&(player[i]), v1, &player_behavior);
 			}
 			else {
-				arp_player_set_division(&(player[d[1]-1]), v, &player_behavior);
+				arp_player_set_division(&(player[d[1]-1]), v1, &player_behavior);
 			}
 			break;
 
@@ -1180,22 +1181,57 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
 			print_dbg_ulong(d[2]);
-			v = uclip(d[2], 0, 32);  // NB: 32 is maximum for euclidean tables
+			v1 = uclip(d[2], 0, 32);  // NB: 32 is maximum for euclidean tables
 			if (d[1] == 0) {
 				for (i = 0; i < 4; i++)
-					arp_player_set_fill(&(player[i]), v);
+					arp_player_set_fill(&(player[i]), v1);
 			}
 			else {
-				arp_player_set_fill(&(player[d[1]-1]), v);
+				arp_player_set_fill(&(player[d[1]-1]), v1);
 			}
 			break;
 
 		case II_ARP_ROT:
+			s = sclip((int16_t)((d[2] << 8) + d[3]), -32, 32);
 			print_dbg("\r\narp ii rot: ");
 			print_dbg_ulong(d[1]);
 			print_dbg(" ");
-			print_dbg_ulong(d[2]);
-			// TODO
+			print_dbg_hex(s);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_rotation(&(player[i]), s);
+			}
+			else {
+				arp_player_set_rotation(&(player[d[1]-1]), s);
+			}
+			break;
+
+		case II_ARP_ER:
+			v2 = uclip(d[2], 0, 32);  // NB: 32 is maximum for euclidean tables
+			v3 = uclip(d[3], 1, 32);
+			s = sclip((int16_t)((d[4] << 8) + d[5]), -32, 32);
+			print_dbg("\r\narp ii er: ");
+			print_dbg_ulong(d[1]);
+			print_dbg(" ");
+			print_dbg_ulong(v2);
+			print_dbg(" ");
+			print_dbg_ulong(v3);
+			print_dbg(" ");
+			print_dbg_hex(s);
+			if (d[1] == 0) {
+				for (i = 0; i < 4; i++) {
+					p = &(player[i]);
+					arp_player_set_division(p, v3, &player_behavior);
+					arp_player_set_fill(p, v2);
+					arp_player_set_rotation(p, s);
+				}
+			}
+			else {
+				p = &(player[d[1]-1]);
+				arp_player_set_division(p, v3, &player_behavior);
+				arp_player_set_fill(p, v2);
+				arp_player_set_rotation(p, s);
+			}
 			break;
 
 		case II_ARP_SLEW:
@@ -1216,7 +1252,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 		case II_ARP_PULSE:
 			print_dbg("\r\narp ii pulse: ");
 			print_dbg_ulong(d[1]);
-			// TODO - ack can't do this without a phase value 
+			// TODO - ack can't do this without a phase value
 			break;
 
 		case II_ARP_RESET:
