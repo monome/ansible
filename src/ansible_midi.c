@@ -260,7 +260,7 @@ void set_mode_midi(void) {
 	sync_source = eClockInternal;
 
 	midi_clock_init(&midi_clock);
-	midi_clock_set_div(&midi_clock, 2); // 8th notes; TODO; make configurable?
+	midi_clock_set_div(&midi_clock, 4); // 16th notes (24 ppq / 4 == 6 pp 16th)
 
 	key_state.key1 = key_state.key2 = key_state.front = 0;
 	key_state.normaled = !gpio_get_pin_value(B10);
