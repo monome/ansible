@@ -1099,16 +1099,16 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 		case II_ARP_STYLE:
 			p1 = uclip(d[1], eStylePlayed, eStyleRandom);
 
-			print_dbg("\r\narp ii style: ");
-			print_dbg_ulong(p1);
+			// print_dbg("\r\narp ii style: ");
+			// print_dbg_ulong(p1);
 
 			arp_state.style = p1;
 			arp_rebuild(&chord);
 			break;
 			
 		case II_ARP_HOLD:
-			print_dbg("\r\narp ii hold: ");
-			print_dbg_ulong(d[1]);
+			// print_dbg("\r\narp ii hold: ");
+			// print_dbg_ulong(d[1]);
 
 			arp_state_set_hold(d[1] > 0);
 			break;
@@ -1118,12 +1118,12 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			p1 = uclip(d[2], 0, 8);
 			s = sclip((int16_t)((d[3] << 8) + d[4]), -24, 24);
 			
-			print_dbg("\r\narp ii rpt: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_ulong(p1);
-			print_dbg(" ");
-			print_dbg_hex(s);
+			// print_dbg("\r\narp ii rpt: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
@@ -1140,10 +1140,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			v = uclip(d[1], 0, 4);
 			p1 = uclip(d[2], 0, 127);
 
-			print_dbg("\r\narp ii gate: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_ulong(p1);
+			// print_dbg("\r\narp ii gate: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
 			// FIXME: the gate width input range is 0-127, should tt range
 			// be non-midi like say 0-100?
 
@@ -1160,10 +1160,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			v = uclip(d[1], 0, 4);
 			p1 = uclip(d[2], 1, 32);  // NB: 32 is maximum for euclidean tables
 
-			print_dbg("\r\narp ii div: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_ulong(p1);
+			// print_dbg("\r\narp ii div: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
@@ -1178,10 +1178,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			v = uclip(d[1], 0, 4);
 			p1 = uclip(d[2], 0, 32);  // NB: 32 is maximum for euclidean tables
 
-			print_dbg("\r\narp ii fill: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_ulong(p1);
+			// print_dbg("\r\narp ii fill: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
@@ -1196,10 +1196,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			v = uclip(d[1], 0, 4);
 			s = sclip((int16_t)((d[2] << 8) + d[3]), -32, 32);
 
-			print_dbg("\r\narp ii rot: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_hex(s);
+			// print_dbg("\r\narp ii rot: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
@@ -1216,14 +1216,14 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			p2 = uclip(d[3], 1, 32);
 			s = sclip((int16_t)((d[4] << 8) + d[5]), -32, 32);
 
-			print_dbg("\r\narp ii er: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_ulong(p1);
-			print_dbg(" ");
-			print_dbg_ulong(p2);
-			print_dbg(" ");
-			print_dbg_hex(s);
+			// print_dbg("\r\narp ii er: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
+			// print_dbg(" ");
+			// print_dbg_ulong(p2);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++) {
@@ -1245,10 +1245,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			v = uclip(d[1], 0, 4);
 			s = sclip((int16_t)((d[2] << 8) + d[3]), 0, 2000);
 
-			print_dbg("\r\narp ii slew: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_ulong(s);
+			// print_dbg("\r\narp ii slew: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(s);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
@@ -1262,8 +1262,8 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 		case II_ARP_RESET:
 			v = uclip(d[1], 0, 4);
 
-			print_dbg("\r\narp ii reset: ");
-			print_dbg_ulong(v);
+			// print_dbg("\r\narp ii reset: ");
+			// print_dbg_ulong(v);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
@@ -1278,10 +1278,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			v = uclip(d[1], 0, 4);
 			s = (int16_t)((d[2] << 8) + d[3]);
 
-			print_dbg("\r\narp ii shift: ");
-			print_dbg_ulong(v);
-			print_dbg(" ");
-			print_dbg_hex(s);
+			// print_dbg("\r\narp ii shift: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
