@@ -39,7 +39,9 @@ typedef struct {
 
 typedef struct {
 	u8 key1 : 1;
+	u8 key1_consumed : 1;
 	u8 key2 : 1;
+	u8 key2_consumed : 1;
 	u8 front : 1;
 	u8 normaled : 1; // isn't this tracked elsewhere?
 } key_state_t;
@@ -60,9 +62,11 @@ static uint16_t pitch_cv(u8 num, s16 offset);
 static uint16_t velocity_cv(u8 vel);
 static uint16_t cc_cv(u8 value);
 
-static void restore_standard(void);
+static void restore_midi_standard(void);
 
 static void set_voice_allocation(voicing_mode v);
+static void set_voice_slew(voicing_mode v, s16 slew);
+static void set_voice_tune(voicing_mode v, s16 shift);
 
 static void reset(void);
 
@@ -102,7 +106,7 @@ static void fixed_note_on(u8 ch, u8 num, u8 vel);
 static void fixed_note_off(u8 ch, u8 num, u8 vel);
 static void fixed_control_change(u8 ch, u8 num, u8 val);
 
-static void restore_arp(void);
+static void restore_midi_arp(void);
 
 static void arp_state_set_hold(bool hold);
 
@@ -220,7 +224,6 @@ static midi_clock_t midi_clock;
 static key_state_t key_state;
 static clock_source sync_source;
 
-
 void set_mode_midi(void) {
 	switch(ansible_mode) {
 	case mMidiStandard:
@@ -230,7 +233,8 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTr] = &handler_StandardTr;
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
-		restore_standard();
+		restore_midi_standard();
+		init_i2c_slave(II_MID_ADDR);
 		process_ii = &ii_midi_standard;
 		update_leds(1);
 		break;
@@ -241,7 +245,7 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTr] = &handler_ArpTr;
 		app_event_handlers[kEventTrNormal] = &handler_ArpTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_ArpMidiPacket;
-		restore_arp();
+		restore_midi_arp();
 		clock = &clock_midi_arp;
 		clock_set(arp_state.clock_period);
 		init_i2c_slave(II_ARP_ADDR);
@@ -263,6 +267,7 @@ void set_mode_midi(void) {
 	midi_clock_set_div(&midi_clock, 4); // 16th notes (24 ppq / 4 == 6 pp 16th)
 
 	key_state.key1 = key_state.key2 = key_state.front = 0;
+	key_state.key1_consumed = key_state.key2_consumed = 0;
 	key_state.normaled = !gpio_get_pin_value(B10);
 
 	for (u8 i = 0; i < 4; i++) {
@@ -274,20 +279,23 @@ void set_mode_midi(void) {
 
 
 void handler_MidiFrontShort(s32 data) {
-	if (ansible_mode == mMidiStandard) {
-		if (standard_state.voicing == eVoiceFixed && key_state.key2) {
-			fixed_start_learning();
-		}
-		else {
+	if (key_state.key2) {
+		if (ansible_mode == mMidiStandard) {
 			// save voice mode configuration to flash
 			write_midi_standard();
 			print_dbg("\r\n standard: wrote midi config");
 		}
+		else {
+			// mMidiArp
+			print_dbg("\r\n arp: wrote config");
+			write_midi_arp();
+		}
+		key_state.key2_consumed = 1; // hide the release
 	}
-	else {
-		// mMidiArp
-		print_dbg("\r\n arp: wrote config");
-		write_midi_arp();
+	else if (key_state.key1 && ansible_mode == mMidiStandard &&
+					 standard_state.voicing == eVoiceFixed) {
+		key_state.key1_consumed = 1;
+		fixed_start_learning();
 	}
 }
 
@@ -400,19 +408,63 @@ static void set_voice_allocation(voicing_mode v) {
 	}
 }
 
+static void set_voice_slew(voicing_mode v, s16 slew) {
+	u8 i;
 
-////////////////////////////////////////////////////////////////////////////////
-///// handlers (standard)
-static void restore_standard(void) {
-	set_voice_allocation(standard_state.voicing);
-	clock_set(standard_state.clock_period);
-
-	for (u8 i = 0; i < 4; i++) {
-		dac_set_slew(i, 0);
-		dac_set_off(i, 0);
+	switch (v) {
+	case eVoicePoly:
+	case eVoiceMulti:
+		for (i = 0; i < 4; i++) {
+			dac_set_slew(i, slew);
+		}
+		break;
+	case eVoiceMono:
+		dac_set_slew(0, slew);  // pitch
+		dac_set_slew(1, 0);     // velocity
+		dac_set_slew(2, 5);     // channel pressure
+		dac_set_slew(3, 5);     // mod
+		break;
+	default:
+		for (i = 0; i < 4; i++) {
+			dac_set_slew(i, 0);
+		}
+		break;
 	}
 }
 
+static void set_voice_tune(voicing_mode v, s16 shift) {
+	u8 i;
+
+	switch (v) {
+	case eVoicePoly:
+	case eVoiceMulti:
+		for (i = 0; i < 4; i++) {
+			dac_set_off(i, shift);
+		}
+		break;
+	case eVoiceMono:
+		dac_set_off(0, shift);  // pitch
+		dac_set_off(1, 0);      // velocity
+		dac_set_off(2, 0);      // channel pressure
+		dac_set_off(3, 0);      // mod
+		break;
+	default:
+		for (i = 0; i < 4; i++) {
+			dac_set_off(i, 0);
+		}
+		break;
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+///// handlers (standard)
+static void restore_midi_standard(void) {
+	set_voice_allocation(standard_state.voicing);
+	set_voice_slew(standard_state.voicing, standard_state.slew);
+	set_voice_tune(standard_state.voicing, standard_state.shift);
+	clock_set(standard_state.clock_period);
+}
 
 void default_midi_standard(void) {
 	fixed_mapping_t m;
@@ -431,6 +483,9 @@ void default_midi_standard(void) {
 	m.cc[3] = 19;
 
 	fixed_write_mapping(&(f.midi_standard_state.fixed), &m);
+
+	flashc_memset16((void*)&(f.midi_standard_state.shift), 0, 2, true);
+	flashc_memset16((void*)&(f.midi_standard_state.slew), 0, 2, true);
 }
 
 void write_midi_standard(void) {
@@ -438,7 +493,14 @@ void write_midi_standard(void) {
 									standard_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_standard_state.voicing),
 								 standard_state.voicing, 1, true);
+
 	fixed_write_mapping(&(f.midi_standard_state.fixed), &standard_state.fixed);
+
+	flashc_memset16((void*)&(f.midi_standard_state.shift),
+									standard_state.shift, 2, true);
+	flashc_memset16((void*)&(f.midi_standard_state.slew),
+									standard_state.slew, 2, true);
+
 }
 
 void clock_midi_standard(uint8_t phase) {
@@ -449,7 +511,36 @@ void clock_midi_standard(uint8_t phase) {
 }
 
 void ii_midi_standard(uint8_t *d, uint8_t l) {
-	;;
+	s16 s;
+
+	if (l) {
+		switch (d[0]) {
+		case II_MID_SLEW:
+			s = sclip((int16_t)((d[1] << 8) + d[2]), 0, 20000);
+
+			// print_dbg("\r\nmid ii slew: ");
+			// print_dbg_ulong(s);
+
+			standard_state.slew = s;
+			set_voice_slew(standard_state.voicing, s);
+			break;
+
+		case II_MID_SHIFT:
+			s = (int16_t)((d[1] << 8) + d[2]);
+
+			// print_dbg("\r\nmid ii shift: ");
+			// print_dbg_hex(s);
+
+			standard_state.shift = s;
+			set_voice_tune(standard_state.voicing, s);
+			break;
+
+		default:
+			print_dbg("\r\nmid ii; unknown command: ");
+			print_dbg_ulong(d[0]);
+			break;
+		}
+	}
 }
 
 void handler_StandardKey(s32 data) { 
@@ -457,12 +548,18 @@ void handler_StandardKey(s32 data) {
 
 	case 0: // key 1 release
 		key_state.key1 = 0;
-		if (fixed_learn.learning == 1 ) {
-			fixed_finalize_learning(true);
+		if (key_state.key1_consumed) {
+			key_state.key1_consumed = 0;
 		}
 		else {
-			// panic, all notes off
-			if (active_behavior.panic) (*active_behavior.panic)();
+			if (fixed_learn.learning == 1) {
+				// cancel learning
+				fixed_finalize_learning(true);
+			}
+			else if (active_behavior.panic) {
+				// panic, all notes off
+				(*active_behavior.panic)();
+			}
 		}
 		break;
 
@@ -472,16 +569,23 @@ void handler_StandardKey(s32 data) {
 
 	case 2: // key 2 release
 		key_state.key2 = 0;
-		if (fixed_learn.learning == 1) {
-			// in learning mode; do nothing
+		if (key_state.key2_consumed) {
+			key_state.key2_consumed = 0;
 		}
 		else {
-			// switch voicing mode
-			standard_state.voicing++;
-			if (standard_state.voicing >= eVoiceMAX) {
-				standard_state.voicing = eVoicePoly;
+			if (fixed_learn.learning == 1) {
+				// in learning mode; do nothing
 			}
-			set_voice_allocation(standard_state.voicing);
+			else {
+				// switch voicing mode
+				standard_state.voicing++;
+				if (standard_state.voicing >= eVoiceMAX) {
+					standard_state.voicing = eVoicePoly;
+				}
+				set_voice_allocation(standard_state.voicing);
+				set_voice_slew(standard_state.voicing, standard_state.slew);
+				set_voice_tune(standard_state.voicing, standard_state.shift);
+			}
 		}
 		break;
 
@@ -1012,22 +1116,53 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 void default_midi_arp() {
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period), 100, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style), eStylePlayed, 1, true);
-	flashc_memset8((void*)&(f.midi_arp_state.hold), false, 1, true);
-	flashc_memset8((void*)&(f.midi_arp_state.steps), 0, 1, true);
-	flashc_memset8((void*)&(f.midi_arp_state.offset), 12, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.hold), 0, 1, true);
+
+	for (u8 i = 0; i < 4; i++) {
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].fill), 1, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].division), i + 1, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].rotation), 0, 1, true);
+
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].gate), 0, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].steps), 0, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].offset), 12, 1, true);
+
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].slew), 0, 2, true);
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift), 0, 2, true);
+	}
 }
 
 void write_midi_arp(void) {
+	arp_player_t *p;
+
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period),
 									arp_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style),
 								 arp_state.style, 1, true);
 	flashc_memset8((void*)&(f.midi_arp_state.hold),
 								 arp_state.hold, 1, true);
-	flashc_memset8((void*)&(f.midi_arp_state.steps),
-								 arp_state.steps, 1, true);
-	flashc_memset8((void*)&(f.midi_arp_state.offset),
-								 arp_state.offset, 1, true);
+
+	for (u8 i = 0; i < 4; i++) {
+		p = &(player[i]);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].fill),
+									 arp_player_get_fill(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].division),
+									 arp_player_get_division(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].rotation),
+									 arp_player_get_rotation(p), 1, true);
+
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].gate),
+									 arp_player_get_gate_width(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].steps),
+									 arp_player_get_steps(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].offset),
+									 arp_player_get_offset(p), 1, true);
+
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].slew),
+										dac_get_slew(i), 2, true);
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift),
+										dac_get_off(i), 2, true);
+	}
 }
 
 static void arp_next_style(void) {
@@ -1243,7 +1378,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 
 		case II_ARP_SLEW:
 			v = uclip(d[1], 0, 4);
-			s = sclip((int16_t)((d[2] << 8) + d[3]), 0, 2000);
+			s = sclip((int16_t)((d[2] << 8) + d[3]), 0, 20000);
 
 			// print_dbg("\r\narp ii slew: ");
 			// print_dbg_ulong(v);
@@ -1337,9 +1472,14 @@ void handler_ArpKey(s32 data) {
 		break;
 	case 2:
 		// key 2 release
-		if (key_state.key1 == 0 && key_state.key2 == 1) {
-			// arp mode swetch on release if not toggling hold mode
-			arp_next_style();
+		if (key_state.key2_consumed) {
+			key_state.key2_consumed = 0;
+		}
+		else {
+			if (key_state.key1 == 0 && key_state.key2 == 1) {
+				// arp mode swetch on release if not toggling hold mode
+				arp_next_style();
+			}
 		}
 		key_state.key2 = 0;
 		break;
@@ -1399,7 +1539,7 @@ void handler_ArpMidiPacket(s32 data) {
 	midi_packet_parse(&active_behavior, (u32)data);
 }
 
-void restore_arp(void) {
+void restore_midi_arp(void) {
 	arp_player_t *p;
 
 	chord_init(&chord);
@@ -1418,13 +1558,14 @@ void restore_arp(void) {
 	
 	for (u8 i = 0; i < 4; i++) {
 		p = &(player[i]);
-		arp_player_init(p, i, i + 1);
-		arp_player_set_gate_width(p, 0); // triggers
-		arp_player_set_steps(p, arp_state.steps);
-		arp_player_set_offset(p, arp_state.offset);
+		arp_player_init(p, i, arp_state.p[i].division);
+		arp_player_set_gate_width(p, arp_state.p[i].gate);
+		arp_player_set_steps(p, arp_state.p[i].steps);
+		arp_player_set_offset(p, arp_state.p[i].offset);
+		arp_player_set_fill(p, arp_state.p[i].fill);
 
-		dac_set_off(i, 0);
-		dac_set_slew(i, 0);
+		dac_set_off(i, arp_state.p[i].shift);
+		dac_set_slew(i, arp_state.p[i].slew);
 	}
 
 	active_behavior.note_on = &arp_note_on;

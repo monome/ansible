@@ -31,15 +31,28 @@ typedef struct {
 	uint32_t clock_period;
 	u8 voicing;
 	fixed_mapping_t fixed;
+	s16 shift;   // tuning/dac offset
+	s16 slew;    // pitch cv slew (ms)
 } midi_standard_state_t;
+
+typedef struct {
+	u8 fill;
+	u8 division;
+	s8 rotation;
+	u8 gate;
+	u8 steps;
+	u8 offset;
+
+	s16 slew;
+	s16 shift;
+} midi_arp_player_state_t;
 
 // arp mode value saved to nvram
 typedef struct {
 	uint32_t clock_period;
 	u8 style;    // NB: not using arp_style as type because enums have vairable size
 	bool hold;   // if true new notes add to chord if at least one note in chord is still held
-	u8 steps;    // number of steps (repeats?) of the arp pattern
-	s8 offset;   // number of semitones to transpose by per step; [-24,24] or voltage offsets?
+	midi_arp_player_state_t p[4];
 } midi_arp_state_t;
 
 void set_mode_midi(void);
