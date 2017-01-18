@@ -2,6 +2,7 @@
 #include "print_funcs.h"
 #include "flashc.h"
 
+#include "delay.h"
 #include "midi_common.h"
 #include "arp.h"
 #include "notes.h"
@@ -287,13 +288,18 @@ void handler_MidiFrontShort(s32 data) {
 	if (key_state.key2) {
 		if (ansible_mode == mMidiStandard) {
 			// save voice mode configuration to flash
+			update_leds(0);
 			write_midi_standard();
 			print_dbg("\r\n standard: wrote midi config");
+			update_leds(1);
 		}
 		else {
 			// mMidiArp
-			print_dbg("\r\n arp: wrote config");
+			update_leds(0);
 			write_midi_arp();
+			print_dbg("\r\n arp: wrote config");
+			update_leds(2);
+
 		}
 		key_state.key2_consumed = 1; // hide the release
 	}
@@ -305,10 +311,39 @@ void handler_MidiFrontShort(s32 data) {
 }
 
 void handler_MidiFrontLong(s32 data) {
-	if (ansible_mode == mMidiStandard)
-		set_mode(mMidiArp);
-	else
-		set_mode(mMidiStandard);
+	if (key_state.key2) {
+		// panic sequence to reset standard/arp mode to defaults
+		if (ansible_mode == mMidiStandard) {
+			default_midi_standard();
+			update_leds(0);
+			delay_ms(50);
+			update_leds(1);
+			delay_ms(50);
+			update_leds(0);
+			delay_ms(50);
+			set_mode(mMidiStandard);
+			print_dbg("\r\n standard: wrote default config");
+		}
+		else {
+			default_midi_arp();
+			update_leds(0);
+			delay_ms(50);
+			update_leds(2);
+			delay_ms(50);
+			update_leds(0);
+			delay_ms(50);
+			set_mode(mMidiArp);
+			print_dbg("\r\n arp: wrote default config");
+		}
+		key_state.key2_consumed = 1;
+	}
+	else {
+		// normal mode switch
+		if (ansible_mode == mMidiStandard)
+			set_mode(mMidiArp);
+		else
+			set_mode(mMidiStandard);
+	}
 }
 
 
