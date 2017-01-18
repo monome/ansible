@@ -28,6 +28,11 @@
 #define MONO_MOD_CV 3
 #define MONO_BEND_CV 3
 
+// NB: default to a -2 octave shift for pitch to help people with
+// small keyboards keep the osc pitch knob closer to mid range.
+// -3277 == N -24 on tt
+#define DEFAULT_PITCH_SHIFT -3277
+
 //------------------------------
 //------ types
 
@@ -484,7 +489,7 @@ void default_midi_standard(void) {
 
 	fixed_write_mapping(&(f.midi_standard_state.fixed), &m);
 
-	flashc_memset16((void*)&(f.midi_standard_state.shift), 0, 2, true);
+	flashc_memset16((void*)&(f.midi_standard_state.shift), DEFAULT_PITCH_SHIFT, 2, true);
 	flashc_memset16((void*)&(f.midi_standard_state.slew), 0, 2, true);
 }
 
@@ -1128,7 +1133,7 @@ void default_midi_arp() {
 		flashc_memset8((void*)&(f.midi_arp_state.p[i].offset), 12, 1, true);
 
 		flashc_memset16((void*)&(f.midi_arp_state.p[i].slew), 0, 2, true);
-		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift), 0, 2, true);
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift), DEFAULT_PITCH_SHIFT, 2, true);
 	}
 }
 
