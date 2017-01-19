@@ -2,30 +2,37 @@
 #include "print_funcs.h"
 #include "flashc.h"
 
+#include "delay.h"
 #include "midi_common.h"
-#include "notes.h"
 #include "arp.h"
+#include "notes.h"
 #include "timers.h"
 #include "util.h"
 
 #include "monome.h"
+#include "ii.h"
 #include "i2c.h"
 #include "gpio.h"
 #include "dac.h"
 
+#include "init_common.h"
 #include "conf_tc_irq.h"
 
 // this
 #include "main.h"
 #include "ansible_midi.h"
 
-#define MIDI_NOTE_MAX 120
 
-#define MONO_PITCH_CV &(aout[0])
-#define MONO_VELOCITY_CV &(aout[1])
-#define MONO_PRESSURE_CV &(aout[2])
-#define MONO_MOD_CV &(aout[3])
-#define MONO_BEND_CV &(aout[3])
+#define MONO_PITCH_CV 0
+#define MONO_VELOCITY_CV 1
+#define MONO_PRESSURE_CV 2
+#define MONO_MOD_CV 3
+#define MONO_BEND_CV 3
+
+// NB: default to a -2 octave shift for pitch to help people with
+// small keyboards keep the osc pitch knob closer to mid range.
+// -3277 == N -24 on tt
+#define DEFAULT_PITCH_SHIFT -3277
 
 //------------------------------
 //------ types
@@ -38,7 +45,9 @@ typedef struct {
 
 typedef struct {
 	u8 key1 : 1;
+	u8 key1_consumed : 1;
 	u8 key2 : 1;
+	u8 key2_consumed : 1;
 	u8 front : 1;
 	u8 normaled : 1; // isn't this tracked elsewhere?
 } key_state_t;
@@ -55,11 +64,15 @@ typedef enum {
 static void write_midi_standard(void);
 static void write_midi_arp(void);
 
-static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset);
-static void set_cv_velocity(uint16_t *cv, u8 vel);
-static void set_cv_cc(uint16_t *cv, u8 value);
+static uint16_t pitch_cv(u8 num, s16 offset);
+static uint16_t velocity_cv(u8 vel);
+static uint16_t cc_cv(u8 value);
+
+static void restore_midi_standard(void);
 
 static void set_voice_allocation(voicing_mode v);
+static void set_voice_slew(voicing_mode v, s16 slew);
+static void set_voice_tune(voicing_mode v, s16 shift);
 
 static void reset(void);
 
@@ -99,9 +112,12 @@ static void fixed_note_on(u8 ch, u8 num, u8 vel);
 static void fixed_note_off(u8 ch, u8 num, u8 vel);
 static void fixed_control_change(u8 ch, u8 num, u8 val);
 
-static void init_arp(void);
+static void restore_midi_arp(void);
+
+static void arp_state_set_hold(bool hold);
 
 static void arp_rebuild(chord_t *c);
+static void arp_reset(void);
 static void arp_next_style(void);
 
 static void arp_note_on(u8 ch, u8 num, u8 vel);
@@ -120,63 +136,70 @@ static void player_note_off(u8 ch, u8 num, u8 vel);
 //-----------------------------
 //----- globals
 
-// step = 4096.0 / (10 octave * 12.0 semitones per octave)
+// step = 16384.0 / (10 octave * 12.0 semitones per octave)
 // [int(n * step) for n in xrange(0,128)]
-const u16 SEMI[128] = { 
-	0, 34, 68, 102, 136, 170, 204, 238, 273, 307, 341, 375, 409, 443, 477, 512,
-	546, 580, 614, 648, 682, 716, 750, 785, 819, 853, 887, 921, 955, 989, 1024,
-	1058, 1092, 1126, 1160, 1194, 1228, 1262, 1297, 1331, 1365, 1399, 1433, 1467,
-	1501, 1536, 1570, 1604, 1638, 1672, 1706, 1740, 1774, 1809, 1843, 1877, 1911,
-	1945, 1979, 2013, 2048, 2082, 2116, 2150, 2184, 2218, 2252, 2286, 2321, 2355,
-	2389, 2423, 2457, 2491, 2525, 2560, 2594, 2628, 2662, 2696, 2730, 2764, 2798,
-	2833, 2867, 2901, 2935, 2969, 3003, 3037, 3072, 3106, 3140, 3174, 3208, 3242,
-	3276, 3310, 3345, 3379, 3413, 3447, 3481, 3515, 3549, 3584, 3618, 3652, 3686,
-	3720, 3754, 3788, 3822, 3857, 3891, 3925, 3959, 3993, 4027, 4061, 4096, 4130,
-	4164, 4198, 4232, 4266, 4300, 4334
+const u16 SEMI14[128] = {
+	0, 136, 273, 409, 546, 682, 819, 955, 1092, 1228, 1365, 1501, 1638,
+	1774, 1911, 2048, 2184, 2321, 2457, 2594, 2730, 2867, 3003, 3140,
+	3276, 3413, 3549, 3686, 3822, 3959, 4096, 4232, 4369, 4505, 4642,
+	4778, 4915, 5051, 5188, 5324, 5461, 5597, 5734, 5870, 6007, 6144,
+	6280, 6417, 6553, 6690, 6826, 6963, 7099, 7236, 7372, 7509, 7645,
+	7782, 7918, 8055, 8192, 8328, 8465, 8601, 8738, 8874, 9011, 9147,
+	9284, 9420, 9557, 9693, 9830, 9966, 10103, 10240, 10376, 10513, 10649,
+	10786, 10922, 11059, 11195, 11332, 11468, 11605, 11741, 11878, 12014,
+	12151, 12288, 12424, 12561, 12697, 12834, 12970, 13107, 13243, 13380,
+	13516, 13653, 13789, 13926, 14062, 14199, 14336, 14472, 14609, 14745,
+	14882, 15018, 15155, 15291, 15428, 15564, 15701, 15837, 15974, 16110,
+	16247, 16384, 16520, 16657, 16793, 16930, 17066, 17203, 17339
 };
 
-// step = 4096.0 / (10 octave * 12.0 semitones per octave)
+// step = 16384.0 / (10 octave * 12.0 semitones per octave)
 // semi_per_octave = step * 12
 // bend_step = semi_per_octave / 512.0
 // [int(n * bend_step) for n in xrange(0,512)]
-const u16 BEND1[512] = {
-	0, 0, 1, 2, 3, 4, 4, 5, 6, 7, 8, 8, 9, 10, 11, 12, 12, 13, 14, 15, 16, 16, 17,
-	18, 19, 20, 20, 21, 22, 23, 24, 24, 25, 26, 27, 28, 28, 29, 30, 31, 32, 32,
-	33, 34, 35, 36, 36, 37, 38, 39, 40, 40, 41, 42, 43, 44, 44, 45, 46, 47, 48,
-	48, 49, 50, 51, 52, 52, 53, 54, 55, 56, 56, 57, 58, 59, 60, 60, 61, 62, 63,
-	64, 64, 65, 66, 67, 68, 68, 69, 70, 71, 72, 72, 73, 74, 75, 76, 76, 77, 78,
-	79, 80, 80, 81, 82, 83, 84, 84, 85, 86, 87, 88, 88, 89, 90, 91, 92, 92, 93,
-	94, 95, 96, 96, 97, 98, 99, 100, 100, 101, 102, 103, 104, 104, 105, 106, 107,
-	108, 108, 109, 110, 111, 112, 112, 113, 114, 115, 116, 116, 117, 118, 119,
-	120, 120, 121, 122, 123, 124, 124, 125, 126, 127, 128, 128, 129, 130, 131,
-	132, 132, 133, 134, 135, 136, 136, 137, 138, 139, 140, 140, 141, 142, 143,
-	144, 144, 145, 146, 147, 148, 148, 149, 150, 151, 152, 152, 153, 154, 155,
-	156, 156, 157, 158, 159, 160, 160, 161, 162, 163, 164, 164, 165, 166, 167,
-	168, 168, 169, 170, 171, 172, 172, 173, 174, 175, 176, 176, 177, 178, 179,
-	180, 180, 181, 182, 183, 184, 184, 185, 186, 187, 188, 188, 189, 190, 191,
-	192, 192, 193, 194, 195, 196, 196, 197, 198, 199, 200, 200, 201, 202, 203,
-	204, 204, 205, 206, 207, 208, 208, 209, 210, 211, 212, 212, 213, 214, 215,
-	216, 216, 217, 218, 219, 220, 220, 221, 222, 223, 224, 224, 225, 226, 227,
-	228, 228, 229, 230, 231, 232, 232, 233, 234, 235, 236, 236, 237, 238, 239,
-	240, 240, 241, 242, 243, 244, 244, 245, 246, 247, 248, 248, 249, 250, 251,
-	252, 252, 253, 254, 255, 256, 256, 257, 258, 259, 260, 260, 261, 262, 263,
-	264, 264, 265, 266, 267, 268, 268, 269, 270, 271, 272, 272, 273, 274, 275,
-	276, 276, 277, 278, 279, 280, 280, 281, 282, 283, 284, 284, 285, 286, 287,
-	288, 288, 289, 290, 291, 292, 292, 293, 294, 295, 296, 296, 297, 298, 299,
-	300, 300, 301, 302, 303, 304, 304, 305, 306, 307, 308, 308, 309, 310, 311,
-	312, 312, 313, 314, 315, 316, 316, 317, 318, 319, 320, 320, 321, 322, 323,
-	324, 324, 325, 326, 327, 328, 328, 329, 330, 331, 332, 332, 333, 334, 335,
-	336, 336, 337, 338, 339, 340, 340, 341, 342, 343, 344, 344, 345, 346, 347,
-	348, 348, 349, 350, 351, 352, 352, 353, 354, 355, 356, 356, 357, 358, 359,
-	360, 360, 361, 362, 363, 364, 364, 365, 366, 367, 368, 368, 369, 370, 371,
-	372, 372, 373, 374, 375, 376, 376, 377, 378, 379, 380, 380, 381, 382, 383,
-	384, 384, 385, 386, 387, 388, 388, 389, 390, 391, 392, 392, 393, 394, 395,
-	396, 396, 397, 398, 399, 400, 400, 401, 402, 403, 404, 404, 405, 406, 407,
-	408, 408
-};
-
-const arp_style player_styles[4] = {
-	eStyleUp, eStyleDown, eStyleUpDown, eStyleRandom
+const u16 BEND1_14[512] = {
+	0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 32, 35, 38, 41, 44, 48, 51, 54,
+	57, 60, 64, 67, 70, 73, 76, 80, 83, 86, 89, 92, 96, 99, 102, 105,
+	108, 112, 115, 118, 121, 124, 128, 131, 134, 137, 140, 144, 147,
+	150, 153, 156, 160, 163, 166, 169, 172, 176, 179, 182, 185, 188,
+	192, 195, 198, 201, 204, 208, 211, 214, 217, 220, 224, 227, 230,
+	233, 236, 240, 243, 246, 249, 252, 256, 259, 262, 265, 268, 272,
+	275, 278, 281, 284, 288, 291, 294, 297, 300, 304, 307, 310, 313,
+	316, 320, 323, 326, 329, 332, 336, 339, 342, 345, 348, 352, 355,
+	358, 361, 364, 368, 371, 374, 377, 380, 384, 387, 390, 393, 396,
+	400, 403, 406, 409, 412, 416, 419, 422, 425, 428, 432, 435, 438,
+	441, 444, 448, 451, 454, 457, 460, 464, 467, 470, 473, 476, 480,
+	483, 486, 489, 492, 496, 499, 502, 505, 508, 512, 515, 518, 521,
+	524, 528, 531, 534, 537, 540, 544, 547, 550, 553, 556, 560, 563,
+	566, 569, 572, 576, 579, 582, 585, 588, 592, 595, 598, 601, 604,
+	608, 611, 614, 617, 620, 624, 627, 630, 633, 636, 640, 643, 646,
+	649, 652, 656, 659, 662, 665, 668, 672, 675, 678, 681, 684, 688,
+	691, 694, 697, 700, 704, 707, 710, 713, 716, 720, 723, 726, 729,
+	732, 736, 739, 742, 745, 748, 752, 755, 758, 761, 764, 768, 771,
+	774, 777, 780, 784, 787, 790, 793, 796, 800, 803, 806, 809, 812,
+	816, 819, 822, 825, 828, 832, 835, 838, 841, 844, 848, 851, 854,
+	857, 860, 864, 867, 870, 873, 876, 880, 883, 886, 889, 892, 896,
+	899, 902, 905, 908, 912, 915, 918, 921, 924, 928, 931, 934, 937,
+	940, 944, 947, 950, 953, 956, 960, 963, 966, 969, 972, 976, 979,
+	982, 985, 988, 992, 995, 998, 1001, 1004, 1008, 1011, 1014, 1017,
+	1020, 1024, 1027, 1030, 1033, 1036, 1040, 1043, 1046, 1049, 1052,
+	1056, 1059, 1062, 1065, 1068, 1072, 1075, 1078, 1081, 1084, 1088,
+	1091, 1094, 1097, 1100, 1104, 1107, 1110, 1113, 1116, 1120, 1123,
+	1126, 1129, 1132, 1136, 1139, 1142, 1145, 1148, 1152, 1155, 1158,
+	1161, 1164, 1168, 1171, 1174, 1177, 1180, 1184, 1187, 1190, 1193,
+	1196, 1200, 1203, 1206, 1209, 1212, 1216, 1219, 1222, 1225, 1228,
+	1232, 1235, 1238, 1241, 1244, 1248, 1251, 1254, 1257, 1260, 1264,
+	1267, 1270, 1273, 1276, 1280, 1283, 1286, 1289, 1292, 1296, 1299,
+	1302, 1305, 1308, 1312, 1315, 1318, 1321, 1324, 1328, 1331, 1334,
+	1337, 1340, 1344, 1347, 1350, 1353, 1356, 1360, 1363, 1366, 1369,
+	1372, 1376, 1379, 1382, 1385, 1388, 1392, 1395, 1398, 1401, 1404,
+	1408, 1411, 1414, 1417, 1420, 1424, 1427, 1430, 1433, 1436, 1440,
+	1443, 1446, 1449, 1452, 1456, 1459, 1462, 1465, 1468, 1472, 1475,
+	1478, 1481, 1484, 1488, 1491, 1494, 1497, 1500, 1504, 1507, 1510,
+	1513, 1516, 1520, 1523, 1526, 1529, 1532, 1536, 1539, 1542, 1545,
+	1548, 1552, 1555, 1558, 1561, 1564, 1568, 1571, 1574, 1577, 1580,
+	1584, 1587, 1590, 1593, 1596, 1600, 1603, 1606, 1609, 1612, 1616,
+	1619, 1622, 1625, 1628, 1632, 1635
 };
 
 // copy of nvram state for editing
@@ -194,6 +217,8 @@ static voice_state_t voice_state;
 
 // arp mode working state
 static chord_t chord;
+static u8 chord_held_notes;
+static bool chord_should_reset;
 static arp_seq_t sequences[2];
 static arp_seq_t *active_seq;
 static arp_seq_t *next_seq;
@@ -203,10 +228,7 @@ static arp_player_t player[4];
 static s16 pitch_offset[4];
 static midi_clock_t midi_clock;
 static key_state_t key_state;
-static uint16_t aout[4];
 static clock_source sync_source;
-
-
 
 void set_mode_midi(void) {
 	switch(ansible_mode) {
@@ -217,8 +239,8 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTr] = &handler_StandardTr;
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
-		set_voice_allocation(standard_state.voicing);
-		clock_set(standard_state.clock_period);
+		restore_midi_standard();
+		init_i2c_slave(II_MID_ADDR);
 		process_ii = &ii_midi_standard;
 		update_leds(1);
 		break;
@@ -229,9 +251,10 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTr] = &handler_ArpTr;
 		app_event_handlers[kEventTrNormal] = &handler_ArpTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_ArpMidiPacket;
-		init_arp();
+		restore_midi_arp();
 		clock = &clock_midi_arp;
 		clock_set(arp_state.clock_period);
+		init_i2c_slave(II_ARP_ADDR);
 		process_ii = &ii_midi_arp;
 		update_leds(2);
 		break;
@@ -247,57 +270,97 @@ void set_mode_midi(void) {
 	sync_source = eClockInternal;
 
 	midi_clock_init(&midi_clock);
-	midi_clock_set_div(&midi_clock, 2); // 8th notes; TODO; make configurable?
+	midi_clock_set_div(&midi_clock, 4); // 16th notes (24 ppq / 4 == 6 pp 16th)
 
 	key_state.key1 = key_state.key2 = key_state.front = 0;
+	key_state.key1_consumed = key_state.key2_consumed = 0;
 	key_state.normaled = !gpio_get_pin_value(B10);
-	
-	aout[0] = aout[1] = aout[2] = aout[3] = 0;
-	update_dacs(aout);
+
+	for (u8 i = 0; i < 4; i++) {
+		pitch_offset[i] = 0;
+		dac_set_value_noslew(i, 0);
+	}
+	dac_update_now();
 }
 
 
 void handler_MidiFrontShort(s32 data) {
-	if (ansible_mode == mMidiStandard) {
-		if (standard_state.voicing == eVoiceFixed && key_state.key2) {
-			fixed_start_learning();
-		}
-		else {
+	if (key_state.key2) {
+		if (ansible_mode == mMidiStandard) {
 			// save voice mode configuration to flash
+			update_leds(0);
 			write_midi_standard();
 			print_dbg("\r\n standard: wrote midi config");
+			update_leds(1);
 		}
+		else {
+			// mMidiArp
+			update_leds(0);
+			write_midi_arp();
+			print_dbg("\r\n arp: wrote config");
+			update_leds(2);
+
+		}
+		key_state.key2_consumed = 1; // hide the release
 	}
-	else {
-		// mMidiArp
-		print_dbg("\r\n arp: wrote config");
-		write_midi_arp();
+	else if (key_state.key1 && ansible_mode == mMidiStandard &&
+					 standard_state.voicing == eVoiceFixed) {
+		key_state.key1_consumed = 1;
+		fixed_start_learning();
 	}
 }
 
 void handler_MidiFrontLong(s32 data) {
-	if(ansible_mode == mMidiStandard)
-		set_mode(mMidiArp);
-	else
-		set_mode(mMidiStandard);
+	if (key_state.key2) {
+		// panic sequence to reset standard/arp mode to defaults
+		if (ansible_mode == mMidiStandard) {
+			default_midi_standard();
+			update_leds(0);
+			delay_ms(50);
+			update_leds(1);
+			delay_ms(50);
+			update_leds(0);
+			delay_ms(50);
+			set_mode(mMidiStandard);
+			print_dbg("\r\n standard: wrote default config");
+		}
+		else {
+			default_midi_arp();
+			update_leds(0);
+			delay_ms(50);
+			update_leds(2);
+			delay_ms(50);
+			update_leds(0);
+			delay_ms(50);
+			set_mode(mMidiArp);
+			print_dbg("\r\n arp: wrote default config");
+		}
+		key_state.key2_consumed = 1;
+	}
+	else {
+		// normal mode switch
+		if (ansible_mode == mMidiStandard)
+			set_mode(mMidiArp);
+		else
+			set_mode(mMidiStandard);
+	}
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 ///// common cv utilities
 
-static void set_cv_pitch(uint16_t *cv, u8 num, s16 offset) {
-	*cv = SEMI[num] + offset;
+inline static uint16_t pitch_cv(u8 num, s16 offset) {
+	return SEMI14[num] + offset;
 }
 
-static void set_cv_velocity(uint16_t *cv, u8 vel) {
-	// for the moment, straight mapping
-	*cv = vel << 5;
+inline static uint16_t velocity_cv(u8 vel) {
+	// 128 << 7 == 16384; 14-bit val, shift to 12-bit on dac update
+	return vel << 7;
 }
 
-static inline void set_cv_cc(uint16_t *cv, u8 value) {
-	// 128 << 5 == 4096; 12-bit dac
-	*cv = value << 5;
+inline static uint16_t cc_cv(u8 value) {
+	return value << 7;
 }
 
 static void reset(void) {
@@ -306,9 +369,9 @@ static void reset(void) {
 		voice_flags_init(&(flags[i]));
 		notes_init(&(notes[i]));
 		pitch_offset[i] = 0;
-		aout[i] = 0;
+		dac_set_value_noslew(i, 0);
 	}
-	update_dacs(aout);
+	dac_update_now();
 	clr_tr(TR1);
 	clr_tr(TR2);
 	clr_tr(TR3);
@@ -385,9 +448,63 @@ static void set_voice_allocation(voicing_mode v) {
 	}
 }
 
+static void set_voice_slew(voicing_mode v, s16 slew) {
+	u8 i;
+
+	switch (v) {
+	case eVoicePoly:
+	case eVoiceMulti:
+		for (i = 0; i < 4; i++) {
+			dac_set_slew(i, slew);
+		}
+		break;
+	case eVoiceMono:
+		dac_set_slew(0, slew);  // pitch
+		dac_set_slew(1, 0);     // velocity
+		dac_set_slew(2, 5);     // channel pressure
+		dac_set_slew(3, 5);     // mod
+		break;
+	default:
+		for (i = 0; i < 4; i++) {
+			dac_set_slew(i, 0);
+		}
+		break;
+	}
+}
+
+static void set_voice_tune(voicing_mode v, s16 shift) {
+	u8 i;
+
+	switch (v) {
+	case eVoicePoly:
+	case eVoiceMulti:
+		for (i = 0; i < 4; i++) {
+			dac_set_off(i, shift);
+		}
+		break;
+	case eVoiceMono:
+		dac_set_off(0, shift);  // pitch
+		dac_set_off(1, 0);      // velocity
+		dac_set_off(2, 0);      // channel pressure
+		dac_set_off(3, 0);      // mod
+		break;
+	default:
+		for (i = 0; i < 4; i++) {
+			dac_set_off(i, 0);
+		}
+		break;
+	}
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ///// handlers (standard)
+static void restore_midi_standard(void) {
+	set_voice_allocation(standard_state.voicing);
+	set_voice_slew(standard_state.voicing, standard_state.slew);
+	set_voice_tune(standard_state.voicing, standard_state.shift);
+	clock_set(standard_state.clock_period);
+}
 
 void default_midi_standard(void) {
 	fixed_mapping_t m;
@@ -406,6 +523,9 @@ void default_midi_standard(void) {
 	m.cc[3] = 19;
 
 	fixed_write_mapping(&(f.midi_standard_state.fixed), &m);
+
+	flashc_memset16((void*)&(f.midi_standard_state.shift), DEFAULT_PITCH_SHIFT, 2, true);
+	flashc_memset16((void*)&(f.midi_standard_state.slew), 0, 2, true);
 }
 
 void write_midi_standard(void) {
@@ -413,7 +533,14 @@ void write_midi_standard(void) {
 									standard_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_standard_state.voicing),
 								 standard_state.voicing, 1, true);
+
 	fixed_write_mapping(&(f.midi_standard_state.fixed), &standard_state.fixed);
+
+	flashc_memset16((void*)&(f.midi_standard_state.shift),
+									standard_state.shift, 2, true);
+	flashc_memset16((void*)&(f.midi_standard_state.slew),
+									standard_state.slew, 2, true);
+
 }
 
 void clock_midi_standard(uint8_t phase) {
@@ -424,7 +551,36 @@ void clock_midi_standard(uint8_t phase) {
 }
 
 void ii_midi_standard(uint8_t *d, uint8_t l) {
-	;;
+	s16 s;
+
+	if (l) {
+		switch (d[0]) {
+		case II_MID_SLEW:
+			s = sclip((int16_t)((d[1] << 8) + d[2]), 0, 20000);
+
+			// print_dbg("\r\nmid ii slew: ");
+			// print_dbg_ulong(s);
+
+			standard_state.slew = s;
+			set_voice_slew(standard_state.voicing, s);
+			break;
+
+		case II_MID_SHIFT:
+			s = (int16_t)((d[1] << 8) + d[2]);
+
+			// print_dbg("\r\nmid ii shift: ");
+			// print_dbg_hex(s);
+
+			standard_state.shift = s;
+			set_voice_tune(standard_state.voicing, s);
+			break;
+
+		default:
+			print_dbg("\r\nmid ii; unknown command: ");
+			print_dbg_ulong(d[0]);
+			break;
+		}
+	}
 }
 
 void handler_StandardKey(s32 data) { 
@@ -432,12 +588,18 @@ void handler_StandardKey(s32 data) {
 
 	case 0: // key 1 release
 		key_state.key1 = 0;
-		if (fixed_learn.learning == 1 ) {
-			fixed_finalize_learning(true);
+		if (key_state.key1_consumed) {
+			key_state.key1_consumed = 0;
 		}
 		else {
-			// panic, all notes off
-			if (active_behavior.panic) (*active_behavior.panic)();
+			if (fixed_learn.learning == 1) {
+				// cancel learning
+				fixed_finalize_learning(true);
+			}
+			else if (active_behavior.panic) {
+				// panic, all notes off
+				(*active_behavior.panic)();
+			}
 		}
 		break;
 
@@ -447,16 +609,23 @@ void handler_StandardKey(s32 data) {
 
 	case 2: // key 2 release
 		key_state.key2 = 0;
-		if (fixed_learn.learning == 1) {
-			// in learning mode; do nothing
+		if (key_state.key2_consumed) {
+			key_state.key2_consumed = 0;
 		}
 		else {
-			// switch voicing mode
-			standard_state.voicing++;
-			if (standard_state.voicing >= eVoiceMAX) {
-				standard_state.voicing = eVoicePoly;
+			if (fixed_learn.learning == 1) {
+				// in learning mode; do nothing
 			}
-			set_voice_allocation(standard_state.voicing);
+			else {
+				// switch voicing mode
+				standard_state.voicing++;
+				if (standard_state.voicing >= eVoiceMAX) {
+					standard_state.voicing = eVoicePoly;
+				}
+				set_voice_allocation(standard_state.voicing);
+				set_voice_slew(standard_state.voicing, standard_state.slew);
+				set_voice_tune(standard_state.voicing, standard_state.shift);
+			}
 		}
 		break;
 
@@ -513,19 +682,20 @@ static void poly_pitch_bend(u8 ch, u16 bend) {
 	}
 	else if (bend > MIDI_BEND_ZERO) {
 		bend -= MIDI_BEND_ZERO;
-		pitch_offset[0] = BEND1[bend >> 4];
+		pitch_offset[0] = BEND1_14[bend >> 4];
 	}
 	else {
 		bend = MIDI_BEND_ZERO - bend - 1;
-		pitch_offset[0] = -BEND1[bend >> 4];
+		pitch_offset[0] = -BEND1_14[bend >> 4];
 	}
 
 	for (u8 i = 0; i < voice_state.count; i++) {
 		if (voice_slot_active(&voice_state, i)) {
-			set_cv_pitch(&(aout[i]), voice_slot_num(&voice_state, i), pitch_offset[0]);
+			dac_set_value(i, pitch_cv(voice_slot_num(&voice_state, i),
+																pitch_offset[0]));
 		}
 	}
-	update_dacs(aout);
+	dac_update_now();
 }
 
 static void poly_sustain(u8 ch, u8 val) {
@@ -567,9 +737,9 @@ static void mono_note_on(u8 ch, u8 num, u8 vel) {
 
 	// keep track of held notes for legato and pitch bend
 	notes_hold(&notes[0], num, vel);
-	set_cv_pitch(MONO_PITCH_CV, num, pitch_offset[0]);
-	set_cv_velocity(MONO_VELOCITY_CV, vel);
-	update_dacs(aout);
+	dac_set_value(MONO_PITCH_CV, pitch_cv(num, pitch_offset[0]));
+	dac_set_value_noslew(MONO_VELOCITY_CV, velocity_cv(vel));
+	dac_update_now();
 	set_tr(TR1);
 }
 
@@ -583,9 +753,9 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 		notes_release(&notes[0], num);
 		prior = notes_get(&notes[0], kNotePriorityLast);
 		if (prior) {
-			set_cv_pitch(MONO_PITCH_CV, prior->num, pitch_offset[0]);
-			set_cv_velocity(MONO_VELOCITY_CV, prior->vel);
-			update_dacs(aout);
+			dac_set_value(MONO_PITCH_CV, pitch_cv(prior->num, pitch_offset[0]));
+			dac_set_value(MONO_VELOCITY_CV, velocity_cv(prior->vel));
+			dac_update_now();
 		}
 		else {
 			clr_tr(TR1);
@@ -600,18 +770,18 @@ static void mono_pitch_bend(u8 ch, u16 bend) {
 	}
 	else if (bend > MIDI_BEND_ZERO) {
 		bend -= MIDI_BEND_ZERO;
-		pitch_offset[0] = BEND1[bend >> 4];
+		pitch_offset[0] = BEND1_14[bend >> 4];
 	}
 	else {
 		bend = MIDI_BEND_ZERO - bend - 1;
-		pitch_offset[0] = -BEND1[bend >> 4];
+		pitch_offset[0] = -BEND1_14[bend >> 4];
 	}
 
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[0]), kNotePriorityLast);
 	if (active) {
-		set_cv_pitch(MONO_PITCH_CV, active->num, pitch_offset[0]);
-		update_dacs(aout);
+		dac_set_value(MONO_PITCH_CV, pitch_cv(active->num, pitch_offset[0]));
+		dac_update_now();
 	}
 }
 
@@ -630,8 +800,8 @@ static void mono_sustain(u8 ch, u8 val) {
 }
 
 static void mono_channel_pressure(u8 ch, u8 val) {
-	set_cv_cc(MONO_PRESSURE_CV, val);
-	update_dacs(aout);
+	dac_set_value_noslew(MONO_PRESSURE_CV, cc_cv(val));
+	dac_update_now();
 }
 
 static void mono_generic(u8 ch, u8 val) {
@@ -641,8 +811,8 @@ static void mono_generic(u8 ch, u8 val) {
 static void mono_control_change(u8 ch, u8 num, u8 val) {
 		switch (num) {
 		case 1:  // mod wheel
-			set_cv_cc(MONO_MOD_CV, val);
-			update_dacs(aout);
+			dac_set_value_noslew(MONO_MOD_CV, cc_cv(val));
+			dac_update_now();
 			break;
 		case 64:  // sustain pedal
 			mono_sustain(ch, val);
@@ -751,8 +921,8 @@ static void multi_note_on(u8 ch, u8 num, u8 vel) {
 		return;
 
 	notes_hold(&notes[ch], num, vel);
-	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
-	update_dacs(aout);
+	dac_set_value(ch, pitch_cv(num, pitch_offset[ch]));
+	dac_update_now();
 	multi_tr_set(ch);
 }
 
@@ -767,8 +937,8 @@ static void multi_note_off(u8 ch, u8 num, u8 vel) {
 		if (flags[ch].legato) {
 			prior = notes_get(&notes[ch], kNotePriorityLast);
 			if (prior) {
-				set_cv_pitch(&(aout[ch]), prior->num, pitch_offset[ch]);
-				update_dacs(aout);
+				dac_set_value(ch, pitch_cv(prior->num, pitch_offset[ch]));
+				dac_update_now();
 			}
 			else {
 				multi_tr_clr(ch);
@@ -791,18 +961,18 @@ static void multi_pitch_bend(u8 ch, u16 bend) {
 	}
 	else if (bend > MIDI_BEND_ZERO) {
 		bend -= MIDI_BEND_ZERO;
-		pitch_offset[ch] = BEND1[bend >> 4];
+		pitch_offset[ch] = BEND1_14[bend >> 4];
 	}
 	else {
 		bend = MIDI_BEND_ZERO - bend - 1;
-		pitch_offset[ch] = -BEND1[bend >> 4];
+		pitch_offset[ch] = -BEND1_14[bend >> 4];
 	}
 
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[ch]), kNotePriorityLast);
 	if (active) {
-		set_cv_pitch(&(aout[ch]), active->num, pitch_offset[ch]);
-		update_dacs(aout);
+		dac_set_value(ch, pitch_cv(active->num, pitch_offset[ch]));
+		dac_update_now();
 	}
 }
 
@@ -853,9 +1023,9 @@ static void fixed_start_learning(void) {
 	fixed_learn.cc_idx = 0;
 	for (u8 i = 0; i < 4; i++) {
 		multi_tr_clr(i);
-		aout[i] = 0;
+		dac_set_value_noslew(i, 0);
 	}
-	update_dacs(aout);
+	dac_update_now();
 }
 
 static bool fixed_finalize_learning(bool cancel) {
@@ -865,13 +1035,13 @@ static bool fixed_finalize_learning(bool cancel) {
 		// clear all tr and cv
 		for (u8 i = 0; i < 4; i++) {
 			multi_tr_clr(i);
-			aout[i] = 0;
+			dac_set_value_noslew(i, 0);
 			print_dbg("\r\n n: ");
 			print_dbg_ulong(standard_state.fixed.notes[i]);
 			print_dbg(" cc: ");
 			print_dbg_ulong(standard_state.fixed.cc[i]);
 		}
-		update_dacs(aout);
+		dac_update_now();
 
 		if (!cancel) {
 			fixed_write_mapping(&(f.midi_standard_state.fixed), &(standard_state.fixed));
@@ -959,8 +1129,8 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 			}
 			// update outputs to provide feedback
 			if (fixed_learn.cc_idx < 4) {
-				aout[fixed_learn.cc_idx] = val << 5;
-				update_dacs(aout);
+				dac_set_value_noslew(fixed_learn.cc_idx, cc_cv(val));
+				dac_update_now();
 			}
 		}
 		if (fixed_finalize_learning(false)) {
@@ -971,8 +1141,8 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 	else {
 		for (u8 i = 0; i < 4; i++) {
 			if (standard_state.fixed.cc[i] == num) {
-				aout[i] = val << 5;
-				update_dacs(aout);
+				dac_set_value_noslew(i, cc_cv(val));
+				dac_update_now();
 				break;
 			}
 		}
@@ -985,20 +1155,60 @@ static void fixed_control_change(u8 ch, u8 num, u8 val) {
 
 void default_midi_arp() {
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period), 100, 4, true);
-	flashc_memset8((void*)&(f.midi_arp_state.style), eStyleUp, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.style), eStylePlayed, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.hold), 0, 1, true);
+
+	for (u8 i = 0; i < 4; i++) {
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].fill), 1, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].division), i + 1, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].rotation), 0, 1, true);
+
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].gate), 0, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].steps), 0, 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].offset), 12, 1, true);
+
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].slew), 0, 2, true);
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift), DEFAULT_PITCH_SHIFT, 2, true);
+	}
 }
 
 void write_midi_arp(void) {
+	arp_player_t *p;
+
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period),
 									arp_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style),
 								 arp_state.style, 1, true);
+	flashc_memset8((void*)&(f.midi_arp_state.hold),
+								 arp_state.hold, 1, true);
+
+	for (u8 i = 0; i < 4; i++) {
+		p = &(player[i]);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].fill),
+									 arp_player_get_fill(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].division),
+									 arp_player_get_division(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].rotation),
+									 arp_player_get_rotation(p), 1, true);
+
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].gate),
+									 arp_player_get_gate_width(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].steps),
+									 arp_player_get_steps(p), 1, true);
+		flashc_memset8((void*)&(f.midi_arp_state.p[i].offset),
+									 arp_player_get_offset(p), 1, true);
+
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].slew),
+										dac_get_slew(i), 2, true);
+		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift),
+										dac_get_off(i), 2, true);
+	}
 }
 
 static void arp_next_style(void) {
 	arp_state.style++;
 	if (arp_state.style > eStyleRandom) {
-		arp_state.style = eStyleUp;
+		arp_state.style = eStylePlayed;
 	}
 	print_dbg("\r\n arp style: ");
 	print_dbg_ulong(arp_state.style);
@@ -1027,26 +1237,23 @@ static bool arp_seq_switch_active(void) {
 }
 
 static void arp_clock_pulse(uint8_t phase) {
-	bool switched = false;
-
 	if (phase) {
-		switched = arp_seq_switch_active();
-		//if (switched) {
-		//	print_dbg("\r\n arp seq: ");
-		//	for (u8 i = 0; i < active_seq->length; i++) {
-		//		print_dbg_ulong(active_seq->notes[i].note.num);
-		//		print_dbg(" ");
-		//	}
-		//}
+		arp_seq_switch_active();
 	}
 
 	for (u8 i = 0; i < 4; i++) {
-		if (switched) {
-			arp_player_reset(&(player[i]), &player_behavior);
-		}
 		arp_player_pulse(&(player[i]), active_seq, &player_behavior, phase);
 	}
-	update_dacs(aout);
+	
+	// NB: forcing a dac update so that when there is no slewing cv
+	// changes ~30us after the tr goes high. without this cv change is
+	// delayed ~1ms or more based on the update timer freq. that said
+	// doing this does result in cv arriving at the target before
+	// slew_ms since the first slew step is executed here...
+	//
+	// calling the timer update function is safe since this function is
+	// running at interrupt level as well.
+	dac_timer_update();
 }
 
 void clock_midi_arp(uint8_t phase) {
@@ -1058,7 +1265,214 @@ void clock_midi_arp(uint8_t phase) {
 }
 
 void ii_midi_arp(uint8_t *d, uint8_t l) {
-	;;
+	arp_player_t *p;
+	u8 i, v, p1, p2;
+	s16 s;
+
+	if (l) {
+		switch (d[0]) {
+		case II_ARP_STYLE:
+			p1 = uclip(d[1], eStylePlayed, eStyleRandom);
+
+			// print_dbg("\r\narp ii style: ");
+			// print_dbg_ulong(p1);
+
+			arp_state.style = p1;
+			arp_rebuild(&chord);
+			break;
+			
+		case II_ARP_HOLD:
+			// print_dbg("\r\narp ii hold: ");
+			// print_dbg_ulong(d[1]);
+
+			arp_state_set_hold(d[1] > 0);
+			break;
+
+		case II_ARP_RPT:
+			v = uclip(d[1], 0, 4);
+			p1 = uclip(d[2], 0, 8);
+			s = sclip((int16_t)((d[3] << 8) + d[4]), -24, 24);
+			
+			// print_dbg("\r\narp ii rpt: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_steps(&(player[i]), p1);
+					arp_player_set_offset(&(player[i]), s);
+			}
+			else {
+				arp_player_set_steps(&(player[v-1]), p1);
+				arp_player_set_offset(&(player[v-1]), s);
+			}
+			break;
+			
+		case II_ARP_GATE:
+			v = uclip(d[1], 0, 4);
+			p1 = uclip(d[2], 0, 127);
+
+			// print_dbg("\r\narp ii gate: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
+			// FIXME: the gate width input range is 0-127, should tt range
+			// be non-midi like say 0-100?
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_gate_width(&(player[i]), p1);
+			}
+			else {
+				arp_player_set_gate_width(&(player[v-1]), p1);
+			}
+			break;
+
+		case II_ARP_DIV:
+			v = uclip(d[1], 0, 4);
+			p1 = uclip(d[2], 1, 32);  // NB: 32 is maximum for euclidean tables
+
+			// print_dbg("\r\narp ii div: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_division(&(player[i]), p1, &player_behavior);
+			}
+			else {
+				arp_player_set_division(&(player[v-1]), p1, &player_behavior);
+			}
+			break;
+
+		case II_ARP_FILL:
+			v = uclip(d[1], 0, 4);
+			p1 = uclip(d[2], 0, 32);  // NB: 32 is maximum for euclidean tables
+
+			// print_dbg("\r\narp ii fill: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_fill(&(player[i]), p1);
+			}
+			else {
+				arp_player_set_fill(&(player[v-1]), p1);
+			}
+			break;
+
+		case II_ARP_ROT:
+			v = uclip(d[1], 0, 4);
+			s = sclip((int16_t)((d[2] << 8) + d[3]), -32, 32);
+
+			// print_dbg("\r\narp ii rot: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_set_rotation(&(player[i]), s);
+			}
+			else {
+				arp_player_set_rotation(&(player[v-1]), s);
+			}
+			break;
+
+		case II_ARP_ER:
+			v = uclip(d[1], 0, 4);
+			p1 = uclip(d[2], 0, 32);  // NB: 32 is maximum for euclidean tables
+			p2 = uclip(d[3], 1, 32);
+			s = sclip((int16_t)((d[4] << 8) + d[5]), -32, 32);
+
+			// print_dbg("\r\narp ii er: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(p1);
+			// print_dbg(" ");
+			// print_dbg_ulong(p2);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++) {
+					p = &(player[i]);
+					arp_player_set_division(p, p2, &player_behavior);
+					arp_player_set_fill(p, p1);
+					arp_player_set_rotation(p, s);
+				}
+			}
+			else {
+				p = &(player[v-1]);
+				arp_player_set_division(p, p2, &player_behavior);
+				arp_player_set_fill(p, p1);
+				arp_player_set_rotation(p, s);
+			}
+			break;
+
+		case II_ARP_SLEW:
+			v = uclip(d[1], 0, 4);
+			s = sclip((int16_t)((d[2] << 8) + d[3]), 0, 20000);
+
+			// print_dbg("\r\narp ii slew: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_ulong(s);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					dac_set_slew(i, s);
+			}
+			else {
+				dac_set_slew(v-1, s);
+			}
+			break;
+
+		case II_ARP_RESET:
+			v = uclip(d[1], 0, 4);
+
+			// print_dbg("\r\narp ii reset: ");
+			// print_dbg_ulong(v);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					arp_player_reset(&(player[i]), &player_behavior);
+			}
+			else {
+				arp_player_reset(&(player[v-1]), &player_behavior);
+			}
+			break;
+
+		case II_ARP_SHIFT:
+			v = uclip(d[1], 0, 4);
+			s = (int16_t)((d[2] << 8) + d[3]);
+
+			// print_dbg("\r\narp ii shift: ");
+			// print_dbg_ulong(v);
+			// print_dbg(" ");
+			// print_dbg_hex(s);
+
+			if (v == 0) {
+				for (i = 0; i < 4; i++)
+					dac_set_off(i, s);
+			}
+			else {
+				dac_set_off(v-1, s);
+			}
+			break;
+
+		default:
+			print_dbg("\r\narp ii; unknown command: ");
+			print_dbg_ulong(d[0]);
+			break;
+		}
+	}
 }
 
 void handler_ArpKey(s32 data) { 
@@ -1071,32 +1485,47 @@ void handler_ArpKey(s32 data) {
 		key_state.key1 = 0;
 		break;
 	case 1:
-		// key 1 press: tap tempo / force internal clock
+		// key 1 press: tap tempo / force internal clock or toggle hold
 		key_state.key1 = 1;
-		if (tapped) {
-			if (sync_source == eClockMidi) {
-				sync_source = eClockInternal;
-			}
-			tapped = false;
-			now = time_now();
-			now = uclip(now >> 1, 23, 1000); // range in ms
-			print_dbg("\r\n arp tap: ");
-			print_dbg_ulong(now);
-			arp_state.clock_period = now;
-			clock_set_tr(now, 0);
+		if (key_state.key2 == 1) {
+			arp_state_set_hold(!arp_state.hold);
+			key_state.key2 = 0; // goofy; use this to signal to case 2 that style should change
 		}
 		else {
-			tapped = true;
-			time_clear();
+			if (tapped) {
+				if (sync_source == eClockMidi) {
+					sync_source = eClockInternal;
+				}
+				tapped = false;
+				now = time_now();
+				now = uclip(now >> 1, 23, 1000); // range in ms
+				print_dbg("\r\n arp tap: ");
+				print_dbg_ulong(now);
+				arp_state.clock_period = now;
+				clock_set_tr(now, 0);
+			}
+			else {
+				tapped = true;
+				time_clear();
+			}
 		}
 		break;
 	case 2:
+		// key 2 release
+		if (key_state.key2_consumed) {
+			key_state.key2_consumed = 0;
+		}
+		else {
+			if (key_state.key1 == 0 && key_state.key2 == 1) {
+				// arp mode swetch on release if not toggling hold mode
+				arp_next_style();
+			}
+		}
 		key_state.key2 = 0;
 		break;
 	case 3:
-		// key 2 press: arp mode switch
+		// key 2 press
 		key_state.key2 = 1;
-		arp_next_style();
 		break;
 	}
 }
@@ -1150,8 +1579,12 @@ void handler_ArpMidiPacket(s32 data) {
 	midi_packet_parse(&active_behavior, (u32)data);
 }
 
-void init_arp(void) {
+void restore_midi_arp(void) {
+	arp_player_t *p;
+
 	chord_init(&chord);
+	chord_held_notes = 0;
+	chord_should_reset = false;
 
 	// ping pong
 	active_seq = &sequences[0];
@@ -1160,12 +1593,19 @@ void init_arp(void) {
 	arp_seq_init(next_seq);
 
 	// ensure style matches stored config
-	arp_seq_build(active_seq, arp_state.style, &chord);
-	arp_seq_build(next_seq, arp_state.style, &chord);
+	arp_seq_build(active_seq, arp_state.style, &chord, &(notes[0]));
+	arp_seq_build(next_seq, arp_state.style, &chord, &(notes[0]));
 	
 	for (u8 i = 0; i < 4; i++) {
-		arp_player_init(&(player[i]), i, i + 1);
-		arp_player_set_gate_width(&(player[i]), 0); // triggers
+		p = &(player[i]);
+		arp_player_init(p, i, arp_state.p[i].division);
+		arp_player_set_gate_width(p, arp_state.p[i].gate);
+		arp_player_set_steps(p, arp_state.p[i].steps);
+		arp_player_set_offset(p, arp_state.p[i].offset);
+		arp_player_set_fill(p, arp_state.p[i].fill);
+
+		dac_set_off(i, arp_state.p[i].shift);
+		dac_set_slew(i, arp_state.p[i].slew);
 	}
 
 	active_behavior.note_on = &arp_note_on;
@@ -1191,12 +1631,29 @@ void init_arp(void) {
 	player_behavior.panic = NULL;
 }
 
+static void arp_state_set_hold(bool hold) {
+	if (hold != arp_state.hold) {
+		arp_state.hold = hold;
+		print_dbg("\r\n arp hold: ");
+		print_dbg_ulong(arp_state.hold);
+
+		if (arp_state.hold) {
+			// entering hold mode, preserve chord
+			chord_held_notes = chord.note_count;
+		}
+		else {
+			// existing hold mode, reset arp
+			arp_reset();
+		}
+	}
+}
+
 static void arp_rebuild(chord_t *c) {
 	arp_seq_state current_state = arp_seq_get_state(next_seq);
 	
 	if (current_state == eSeqFree || current_state == eSeqWaiting) {
 		arp_seq_set_state(next_seq, eSeqBuilding); // TODO: check return
-		arp_seq_build(next_seq, arp_state.style, &chord);
+		arp_seq_build(next_seq, arp_state.style, &chord, &(notes[0]));
 		arp_seq_set_state(next_seq, eSeqWaiting);
 	}
 	else {
@@ -1204,14 +1661,45 @@ static void arp_rebuild(chord_t *c) {
 	}
 }
 
+static void arp_reset(void) {
+	// used when exiting held mode
+	chord_should_reset = false;
+	chord_init(&chord);
+	notes_init(&(notes[0]));
+	arp_rebuild(&chord);
+}
+
 static void arp_note_on(u8 ch, u8 num, u8 vel) {
+	if (arp_state.hold) {
+		if (chord_should_reset) {
+			//print_dbg("\r\n > arp: hold chord resetting");
+			chord_should_reset = false;
+			chord_init(&chord);
+			notes_init(&(notes[0]));
+		}
+		chord_held_notes++;
+
+		//print_dbg("\r\n > arp: chord held: ");
+		//print_dbg_ulong(chord_held_notes);
+	}
 	chord_note_add(&chord, num, vel);
+	notes_hold(&(notes[0]), num, vel);
 	arp_rebuild(&chord);
 }
 
 static void arp_note_off(u8 ch, u8 num, u8 vel) {
-	chord_note_release(&chord, num);
-	arp_rebuild(&chord);
+	if (arp_state.hold && chord_contains(&chord, num)) {
+		chord_held_notes--;
+		if (chord_held_notes == 0) {
+			//print_dbg("\r\n > arp chord should reset");
+			chord_should_reset = true;
+		}
+	}
+	else {
+		chord_note_release(&chord, num);
+		notes_release(&(notes[0]), num);
+		arp_rebuild(&chord);
+	}
 }
 
 static void arp_pitch_bend(u8 ch, u16 bend) {
@@ -1301,7 +1789,14 @@ static void player_note_on(u8 ch, u8 num, u8 vel) {
 	if (ch > 3 || num > MIDI_NOTE_MAX)
 		return;
 
-	set_cv_pitch(&(aout[ch]), num, pitch_offset[ch]);
+	/*
+	if (ch == 0) {
+		print_dbg("\r\n >> p note on: ");
+		print_dbg_ulong(num);
+	}
+	*/
+
+	dac_set_value(ch, SEMI14[num]);
 	multi_tr_set(ch);
 }
 
