@@ -109,7 +109,7 @@ void set_mode_arc(void) {
 		update_leds(1);
 		break;
 	case mArcCycles:
-		print_dbg("\r\n> mode arc cycles");
+		// print_dbg("\r\n> mode arc cycles");
 		app_event_handlers[kEventKey] = &handler_CyclesKey;
 		app_event_handlers[kEventTr] = &handler_CyclesTr;
 		app_event_handlers[kEventTrNormal] = &handler_CyclesTrNormal;
@@ -1383,8 +1383,6 @@ void init_cycles() {
 }
 
 void resume_cycles() {
-	print_dbg("\r\n> RESUME mode arc cycles");
-
 	uint8_t i1;
 
 	mode = 0;
