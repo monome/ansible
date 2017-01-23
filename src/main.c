@@ -62,7 +62,7 @@ usb flash
 #include "ansible_arc.h"
 #include "ansible_midi.h"
 #include "ansible_tt.h"
-	
+
 
 #define FIRSTRUN_KEY 0x22
 
@@ -115,7 +115,7 @@ static softTimer_t monomePollTimer = { .next = NULL, .prev = NULL };
 static softTimer_t monomeRefreshTimer  = { .next = NULL, .prev = NULL };
 static softTimer_t midiPollTimer = { .next = NULL, .prev = NULL };
 
-softTimer_t auxTimer[4] = { 
+softTimer_t auxTimer[4] = {
 	{ .next = NULL, .prev = NULL },
 	{ .next = NULL, .prev = NULL },
 	{ .next = NULL, .prev = NULL },
@@ -126,21 +126,21 @@ static uint8_t clock_phase;
 
 void handler_None(s32 data) { ;; }
 
-static void clockTimer_callback(void* o) {  
+static void clockTimer_callback(void* o) {
 	clock_phase++;
 	if(clock_phase > 1)
 		clock_phase = 0;
 	clock(clock_phase);
 }
 
-static void keyTimer_callback(void* o) {  
+static void keyTimer_callback(void* o) {
 	static event_t e;
 	e.type = kEventKeyTimer;
 	e.data = 0;
 	event_post(&e);
 }
 
-static void cvTimer_callback(void* o) {  
+static void cvTimer_callback(void* o) {
 	dac_timer_update();
 }
 
@@ -205,11 +205,11 @@ void set_mode(ansible_mode_t m) {
 ////////////////////////////////////////////////////////////////////////////////
 // event handlers
 
-static void handler_FtdiConnect(s32 data) { 
+static void handler_FtdiConnect(s32 data) {
 	ftdi_setup();
 }
 
-static void handler_FtdiDisconnect(s32 data) { 
+static void handler_FtdiDisconnect(s32 data) {
 	timers_unset_monome();
 	app_event_handlers[ kEventFrontShort ]	= &handler_FrontShort;
 	app_event_handlers[ kEventFrontLong ]	= &handler_FrontLong;
@@ -245,8 +245,8 @@ static void handler_MonomeConnect(s32 data) {
 	timers_set_monome();
 }
 
-static void handler_MonomePoll(s32 data) { 
-	monome_read_serial(); 
+static void handler_MonomePoll(s32 data) {
+	monome_read_serial();
 }
 
 static void handler_MidiConnect(s32 data) {
@@ -285,10 +285,10 @@ static void handler_Front(s32 data) {
 }
 
 static void handler_FrontShort(s32 data) {
-	if(ansible_mode == mTT)
-		set_mode(f.state.none_mode);
-	else
+	if(ansible_mode != mTT) {
+		flashc_memset32((void*)&(f.state.none_mode), mTT, 4, true);
 		set_mode(mTT);
+	}
 }
 
 static void handler_FrontLong(s32 data) {
@@ -502,7 +502,7 @@ int main(void)
 		default_midi_standard();
 		default_midi_arp();
 		default_tt();
-		
+
 		flash_unfresh();
 	}
 
@@ -539,10 +539,11 @@ int main(void)
 	timer_add(&keyTimer,50,&keyTimer_callback, NULL);
 	timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
 
+	init_dacs();
+	
 	connected = conNONE;
 	set_mode(f.state.none_mode);
 
-	init_dacs();
 	init_usb_host();
 	init_monome();
 

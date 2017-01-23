@@ -109,7 +109,7 @@ void set_mode_arc(void) {
 		update_leds(1);
 		break;
 	case mArcCycles:
-		// print_dbg("\r\n> mode arc cycles");
+		print_dbg("\r\n> mode arc cycles");
 		app_event_handlers[kEventKey] = &handler_CyclesKey;
 		app_event_handlers[kEventTr] = &handler_CyclesTr;
 		app_event_handlers[kEventTrNormal] = &handler_CyclesTrNormal;
@@ -126,7 +126,7 @@ void set_mode_arc(void) {
 	default:
 		break;
 	}
-	
+
 	// if(connected == conARC) {
 	// 	app_event_handlers[kEventFrontShort] = &handler_ArcFrontShort;
 	// 	app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
@@ -156,7 +156,7 @@ static inline void arc_leave_preset(void) {
 		break;
 	default:
 		break;
-	}	
+	}
 }
 
 void handler_ArcFrontShort(s32 data) {
@@ -302,7 +302,7 @@ void handler_ArcPresetKey(s32 data) {
 		default:
 			break;
 		}
-		
+
 		break;
 	default:
 		break;
@@ -654,16 +654,16 @@ void ii_levels(uint8_t *d, uint8_t len) {
 	}
 }
 
-void handler_LevelsEnc(s32 data) { 
+void handler_LevelsEnc(s32 data) {
 	uint8_t n;
 	int8_t delta;
 	int16_t i;
 
 	monome_ring_enc_parse_event_data(data, &n, &delta);
 
-	// print_dbg("\r\n levels enc \tn: "); 
-	// print_dbg_ulong(n); 
-	// print_dbg("\t delta: "); 
+	// print_dbg("\r\n levels enc \tn: ");
+	// print_dbg_ulong(n);
+	// print_dbg("\t delta: ");
 	// print_dbg_hex(delta);
 
 	switch(mode) {
@@ -689,8 +689,8 @@ void handler_LevelsEnc(s32 data) {
 				if(l.all[n])
 					memset(l.note[n], i, 16);
 
-				if(!ext_clock) 
-					levels_dac_refresh();	
+				if(!ext_clock)
+					levels_dac_refresh();
 			}
 		}
 		// VOLT
@@ -699,7 +699,7 @@ void handler_LevelsEnc(s32 data) {
 			if(delta < -15) delta = -15;
 			if(delta > 0)
 				i = l.pattern[n][l.now] + delta_acc[delta];
-			else 
+			else
 				i = l.pattern[n][l.now] - delta_acc[-delta];
 			if(i < 0)
 				i = 0;
@@ -756,7 +756,7 @@ void handler_LevelsEnc(s32 data) {
 					l.len = ((16 - (i>>4)) & 0xf) + 1;
 				else
 					l.len = (i>>4) + 1;
-				
+
 				// print_dbg("\r\nlen: ");
 				// print_dbg_ulong(l.len);
 				// print_dbg("\t");
@@ -872,7 +872,7 @@ void handler_LevelsEnc(s32 data) {
 				if(delta < -15) delta = -15;
 				if(delta > 0)
 					i = l.offset[n] + delta_acc[delta];
-				else 
+				else
 					i = l.offset[n] - delta_acc[-delta];
 				if(i < 0)
 					i = 0;
@@ -904,7 +904,7 @@ void handler_LevelsEnc(s32 data) {
 			if(delta < -15) delta = -15;
 			if(delta > 0)
 				i = delta_acc[delta];
-			else 
+			else
 				i = -delta_acc[-delta];
 			i += l.slew[n];
 
@@ -923,7 +923,7 @@ void handler_LevelsEnc(s32 data) {
 		break;
 	}
 
-	// print_dbg("\r\n accum: "); 
+	// print_dbg("\r\n accum: ");
 	// print_dbg_hex(i);
 
 	monomeFrameDirty++;
@@ -1028,7 +1028,7 @@ void refresh_levels_change() {
 		monomeLedBuffer[128 + (l.start * 4) + i1] = 15;
 
 		// PLAY
-		monomeLedBuffer[192 + (play * 4) + i1] = 11;		
+		monomeLedBuffer[192 + (play * 4) + i1] = 11;
 	}
 
 
@@ -1127,7 +1127,7 @@ void refresh_levels_config() {
 }
 
 
-void handler_LevelsKey(s32 data) { 
+void handler_LevelsKey(s32 data) {
 	// print_dbg("\r\n> levels key ");
 	// print_dbg_ulong(data);
 
@@ -1187,7 +1187,7 @@ void handler_LevelsKey(s32 data) {
 		break;
 	// key 1 DOWN
 	case 1:
-		key_count_arc[0] = KEY_HOLD_TIME;	
+		key_count_arc[0] = KEY_HOLD_TIME;
 		break;
 	// key 2 UP
 	case 2:
@@ -1260,7 +1260,7 @@ static void key_long_levels(uint8_t key) {
 	}
 }
 
-void handler_LevelsTr(s32 data) { 
+void handler_LevelsTr(s32 data) {
 	// print_dbg("\r\n> levels tr ");
 	// print_dbg_ulong(data);
 
@@ -1284,11 +1284,11 @@ void handler_LevelsTr(s32 data) {
 
 }
 
-void handler_LevelsTrNormal(s32 data) { 
+void handler_LevelsTrNormal(s32 data) {
 	print_dbg("\r\n> levels tr normal ");
 	print_dbg_ulong(data);
 
-	if(data) 
+	if(data)
 		ext_clock = true;
 	else {
 		ext_clock = false;
@@ -1300,7 +1300,7 @@ void handler_LevelsTrNormal(s32 data) {
 
 static void levels_pattern_next() {
 	pattern_pos = (pattern_pos + 1) % l.len;
-	if(l.dir) 
+	if(l.dir)
 		l.now = (16 + l.start - pattern_pos) % 0xf;
 	else
 		l.now = (pattern_pos + l.start) & 0xf;
@@ -1383,6 +1383,8 @@ void init_cycles() {
 }
 
 void resume_cycles() {
+	print_dbg("\r\n> RESUME mode arc cycles");
+
 	uint8_t i1;
 
 	mode = 0;
@@ -1513,7 +1515,7 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 
 #define MAX_SPEED 2000
 
-void handler_CyclesEnc(s32 data) { 
+void handler_CyclesEnc(s32 data) {
 	uint8_t n;
 	int16_t i;
 	int8_t delta;
@@ -1533,7 +1535,7 @@ void handler_CyclesEnc(s32 data) {
 				if(s < -MAX_SPEED)
 					s = -MAX_SPEED;
 				c.speed[0] = s;
-				
+
 				cycle_dir[0] = delta > 0;
 				cycle_dir[1] = delta > 0;
 				cycle_dir[2] = delta > 0;
@@ -1553,7 +1555,7 @@ void handler_CyclesEnc(s32 data) {
 					c.speed[3] = c.speed[0] >> c.mult[3];
 				else
 					c.speed[3] = c.speed[0] << -c.mult[3];
-				
+
 			}
 			else {
 				enc_count[n] += delta;
@@ -1570,7 +1572,7 @@ void handler_CyclesEnc(s32 data) {
 
 					if(i > -1)
 						c.speed[n] = c.speed[0] >> i;
-					else 
+					else
 						c.speed[n] = c.speed[0] << -i;
 				}
 			}
@@ -1667,7 +1669,7 @@ void handler_CyclesEnc(s32 data) {
 }
 
 
-void handler_CyclesRefresh(s32 data) { 
+void handler_CyclesRefresh(s32 data) {
 	if(monomeFrameDirty) {
 		arc_refresh();
 
@@ -1679,7 +1681,7 @@ void handler_CyclesRefresh(s32 data) {
 	}
 }
 
-void handler_CyclesKey(s32 data) { 
+void handler_CyclesKey(s32 data) {
 	// print_dbg("\r\n> cycles key ");
 	// print_dbg_ulong(data);
 
@@ -1707,8 +1709,8 @@ void handler_CyclesKey(s32 data) {
 			arc_refresh = &refresh_cycles_config_range;
 			monomeFrameDirty++;
 		}
-		else 
-			key_count_arc[0] = KEY_HOLD_TIME;	
+		else
+			key_count_arc[0] = KEY_HOLD_TIME;
 		break;
 	// key 2 UP
 	case 2:
@@ -1740,7 +1742,7 @@ void handler_CyclesKey(s32 data) {
 	}
 }
 
-void handler_CyclesTr(s32 data) { 
+void handler_CyclesTr(s32 data) {
 	// print_dbg("\r\n> cycles tr ");
 	// print_dbg_ulong(data);
 
@@ -1776,7 +1778,7 @@ void handler_CyclesTr(s32 data) {
 	}
 }
 
-void handler_CyclesTrNormal(s32 data) { 
+void handler_CyclesTrNormal(s32 data) {
 	// print_dbg("\r\n> cycles tr normal ");
 	// print_dbg_ulong(data);
 
