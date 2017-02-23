@@ -38,6 +38,8 @@ typedef struct {
 
 typedef struct {
 	kria_track t[4];
+	u8 len;
+	u8 len_mul;
 	u8 scale;
 } kria_pattern;
 

@@ -270,6 +270,9 @@ uint8_t loop_sync;
 u8 pos[4][KRIA_NUM_PARAMS];
 u8 pos_mul[4][KRIA_NUM_PARAMS];
 bool pos_reset;
+u8 pattern_pos;
+bool defer_pattern;
+u8 deferred_pattern;
 u8 tr[4];
 u8 note[4];
 u8 oct[4];
@@ -321,6 +324,8 @@ void default_kria() {
 	k.p[0].t[2] = k.p[0].t[0];
 	k.p[0].t[3] = k.p[0].t[0];
 	k.p[0].scale = 0;
+	k.p[0].len = 0;
+	k.p[0].len_mul = 4;
 
 	for(i1=1;i1<KRIA_NUM_PATTERNS;i1++)
 		k.p[i1] = k.p[0];
@@ -338,6 +343,8 @@ void init_kria() {
 
 	note_sync = f.kria_state.note_sync;
 	loop_sync = f.kria_state.loop_sync;
+	pattern_pos = 0;
+	defer_pattern = false;
 
 	preset = f.kria_state.preset;
 
@@ -417,8 +424,23 @@ void clock_kria(uint8_t phase) {
 	if(phase) {
 		clock_count++;
 
+		if (k.p[k.pattern].len) {
+			pattern_pos++;
+
+			if (!pos_reset && pattern_pos >= k.p[k.pattern].len * k.p[k.pattern].len_mul) {
+				pos_reset = true;
+			}
+		}
+
 		if(pos_reset) {
+			if (defer_pattern) {
+				k.pattern = deferred_pattern;
+				calc_scale(k.p[k.pattern].scale);
+				defer_pattern = false;
+			}
+
 			clock_count = 0;
+			pattern_pos = 0;
 			for(int i1=0;i1<4;i1++)
 			for(int i2=0;i2<4;i2++) {
 				pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
@@ -869,9 +891,14 @@ void handler_KriaGridKey(s32 data) {
 			}
 			else if(k_mode == mPattern) {
 				if(y ==0) {
-					k.pattern = x;
-					pos_reset = true;
-					calc_scale(k.p[k.pattern].scale);
+					if (k.p[k.pattern].len) {
+						defer_pattern = true;
+						deferred_pattern = x;
+					} else {
+						k.pattern = x;
+						pos_reset = true;
+						calc_scale(k.p[k.pattern].scale);
+					}
 				}
 			}
 		}
@@ -1273,12 +1300,27 @@ void handler_KriaGridKey(s32 data) {
 					monomeFrameDirty++;
 				}
 				break;
-			// case mPattern:
-			// 	if(z && y ==0) {
-			// 		k.pattern = x;
-			// 		pos_reset = true;
-			// 	}
-			// 	break;
+			case mPattern:
+				switch (k_mod_mode) {
+				case modTime:
+					if(z) {
+						if (y == 1) {
+							if (k.p[k.pattern].len == x + 1)
+								k.p[k.pattern].len = 0;
+							else {
+								k.p[k.pattern].len = x + 1;
+								pos_reset = true;							
+							}
+							monomeFrameDirty++;
+						} else if (y == 2) {
+							k.p[k.pattern].len_mul = x + 1;
+							monomeFrameDirty++;
+						}						
+					}
+					break;
+				default: break;
+				}
+				break;
 
 			default: break;
 			}
@@ -1685,9 +1727,20 @@ void refresh_kria(void) {
 		}
 		break;
 	case mPattern:
-		memset(monomeLedBuffer, 3, 16);
-		for(i1=0;i1<16;i1++)
+		switch (k_mod_mode) {
+		case modTime:
+			memset(monomeLedBuffer + R1, 3, 16);
+			memset(monomeLedBuffer + R2, 2, 16);
+			monomeLedBuffer[R2 + k.p[k.pattern].len_mul - 1] = L1;
+			if(k.p[k.pattern].len)
+				monomeLedBuffer[R1 + k.p[k.pattern].len - 1] = L1;
+			break;
+		default:
+			memset(monomeLedBuffer, 3, 16);
 			monomeLedBuffer[k.pattern] = L1;
+			if (defer_pattern && k.p[k.pattern].len)
+				monomeLedBuffer[deferred_pattern] = 6;
+		}
 		break;
 	default: break;
 	}
