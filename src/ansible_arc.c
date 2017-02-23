@@ -1486,7 +1486,7 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 				c.pos[3] = d[2] << 6;
 			}
 			else if(d[1] < 5)
-				c.pos[d[1]-1] = d[2] << 8;
+				c.pos[d[1]-1] = d[2] << 6;
 			monomeFrameDirty++;
 			break;
 		case II_CY_POS + II_GET:
