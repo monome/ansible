@@ -1738,8 +1738,12 @@ void refresh_kria(void) {
 		default:
 			memset(monomeLedBuffer, 3, 16);
 			monomeLedBuffer[k.pattern] = L1;
-			if (defer_pattern && k.p[k.pattern].len)
-				monomeLedBuffer[deferred_pattern] = 6;
+			if (k.p[k.pattern].len) {
+				if (defer_pattern)
+					monomeLedBuffer[deferred_pattern] = 6;
+				memset(monomeLedBuffer + R1, 3, k.p[k.pattern].len);
+				monomeLedBuffer[R1 + (pattern_pos / k.p[k.pattern].len_mul)] = 6;
+			}
 		}
 		break;
 	default: break;
