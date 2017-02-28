@@ -613,7 +613,7 @@ void ii_levels(uint8_t *d, uint8_t len) {
 			ii_tx_queue(l.start);
 			break;
 		case II_LV_L_LEN:
-			if(d[1] > -1 && d[1] < 16) {
+			if(d[1] > 0 && d[1] < 17) {
 				l.len = d[1];
 				monomeFrameDirty++;
 			}
