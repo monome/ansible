@@ -277,6 +277,13 @@ u8 note[4];
 u8 oct[4];
 u16 dur[4];
 
+bool cue;
+u8 cue_div;
+u8 cue_sub_count;
+u8 cue_count;
+u8 cue_steps;
+u8 cue_pat_next;
+
 
 static void kria_off0(void* o);
 static void kria_off1(void* o);
@@ -290,6 +297,8 @@ static void adjust_loop_len(u8 t, u8 x, u8 m);
 static void update_loop_start(u8 t, u8 x, u8 m);
 static void update_loop_end(u8 t, u8 x, u8 m);
 static void jump_pos(u8 t, u8 x, u8 m);
+
+void change_pattern(uint8_t x);
 
 
 void default_kria() {
@@ -418,6 +427,19 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 void clock_kria(uint8_t phase) {
 	if(phase) {
 		clock_count++;
+		cue_sub_count++;
+
+		if(cue_sub_count >= cue_div + 1) {
+			cue_sub_count = 0;
+			cue_count++;
+			if(cue_count >= cue_steps + 1) {
+				cue_count = 0;
+				if(cue_pat_next) {
+					change_pattern(cue_pat_next - 1);
+					cue_pat_next = 0;
+				}
+			}
+		}
 
 		if(pos_reset) {
 			clock_count = 0;
@@ -426,8 +448,12 @@ void clock_kria(uint8_t phase) {
 				pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
 				pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
 			}
+			cue_count = 0;
+			cue_sub_count = 0;
 			pos_reset = false;
 		}
+
+
 
 		for(uint8_t i1=0;i1<4;i1++) {
 			if(kria_next_step(i1, mDur)) {
@@ -499,6 +525,12 @@ static void kria_off3(void* o) {
 	tr[3] = 0;
 }
 
+
+void change_pattern(uint8_t x) {
+	k.pattern = x;
+	pos_reset = true;
+	calc_scale(k.p[k.pattern].scale);
+}
 
 
 void ii_kria(uint8_t *d, uint8_t l) {
@@ -870,10 +902,13 @@ void handler_KriaGridKey(s32 data) {
 				}
 			}
 			else if(k_mode == mPattern) {
-				if(y ==0) {
-					k.pattern = x;
-					pos_reset = true;
-					calc_scale(k.p[k.pattern].scale);
+				if(y == 0) {
+					if(cue) {
+						cue_pat_next = x+1;
+					}
+					else {
+						change_pattern(x);
+					}
 				}
 			}
 		}
@@ -1012,7 +1047,9 @@ void handler_KriaGridKey(s32 data) {
 				case 14:
 					k_mode = mScale; break;
 				case 15:
-					k_mode = mPattern; break;
+					k_mode = mPattern;
+					cue = true;
+					break;
 				default: break;
 				}
 			}
@@ -1022,6 +1059,9 @@ void handler_KriaGridKey(s32 data) {
 				case 11:
 				case 12:
 					k_mod_mode = modNone;
+					break;
+				case 15:
+					cue = false;
 					break;
 				default: break;
 				}
@@ -1275,12 +1315,19 @@ void handler_KriaGridKey(s32 data) {
 					monomeFrameDirty++;
 				}
 				break;
-			// case mPattern:
-			// 	if(z && y ==0) {
-			// 		k.pattern = x;
-			// 		pos_reset = true;
-			// 	}
-			// 	break;
+			case mPattern:
+				if(z && y == 1) {
+					switch(k_mod_mode) {
+					case modNone:
+						cue_steps = x;
+						break;
+					case modTime:
+						cue_div = x;
+						break;
+					default: break;
+					}
+				}
+				break;
 
 			default: break;
 			}
@@ -1688,9 +1735,22 @@ void refresh_kria(void) {
 		break;
 	case mPattern:
 		memset(monomeLedBuffer, 3, 16);
-		for(i1=0;i1<16;i1++)
-			monomeLedBuffer[k.pattern] = L1;
-		break;
+		monomeLedBuffer[k.pattern] = L1;
+		if(cue_pat_next)
+			monomeLedBuffer[cue_pat_next-1] = L2;
+		switch(k_mod_mode) {
+		case modNone:
+		case modLoop:
+		case modProb:
+			monomeLedBuffer[16 + cue_steps] = L0;
+			monomeLedBuffer[16 + cue_count] = L1;
+			break;
+		case modTime:
+			monomeLedBuffer[16 + cue_count] = L0;
+			monomeLedBuffer[16 + cue_div] = L1;
+			break;
+		default: break;
+		}
 	default: break;
 	}
 }
@@ -1877,6 +1937,8 @@ void resume_mp() {
 	clr_tr(TR2);
 	clr_tr(TR3);
 	clr_tr(TR4);
+
+	monomeFrameDirty++;
 }
 
 void clock_mp(uint8_t phase) {
