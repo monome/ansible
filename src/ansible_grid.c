@@ -134,7 +134,7 @@ void set_mode_grid() {
 	default:
 		break;
 	}
-	
+
 	// if(connected == conGRID) {
 	// 	app_event_handlers[kEventFrontShort] = &handler_GridFrontShort;
 	// 	app_event_handlers[kEventFrontLong] = &handler_GridFrontLong;
@@ -218,7 +218,7 @@ void grid_keytimer(void) {
 						flashc_memset8((void*)&(f.mp_state.sound), sound, 1, true);
 						flashc_memset8((void*)&(f.mp_state.voice_mode), voice_mode, 1, true);
 						flashc_memcpy((void *)&f.mp_state.m[preset], &m, sizeof(m), true);
-						
+
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
 
 						preset_mode = false;
@@ -226,7 +226,7 @@ void grid_keytimer(void) {
 					} else if(ansible_mode == mGridKria) {
 						flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
 						flashc_memcpy((void *)&f.kria_state.k[preset], &k, sizeof(k), true);
-						
+
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
 
 						preset_mode = false;
@@ -247,7 +247,7 @@ void grid_keytimer(void) {
 				}
 			}
 
-			// print_dbg("\rlong press: "); 
+			// print_dbg("\rlong press: ");
 			// print_dbg_ulong(held_keys[i1]);
 		}
 	}
@@ -598,13 +598,13 @@ void ii_kria(uint8_t *d, uint8_t l) {
 						pos[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].lend[i1];
 						pos_mul[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].tmul[i1];
 					}
-				}	
+				}
 				else if(d[1] < 5 && d[2] < 5) {
 					pos[d[1]-1][d[2]-1] = k.p[k.pattern].t[d[1]-1].lend[d[2]-1];
 					pos_mul[d[1]-1][d[2]-1] = k.p[k.pattern].t[d[1]-1].tmul[d[2]-1];
 				}
 				break;
-			default: 
+			default:
 				break;
 			}
 			break;
@@ -619,7 +619,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			case 1:
 				if(d[1] == 0) {
 					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++) 
+						for(int i2=0;i2<4;i2++)
 							adjust_loop_start(i1, d[3], i2);
 				}
 				else if(d[1] < 5) {
@@ -640,12 +640,12 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				else if(d[2] == 0 && d[1] < 5) {
 					for(int i1=0;i1<4;i1++)
 						adjust_loop_start(d[1]-1, d[3], i1);
-				}	
+				}
 				else if(d[1] < 5 && d[2] < 5) {
 					adjust_loop_start(d[1]-1, d[3], d[2]-1);
 				}
 				break;
-			default: 
+			default:
 				break;
 			}
 			break;
@@ -684,7 +684,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			case 1:
 				if(d[1] == 0) {
 					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++) 
+						for(int i2=0;i2<4;i2++)
 							adjust_loop_len(i1, d[3], i2);
 				}
 				else if(d[1] < 5) {
@@ -705,12 +705,12 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				else if(d[2] == 0 && d[1] < 5) {
 					for(int i1=0;i1<4;i1++)
 						adjust_loop_len(d[1]-1, d[3], i1);
-				}	
+				}
 				else if(d[1] < 5 && d[2] < 5) {
 					adjust_loop_len(d[1]-1, d[3], d[2]-1);
 				}
 				break;
-			default: 
+			default:
 				break;
 			}
 			break;
@@ -749,7 +749,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			case 1:
 				if(d[1] == 0) {
 					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++) 
+						for(int i2=0;i2<4;i2++)
 							jump_pos(i1, d[3], i2);
 				}
 				else if(d[1] < 5) {
@@ -770,12 +770,12 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				else if(d[2] == 0 && d[1] < 5) {
 					for(int i1=0;i1<4;i1++)
 						jump_pos(d[1]-1, d[3], i1);
-				}	
+				}
 				else if(d[1] < 5 && d[2] < 5) {
 					jump_pos(d[1]-1, d[3], d[2]-1);
 				}
 				break;
-			default: 
+			default:
 				break;
 			}
 			break;
@@ -812,15 +812,15 @@ void ii_kria(uint8_t *d, uint8_t l) {
 
 
 
-void handler_KriaGridKey(s32 data) { 
+void handler_KriaGridKey(s32 data) {
 	u8 x, y, z, index, i1, found;
 
 	monome_grid_key_parse_event_data(data, &x, &y, &z);
-	// print_dbg("\r\n monome event; x: "); 
-	// print_dbg_hex(x); 
-	// print_dbg("; y: 0x"); 
-	// print_dbg_hex(y); 
-	// print_dbg("; z: 0x"); 
+	// print_dbg("\r\n monome event; x: ");
+	// print_dbg_hex(x);
+	// print_dbg("; y: 0x");
+	// print_dbg_hex(y);
+	// print_dbg("; z: 0x");
 	// print_dbg_hex(z);
 
 	//// TRACK LONG PRESSES
@@ -832,9 +832,9 @@ void handler_KriaGridKey(s32 data) {
 	} else {
 		found = 0; // "found"
 		for(i1 = 0; i1<key_count; i1++) {
-			if(held_keys[i1] == index) 
+			if(held_keys[i1] == index)
 				found++;
-			if(found) 
+			if(found)
 				held_keys[i1] = held_keys[i1+1];
 		}
 		key_count--;
@@ -883,7 +883,7 @@ void handler_KriaGridKey(s32 data) {
 		if(z && x > 7) {
 			k.glyph[y] ^= 1<<(x-8);
 
-			monomeFrameDirty++;	
+			monomeFrameDirty++;
 		}
 	}
 	else if(view_clock) {
@@ -1054,7 +1054,7 @@ void handler_KriaGridKey(s32 data) {
 					}
 					else if(loop_edit == y) {
 						loop_count--;
-						
+
 						if(loop_count == 0) {
 							if(loop_last == -1) {
 								if(loop_first == k.p[k.pattern].t[loop_edit].lstart[mTr]) {
@@ -1096,7 +1096,7 @@ void handler_KriaGridKey(s32 data) {
 								k.p[k.pattern].t[track].note[x] = 6-y;
 							}
 						}
-						else 
+						else
 							k.p[k.pattern].t[track].note[x] = 6-y;
 						monomeFrameDirty++;
 					}
@@ -1171,7 +1171,7 @@ void handler_KriaGridKey(s32 data) {
 					}
 					else {
 						loop_count--;
-						
+
 						if(loop_count == 0) {
 							if(loop_last == -1) {
 								if(loop_first == k.p[k.pattern].t[track].lstart[mOct]) {
@@ -1228,7 +1228,7 @@ void handler_KriaGridKey(s32 data) {
 						}
 						else {
 							loop_count--;
-							
+
 							if(loop_count == 0) {
 								if(loop_last == -1) {
 									if(loop_first == k.p[k.pattern].t[track].lstart[mDur]) {
@@ -1380,7 +1380,7 @@ static void jump_pos(u8 t, u8 x, u8 m) {
 	pos[t][m] = (x + 15) & 0xf;
 }
 
-void handler_KriaRefresh(s32 data) { 
+void handler_KriaRefresh(s32 data) {
 	if(monomeFrameDirty) {
 		grid_refresh();
 
@@ -1390,7 +1390,7 @@ void handler_KriaRefresh(s32 data) {
 	}
 }
 
-void handler_KriaKey(s32 data) { 
+void handler_KriaKey(s32 data) {
 	// print_dbg("\r\n> kria key");
 	// print_dbg_ulong(data);
 
@@ -1424,7 +1424,7 @@ void handler_KriaKey(s32 data) {
 	monomeFrameDirty++;
 }
 
-void handler_KriaTr(s32 data) { 
+void handler_KriaTr(s32 data) {
 	// print_dbg("\r\n> kria tr ");
 	// print_dbg_ulong(data);
 
@@ -1455,7 +1455,7 @@ void handler_KriaTr(s32 data) {
 	monomeFrameDirty++;
 }
 
-void handler_KriaTrNormal(s32 data) { 
+void handler_KriaTrNormal(s32 data) {
 	// print_dbg("\r\n> kria tr normal ");
 	// print_dbg_ulong(data);
 
@@ -1522,7 +1522,7 @@ void refresh_kria(void) {
 		case modTime:
 			memset(monomeLedBuffer + R1, 3, 16);
 			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mTr] - 1] = L1;
-			break;			
+			break;
 		case modProb:
 			memset(monomeLedBuffer + R5, 3, 16);
 			for(i1=0;i1<16;i1++)
@@ -1560,7 +1560,7 @@ void refresh_kria(void) {
 		case modTime:
 			memset(monomeLedBuffer + R1, 3, 16);
 			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mNote] - 1] = L1;
-			break;			
+			break;
 		case modProb:
 			memset(monomeLedBuffer + R5, 3, 16);
 			for(i1=0;i1<16;i1++)
@@ -1570,7 +1570,7 @@ void refresh_kria(void) {
 		default:
 			if(note_sync) {
 				for(i1=0;i1<16;i1++)
-					monomeLedBuffer[i1 + (6 - k.p[k.pattern].t[track].note[i1] ) * 16] = 
+					monomeLedBuffer[i1 + (6 - k.p[k.pattern].t[track].note[i1] ) * 16] =
 						k.p[k.pattern].t[track].tr[i1] * 3;
 			}
 			else {
@@ -1598,7 +1598,7 @@ void refresh_kria(void) {
 		case modTime:
 			memset(monomeLedBuffer + R1, 3, 16);
 			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mOct] - 1] = L1;
-			break;			
+			break;
 		case modProb:
 			memset(monomeLedBuffer + R5, 3, 16);
 			for(i1=0;i1<16;i1++)
@@ -1634,7 +1634,7 @@ void refresh_kria(void) {
 		case modTime:
 			memset(monomeLedBuffer + R1, 3, 16);
 			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mDur] - 1] = L1;
-			break;			
+			break;
 		case modProb:
 			memset(monomeLedBuffer + R5, 3, 16);
 			for(i1=0;i1<16;i1++)
@@ -1740,10 +1740,11 @@ s8 kcount = 0;
 s8 scount[8];
 u8 state[8];
 u8 pstate[8];
-u8 clear[8]; 
+u8 clear[8];
 s8 position[8];		// current position in cycle
 u8 tick[8]; 		// position in speed countdown
 u8 pushed[8];		// manual key reset
+u8 reset[8];
 
 s8 note_now[4];
 u16 note_age[4];
@@ -1889,8 +1890,7 @@ void clock_mp(uint8_t phase) {
 			if(pushed[i]) {
 				for(int n=0;n<8;n++) {
 					if(m.sync[i] & (1<<n)) {
-						position[n] = m.count[n];
-						tick[n] = m.speed[n];
+						reset[n] = 1;
 					}
 
 					if(m.trigger[i] & (1<<n)) {
@@ -1951,19 +1951,19 @@ void clock_mp(uint8_t phase) {
 				    }
 				    else if(m.rules[i] == 5) {  // rnd
 				    	if(m.rule_dest_targets[i] & 1)
-				    		m.count[m.rule_dests[i]] = 
+				    		m.count[m.rule_dests[i]] =
 				    			(rnd() % (m.max[m.rule_dests[i]] - m.min[m.rule_dests[i]] + 1)) + m.min[m.rule_dests[i]];
 				    	if(m.rule_dest_targets[i] & 2)
-				    		m.speed[m.rule_dests[i]] = 
+				    		m.speed[m.rule_dests[i]] =
 				    			(rnd() % (m.smax[m.rule_dests[i]] - m.smin[m.rule_dests[i]] + 1)) + m.smin[m.rule_dests[i]];
-				    					
+
 				      // print_dbg("\r\n RANDOM: ");
 				      // print_dbg_hex(m.count[m.rule_dests[i]]);
 				      // print_dbg_hex(rnd() % 11);
 				    }
 				    else if(m.rules[i] == 6) {  // pole
 				    	if(m.rule_dest_targets[i] & 1) {
-					    	if(abs(m.count[m.rule_dests[i]] - m.min[m.rule_dests[i]]) < 
+					    	if(abs(m.count[m.rule_dests[i]] - m.min[m.rule_dests[i]]) <
 					    		abs(m.count[m.rule_dests[i]] - m.max[m.rule_dests[i]]) ) {
 					    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
 					    	}
@@ -1972,7 +1972,7 @@ void clock_mp(uint8_t phase) {
 					    	}
 					    }
 					    if(m.rule_dest_targets[i] & 2) {
-					    	if(abs(m.speed[m.rule_dests[i]] - m.smin[m.rule_dests[i]]) < 
+					    	if(abs(m.speed[m.rule_dests[i]] - m.smin[m.rule_dests[i]]) <
 					    		abs(m.speed[m.rule_dests[i]] - m.smax[m.rule_dests[i]]) ) {
 					    		m.speed[m.rule_dests[i]] = m.smax[m.rule_dests[i]];
 					    	}
@@ -1990,8 +1990,9 @@ void clock_mp(uint8_t phase) {
 
 					for(int n=0;n<8;n++) {
 						if(m.sync[i] & (1<<n)) {
-							position[n] = m.count[n];
-							tick[n] = m.speed[n];
+							reset[n] = 1;
+							// position[n] = m.count[n];
+							// tick[n] = m.speed[n];
 						}
 
 						if(m.trigger[i] & (1<<n)) {
@@ -2006,6 +2007,14 @@ void clock_mp(uint8_t phase) {
 				else if(position[i] > 0) position[i]--;
 			}
 			else tick[i]--;
+		}
+
+		for(i=0;i<8;i++) {
+			if(reset[i]) {
+				position[i] = m.count[i];
+				tick[i] = m.speed[i];
+				reset[i] = 0;
+			}
 		}
 
 		for(i=0;i<8;i++)
@@ -2186,7 +2195,7 @@ void ii_mp(uint8_t *d, uint8_t l) {
 			break;
 		case II_MP_STOP:
 			if(d[1] == 0) {
-				for(int n=0;n<8;n++) 
+				for(int n=0;n<8;n++)
 					position[n] =  -1;
 			}
 			else if(d[1] < 9) {
@@ -2199,14 +2208,14 @@ void ii_mp(uint8_t *d, uint8_t l) {
 	}
 }
 
-void handler_MPGridKey(s32 data) { 
+void handler_MPGridKey(s32 data) {
  	u8 x, y, z, index, i1, found;
 	monome_grid_key_parse_event_data(data, &x, &y, &z);
-	// print_dbg("\r\n monome event; x: "); 
-	// print_dbg_hex(x); 
-	// print_dbg("; y: 0x"); 
-	// print_dbg_hex(y); 
-	// print_dbg("; z: 0x"); 
+	// print_dbg("\r\n monome event; x: ");
+	// print_dbg_hex(x);
+	// print_dbg("; y: 0x");
+	// print_dbg_hex(y);
+	// print_dbg("; z: 0x");
 	// print_dbg_hex(z);
 
 	//// TRACK LONG PRESSES
@@ -2218,9 +2227,9 @@ void handler_MPGridKey(s32 data) {
 	} else {
 		found = 0; // "found"
 		for(i1 = 0; i1<key_count; i1++) {
-			if(held_keys[i1] == index) 
+			if(held_keys[i1] == index)
 				found++;
-			if(found) 
+			if(found)
 				held_keys[i1] = held_keys[i1+1];
 		}
 		key_count--;
@@ -2251,7 +2260,7 @@ void handler_MPGridKey(s32 data) {
 					}
 				}
 
-				monomeFrameDirty++;	
+				monomeFrameDirty++;
 			}
 			// print_dbg("\r\nfast press: ");
 			// print_dbg_ulong(index);
@@ -2266,7 +2275,7 @@ void handler_MPGridKey(s32 data) {
 		if(z && x>7)
 			m.glyph[y] ^= 1<<(x-8);
 
-		monomeFrameDirty++;	
+		monomeFrameDirty++;
 	}
 	else if(view_clock) {
 		if(z) {
@@ -2389,10 +2398,10 @@ void handler_MPGridKey(s32 data) {
 			// print_dbg_ulong(kcount);
 
 			if(kcount == 1 && z == 1)
-				mode = 1; 
+				mode = 1;
 			else if(kcount == 0) {
 				mode = 0;
-				scount[y] = 0;	
+				scount[y] = 0;
 			}
 
 			if(z == 1 && mode == 1) {
@@ -2496,7 +2505,7 @@ void handler_MPGridKey(s32 data) {
 	}
 }
 
-void handler_MPRefresh(s32 data) { 
+void handler_MPRefresh(s32 data) {
 	if(monomeFrameDirty) {
 		grid_refresh();
 
@@ -2506,7 +2515,7 @@ void handler_MPRefresh(s32 data) {
 	}
 }
 
-void handler_MPKey(s32 data) { 
+void handler_MPKey(s32 data) {
 	// print_dbg("\r\n> MP key ");
 	// print_dbg_ulong(data);
 
@@ -2540,7 +2549,7 @@ void handler_MPKey(s32 data) {
 	monomeFrameDirty++;
 }
 
-void handler_MPTr(s32 data) { 
+void handler_MPTr(s32 data) {
 	// print_dbg("\r\n> MP tr ");
 	// print_dbg_ulong(data);
 
@@ -2575,7 +2584,7 @@ void handler_MPTr(s32 data) {
 	monomeFrameDirty++;
 }
 
-void handler_MPTrNormal(s32 data) { 
+void handler_MPTrNormal(s32 data) {
 	// print_dbg("\r\n> MP tr normal ");
 	// print_dbg_ulong(data);
 
@@ -2714,7 +2723,7 @@ void refresh_mp(void) {
 
 			if(m.sync[edit_row] & (1<<i1))
 				monomeLedBuffer[i1*16 + 3] = L1;
-			else  
+			else
 				monomeLedBuffer[i1*16 + 3] = L0;
 		}
 
@@ -2722,7 +2731,7 @@ void refresh_mp(void) {
 	}
 	// SHOW RULES
 	else if(mode == 2) {
-		for(i1=0;i1<8;i1++) 
+		for(i1=0;i1<8;i1++)
 			if(position[i1] >= 0)
 				monomeLedBuffer[i1*16 + position[i1]] = L0;
 
@@ -2767,6 +2776,6 @@ void calc_scale(uint8_t s) {
 		cur_scale[i1] = cur_scale[i1-1] + scale_data[s][i1];
 		// print_dbg("\r\n ");
 		// print_dbg_ulong(cur_scale[i1]);
-		
+
 	}
 }
