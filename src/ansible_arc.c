@@ -613,7 +613,7 @@ void ii_levels(uint8_t *d, uint8_t len) {
 			ii_tx_queue(l.start);
 			break;
 		case II_LV_L_LEN:
-			if(d[1] > -1 && d[1] < 16) {
+			if(d[1] > 0 && d[1] < 17) {
 				l.len = d[1];
 				monomeFrameDirty++;
 			}
@@ -647,7 +647,15 @@ void ii_levels(uint8_t *d, uint8_t len) {
 				monomeFrameDirty++;
 			}
 			break;
-
+		case II_LV_CV + II_GET:
+			if (d[1] > 3) {
+				ii_tx_queue(0);
+				ii_tx_queue(0);
+				break;
+			}
+			ii_tx_queue(dac_get_value(d[1]) >> 8);
+			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			break;
 		default:
 			break;
 		}
@@ -1504,6 +1512,15 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 			}
 			else if(d[1] < 5)
 				c.speed[d[1]-1] = -c.speed[d[1]-1];
+			break;
+		case II_CY_CV + II_GET:
+			if (d[1] > 3) {
+				ii_tx_queue(0);
+				ii_tx_queue(0);
+				break;
+			}
+			ii_tx_queue(dac_get_value(d[1]) >> 8);
+			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
 		default:
 			break;
