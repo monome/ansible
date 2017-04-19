@@ -53,6 +53,8 @@ period
 #define L1 8
 #define L0 4
 
+#define GRID_KEY_HOLD_TIME 15
+
 bool preset_mode;
 uint8_t preset;
 
@@ -828,7 +830,7 @@ void handler_KriaGridKey(s32 data) {
 	if(z) {
 		held_keys[key_count] = index;
 		key_count++;
-		key_times[index] = 10;		//// THRESHOLD key hold time
+		key_times[index] = GRID_KEY_HOLD_TIME;		//// THRESHOLD key hold time
 	} else {
 		found = 0; // "found"
 		for(i1 = 0; i1<key_count; i1++) {
