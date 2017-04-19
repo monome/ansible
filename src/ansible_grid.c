@@ -74,6 +74,11 @@ uint8_t ext_clock_phase;
 uint8_t time_rough;
 uint8_t time_fine;
 
+uint8_t cue_div;
+uint8_t cue_steps;
+
+uint8_t meta;
+
 uint8_t scale_data[16][8];
 
 u8 cur_scale[8];
@@ -227,6 +232,9 @@ void grid_keytimer(void) {
 						grid_refresh = &refresh_mp;
 					} else if(ansible_mode == mGridKria) {
 						flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
+						flashc_memset8((void*)&(f.kria_state.cue_div), cue_div, 1, true);
+						flashc_memset8((void*)&(f.kria_state.cue_steps), cue_steps, 1, true);
+						flashc_memset8((void*)&(f.kria_state.meta), meta, 1, true);
 						flashc_memcpy((void *)&f.kria_state.k[preset], &k, sizeof(k), true);
 
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
@@ -278,11 +286,14 @@ u8 oct[4];
 u16 dur[4];
 
 bool cue;
-u8 cue_div;
 u8 cue_sub_count;
 u8 cue_count;
-u8 cue_steps;
 u8 cue_pat_next;
+
+uint8_t meta_pos;
+uint8_t meta_count;
+uint8_t meta_next;
+uint8_t meta_edit;
 
 
 static void kria_off0(void* o);
@@ -298,6 +309,9 @@ static void update_loop_start(u8 t, u8 x, u8 m);
 static void update_loop_end(u8 t, u8 x, u8 m);
 static void jump_pos(u8 t, u8 x, u8 m);
 
+static void update_meta_start(u8 x);
+static void update_meta_end(u8 x);
+
 void change_pattern(uint8_t x);
 
 
@@ -308,6 +322,9 @@ void default_kria() {
 	flashc_memset8((void*)&(f.kria_state.preset), 0, 1, true);
 	flashc_memset8((void*)&(f.kria_state.note_sync), true, 1, true);
 	flashc_memset8((void*)&(f.kria_state.loop_sync), 2, 1, true);
+	flashc_memset8((void*)&(f.kria_state.cue_div), 0, 1, true);
+	flashc_memset8((void*)&(f.kria_state.cue_steps), 3, 1, true);
+	flashc_memset8((void*)&(f.kria_state.meta), 0, 1, true);
 
 	for(i1=0;i1<8;i1++)
 		k.glyph[i1] = 0;
@@ -338,6 +355,14 @@ void default_kria() {
 
 	k.pattern = 0;
 
+	k.meta_start = 0;
+	k.meta_end = 3;
+	k.meta_len = 4;
+	k.meta_lswap = 0;
+
+	memset(k.meta_pat, 0, 64);
+	memset(k.meta_steps, 7, 64);
+
 	for(i1=0;i1<GRID_PRESETS;i1++)
 		flashc_memcpy((void *)&f.kria_state.k[i1], &k, sizeof(k), true);
 }
@@ -349,6 +374,8 @@ void init_kria() {
 
 	note_sync = f.kria_state.note_sync;
 	loop_sync = f.kria_state.loop_sync;
+	cue_div = f.kria_state.cue_div;
+	cue_steps = f.kria_state.cue_steps;
 
 	preset = f.kria_state.preset;
 
@@ -434,7 +461,23 @@ void clock_kria(uint8_t phase) {
 			cue_count++;
 			if(cue_count >= cue_steps + 1) {
 				cue_count = 0;
-				if(cue_pat_next) {
+
+				if(meta) {
+					meta_count++;
+					if(meta_count > k.meta_steps[meta_pos]) {
+						if(meta_next)
+							meta_pos = meta_next - 1;
+						else if(meta_pos == k.meta_end)
+							meta_pos = k.meta_start;
+						else
+							meta_pos++;
+
+						change_pattern(k.meta_pat[meta_pos]);
+						meta_next = 0;
+						meta_count = 0;
+					}
+				}
+				else if(cue_pat_next) {
 					change_pattern(cue_pat_next - 1);
 					cue_pat_next = 0;
 				}
@@ -903,11 +946,16 @@ void handler_KriaGridKey(s32 data) {
 			}
 			else if(k_mode == mPattern) {
 				if(y == 0) {
-					if(cue) {
-						cue_pat_next = x+1;
+					if(!meta) {
+						if(cue) {
+							cue_pat_next = x+1;
+						}
+						else {
+							change_pattern(x);
+						}
 					}
 					else {
-						change_pattern(x);
+						k.meta_pat[meta_edit] = x;
 					}
 				}
 			}
@@ -1316,23 +1364,115 @@ void handler_KriaGridKey(s32 data) {
 				}
 				break;
 			case mPattern:
-				if(z && y == 1) {
+				if(y > 1 && y < 6) {
+					if(z && cue) {
+						meta_next = (y-2) * 16 + x + 1;
+						if(meta_next - 1 > k.meta_end) {
+							meta_next = 0;
+						}
+					}
+					else if(k_mod_mode == modLoop) {
+						if(z) {
+							if(loop_count == 0) {
+								loop_first = (y-2) * 16 + x;
+								loop_last = -1;
+							}
+							else {
+								loop_last = (y-2) * 16 + x;
+								update_meta_start(loop_first);
+								update_meta_end(loop_last);
+							}
+							loop_count++;
+						}
+						else {
+							loop_count--;
+							if(loop_count == 0) {
+								if(loop_last == -1) {
+									if(loop_first == k.meta_start) {
+										update_meta_start(loop_first);
+										update_meta_end(loop_first);
+									}
+									else
+										update_meta_start(loop_first);
+								}
+								monomeFrameDirty++;
+							}
+						}
+					}
+					else if(z) {
+						meta_edit = (y-2) * 16 + x;
+					}
+				}
+				else if(z && y == 6) {
+					if(cue) {
+						meta ^= 1;
+					}
+					else {
+						k.meta_steps[meta_edit] = x;
+					}
+				}
+				else if(z && y == 1) {
 					switch(k_mod_mode) {
-					case modNone:
-						cue_steps = x;
-						break;
 					case modTime:
 						cue_div = x;
 						break;
-					default: break;
+					default:
+						cue_steps = x;
+						break;
 					}
 				}
+				monomeFrameDirty++;
 				break;
 
 			default: break;
 			}
 		}
 
+	}
+}
+
+static void update_meta_start(u8 x) {
+	s16 temp;
+
+	temp = meta_pos - k.meta_start + x;
+	if(temp < 0) temp += 64;
+	else if(temp > 63) temp -= 64;
+	meta_next = temp + 1;
+
+	k.meta_start = x;
+	temp = x + k.meta_len-1;
+	if(temp > 63) {
+		k.meta_end = temp - 64;
+		k.meta_lswap = 1;
+	}
+	else {
+		k.meta_end = temp;
+		k.meta_lswap = 0;
+	}
+}
+
+static void update_meta_end(u8 x) {
+	s16 temp;
+
+	k.meta_end = x;
+	temp = k.meta_end - k.meta_start;
+	if(temp < 0) {
+		k.meta_len = temp + 65;
+		k.meta_lswap = 1;
+	}
+	else {
+		k.meta_len = temp+1;
+		k.meta_lswap = 0;
+	}
+
+	temp = meta_pos;
+	if(k.meta_lswap) {
+		if(temp < k.meta_start && temp > k.meta_end)
+			meta_next = k.meta_start + 1;
+	}
+	else {
+		if(temp < k.meta_start || temp > k.meta_end)
+			meta_next = k.meta_start + 1;
 	}
 }
 
@@ -1734,22 +1874,44 @@ void refresh_kria(void) {
 		}
 		break;
 	case mPattern:
-		memset(monomeLedBuffer, 3, 16);
-		monomeLedBuffer[k.pattern] = L1;
-		if(cue_pat_next)
+		if(!meta) {
+			memset(monomeLedBuffer, 3, 16);
+			monomeLedBuffer[k.pattern] = L1;
+		}
+		else {
+			// bar
+			memset(monomeLedBuffer + 96, 3, k.meta_steps[meta_pos]+1);
+			monomeLedBuffer[96 + meta_count] = L1;
+			monomeLedBuffer[96 + k.meta_steps[meta_edit]] = L2;
+			// top
+			monomeLedBuffer[k.pattern] = L0;
+			monomeLedBuffer[k.meta_pat[meta_edit]] = L1;
+			// meta data
+			if(!k.meta_lswap)
+				memset(monomeLedBuffer + 32 + k.meta_start, 3, k.meta_len);
+			else {
+				memset(monomeLedBuffer + 32, 3, k.meta_end);
+				memset(monomeLedBuffer + 32 + k.meta_start, 3, 64 - k.meta_start);
+			}
+			monomeLedBuffer[32 + meta_pos] = L1;
+			monomeLedBuffer[32 + meta_edit] = L2;
+			if(meta_next) {
+				monomeLedBuffer[32 + meta_next - 1] = L2;
+				monomeLedBuffer[k.meta_pat[meta_next] - 1] = L2;
+			}
+		}
+		if(cue_pat_next) {
 			monomeLedBuffer[cue_pat_next-1] = L2;
+		}
 		switch(k_mod_mode) {
-		case modNone:
-		case modLoop:
-		case modProb:
-			monomeLedBuffer[16 + cue_steps] = L0;
-			monomeLedBuffer[16 + cue_count] = L1;
-			break;
-		case modTime:
+			case modTime:
 			monomeLedBuffer[16 + cue_count] = L0;
 			monomeLedBuffer[16 + cue_div] = L1;
 			break;
-		default: break;
+		default:
+			monomeLedBuffer[16 + cue_steps] = L0;
+			monomeLedBuffer[16 + cue_count] = L1;
+			break;
 		}
 	default: break;
 	}

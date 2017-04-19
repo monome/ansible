@@ -43,8 +43,14 @@ typedef struct {
 
 typedef struct {
 	kria_pattern p[KRIA_NUM_PATTERNS];
-	u8 pattern;
-	u8 glyph[8];
+	uint8_t pattern;
+	uint8_t meta_pat[64];
+	uint8_t meta_steps[64];
+	uint8_t meta_start;
+	uint8_t meta_end;
+	uint8_t meta_len;
+	uint8_t meta_lswap;
+	uint8_t glyph[8];
 } kria_data_t;
 
 typedef struct {
@@ -52,6 +58,9 @@ typedef struct {
 	uint8_t preset;
 	bool note_sync;
 	uint8_t loop_sync;
+	uint8_t cue_div;
+	uint8_t cue_steps;
+	uint8_t meta;
 	kria_data_t k[GRID_PRESETS];
 } kria_state_t;
 
@@ -62,7 +71,7 @@ typedef struct {
 	// s8 position[8];		// current position in cycle
 	// u8 tick[8]; 		// position in speed countdown
 	// u8 pushed[8];		// manual key reset
-	
+
 	u8 count[8];		// length of cycle
 	s8 speed[8];		// speed of cycle
 	u8 min[8];
