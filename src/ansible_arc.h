@@ -36,6 +36,7 @@ typedef struct {
 	uint8_t shape;
 	uint8_t friction;
 	uint16_t force;
+	uint8_t div[4];
 } cycles_data_t;
 
 typedef struct {
@@ -74,6 +75,7 @@ void ii_cycles(uint8_t *d, uint8_t l);
 void refresh_cycles(void);
 void refresh_cycles_config(void);
 void refresh_cycles_config_range(void);
+void refresh_cycles_config_div(void);
 void handler_CyclesEnc(s32 data);
 void handler_CyclesRefresh(s32 data);
 void handler_CyclesKey(s32 data);

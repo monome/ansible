@@ -1346,6 +1346,8 @@ static void levels_play_next() {
 const uint8_t friction_map[25] = { 0, 12, 20, 26, 30, 34, 39, 42, 45,
 	48, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64};
 
+const uint16_t div_map[4] = {0x2000,0x1000,0x0800,0x0400};
+
 static uint16_t friction;
 static int8_t add_force[4];
 static bool cycle_dir[4];
@@ -1363,6 +1365,7 @@ void default_cycles() {
 		c.speed[i1] = 0;
 		c.mult[i1] = 0;
 		c.range[i1] = 64;
+		c.div[i1] = 0;
 	}
 
 	for(i1=0;i1<8;i1++)
@@ -1387,6 +1390,7 @@ void init_cycles() {
 		c.speed[i1] = f.cycles_state.c[arc_preset].speed[i1];
 		c.mult[i1] = f.cycles_state.c[arc_preset].mult[i1];
 		c.range[i1] = f.cycles_state.c[arc_preset].range[i1];
+		c.div[i1] = f.cycles_state.c[arc_preset].div[i1];
 	}
 }
 
@@ -1447,7 +1451,7 @@ void clock_cycles(uint8_t phase) {
 		c.speed[i1] = (c.speed[i1] * (friction)) / 256;
 		// c.speed[i1] = (c.speed[i1] * (friction)) >> 8;
 
-		if(c.pos[i1] & 0x2000)
+		if(c.pos[i1] & div_map[c.div[i1]])
 			set_tr(TR1 + i1);
 		else
 			clr_tr(TR1 + i1);
@@ -1679,6 +1683,21 @@ void handler_CyclesEnc(s32 data) {
 			c.range[n] = i;
 		}
 		break;
+	case 3:
+		// div
+		enc_count[n] += delta;
+		i = enc_count[n] >> 6;
+		enc_count[n] -= i << 6;
+
+		if(i) {
+			i += c.div[n];
+			if(i < 0)
+				i = 0;
+			else if(i > 3)
+				i = 3;
+			c.div[n] = i;
+		}
+		break;
 	default: break;
 	}
 }
@@ -1722,6 +1741,15 @@ void handler_CyclesKey(s32 data) {
 			enc_count[2] = 0;
 			enc_count[3] = 0;
 			arc_refresh = &refresh_cycles_config_range;
+			monomeFrameDirty++;
+		}
+		else if(mode == 2) {
+			mode = 3;
+			enc_count[0] = 0;
+			enc_count[1] = 0;
+			enc_count[2] = 0;
+			enc_count[3] = 0;
+			arc_refresh = &refresh_cycles_config_div;
 			monomeFrameDirty++;
 		}
 		else
@@ -1890,6 +1918,17 @@ void refresh_cycles_config_range(void) {
 	for(i1=0;i1<4;i1++)
 		for(i2=0;i2<c.range[i1];i2++)
 			monomeLedBuffer[i1*64 + ((32 + i2) & 0x3f)] = 3;
+}
+
+void refresh_cycles_config_div(void) {
+	uint8_t i1, i2;
+	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+
+	for(i1=0;i1<4;i1++) {
+		for(i2=0; i2<(1<<c.div[i1]); i2++) {
+			memset(i1*64 + monomeLedBuffer + i2*(64 >> c.div[i1]), 5, (64 >> (c.div[i1]+1)));
+		}
+	}
 }
 
 
