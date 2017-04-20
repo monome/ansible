@@ -1,26 +1,3 @@
-/*
-
-ii/levels
-
-preset
-*reset
-pattern
-loop.st
-loop.len
-pos
-
-ii/cycles
-
-preset
-*reset 0/1-4
-position 0/1-4 SET
-*reverse 0/1-4
-brake 0/1-4 SET
-accelerate 0/1-4 SET
-range 0/1-4 SET
-
-*/
-
 #include <string.h> //memset
 #include <stdlib.h> //abs
 

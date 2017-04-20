@@ -1,36 +1,3 @@
-/*
-
-KRIA
-
-pattern play mode
-
-loop helper display for oct/dur and probs
-ext clock mul fix
-
-
-
-II/kria
-
-preset
-pattern
-scale
-period
-position tr param SET
-loop.st tr param SET
-loop.len tr param SET
-*reset 0/1-4
-
-
-II/mp
-
-preset
-*reset 0/1-8
-*stop 0/1-8
-scale
-period
-
-*/
-
 #include "string.h"
 
 #include "print_funcs.h"
@@ -436,11 +403,11 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 		case 0:
 			return false;
 		case 1:
+			// ~25%
+			return (rnd() & 0xff) > 192;
+		case 2:
 			// ~50%
 			return (rnd() & 0xff) > 128;
-		case 2:
-			// ~75%
-			return (rnd() & 0xff) > 64;
 		case 3:
 			return true;
 		default:
