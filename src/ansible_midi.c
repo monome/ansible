@@ -1220,7 +1220,8 @@ static bool arp_seq_switch_active(void) {
 	arp_seq_t *last_seq;
 	bool switched = false;
 
-	cpu_irq_disable_level(APP_TC_IRQ_PRIORITY);
+	// disable timer interrupts
+	timers_pause();
 
 	if (next_seq->state == eSeqWaiting) {
 		next_seq->state = eSeqPlaying;
@@ -1231,7 +1232,8 @@ static bool arp_seq_switch_active(void) {
 		switched = true;
 	}
 
-	cpu_irq_enable_level(APP_TC_IRQ_PRIORITY);
+	// enable timer interrupts
+	timers_resume();
 
 	return switched;
 }
