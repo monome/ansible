@@ -2404,6 +2404,15 @@ void ii_mp(uint8_t *d, uint8_t l) {
 				position[d[1]-1] = -1;
 			}
 			break;
+		case II_MP_CV + II_GET:
+			if (d[1] > 3) {
+				ii_tx_queue(0);
+				ii_tx_queue(0);
+				break;
+			}
+			ii_tx_queue(dac_get_value(d[1]) >> 8);
+			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			break;
 		default:
 			break;
 		}
