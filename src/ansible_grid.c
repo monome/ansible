@@ -15,6 +15,8 @@
 #include "main.h"
 #include "ansible_grid.h"
 
+#include "init_ansible.h"
+
 
 #define L2 12
 #define L1 8
@@ -37,6 +39,9 @@ uint8_t clock_count;
 uint8_t clock_mul;
 uint8_t ext_clock_count;
 uint8_t ext_clock_phase;
+
+u64 last_tick;
+u32 clock_delta;
 
 uint8_t time_rough;
 uint8_t time_fine;
@@ -355,6 +360,8 @@ void init_kria() {
 	clock_period = f.kria_state.clock_period;
 	time_rough = (clock_period - 20) / 16;
 	time_fine = (clock_period - 20) % 16;
+
+	last_tick = get_ticks();
 }
 
 void resume_kria() {
@@ -373,6 +380,8 @@ void resume_kria() {
 		clock = &clock_null;
 	else
 		clock = &clock_kria;
+
+	last_tick = get_ticks();
 
 	dac_set_slew(0,0);
 	dac_set_slew(1,0);
@@ -423,6 +432,10 @@ void clock_kria(uint8_t phase) {
 		clock_count++;
 		cue_sub_count++;
 
+		u64 current_tick = get_ticks();
+		clock_delta = (u32)(current_tick-last_tick);
+		last_tick = current_tick;
+
 		if(cue_sub_count >= cue_div + 1) {
 			cue_sub_count = 0;
 			cue_count++;
@@ -467,7 +480,9 @@ void clock_kria(uint8_t phase) {
 
 		for(uint8_t i1=0;i1<4;i1++) {
 			if(kria_next_step(i1, mDur)) {
-				dur[i1] = (k.p[k.pattern].t[i1].dur[pos[i1][mDur]]+1) * (k.p[k.pattern].t[i1].dur_mul<<2);
+				f32 clock_scale = (clock_delta*k.p[k.pattern].t[i1].tmul[mTr]) / (f32)384.0;
+				f32 uncscaled = (k.p[k.pattern].t[i1].dur[pos[i1][mDur]]+1) * (k.p[k.pattern].t[i1].dur_mul<<2);
+				dur[i1] = (u16)(uncscaled * clock_scale);
 			}
 
 			if(kria_next_step(i1, mOct)) {
