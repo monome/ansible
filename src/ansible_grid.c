@@ -72,6 +72,7 @@ typedef enum {
 kria_modes_t k_mode;
 kria_mod_modes_t k_mod_mode;
 
+bool kria_mutes[4];
 
 // MP
 
@@ -266,7 +267,6 @@ uint8_t meta_pos;
 uint8_t meta_count;
 uint8_t meta_next;
 uint8_t meta_edit;
-
 
 static void kria_off0(void* o);
 static void kria_off1(void* o);
@@ -494,7 +494,7 @@ void clock_kria(uint8_t phase) {
 			}
 
 			if(kria_next_step(i1, mTr)) {
-				if(k.p[k.pattern].t[i1].tr[pos[i1][mTr]]) {
+				if(!kria_mutes[i1] && k.p[k.pattern].t[i1].tr[pos[i1][mTr]]) {
 					dac_set_value(i1, ET[cur_scale[note[i1]] + (oct[i1] * 12)] << 2);
 					gpio_set_gpio_pin(TR1 + i1);
 
@@ -1060,13 +1060,14 @@ void handler_KriaGridKey(s32 data) {
 			if(z) {
 				switch(x) {
 				case 0:
-					track = 0; break;
 				case 1:
-					track = 1; break;
 				case 2:
-					track = 2; break;
 				case 3:
-					track = 3; break;
+					if ( k_mod_mode == modLoop )
+						kria_mutes[x] = !kria_mutes[x];
+					else
+						track = x;
+					break;
 				case 5:
 					k_mode = mTr; break;
 				case 6:
@@ -1655,8 +1656,6 @@ void refresh_kria(void) {
 	memset(monomeLedBuffer,0,128);
 
 	// bottom strip
-
-	memset(monomeLedBuffer + R7, L0, 4);
 	memset(monomeLedBuffer + R7 + 5, L0, 4);
 	monomeLedBuffer[R7 + 10] = L0;
 	monomeLedBuffer[R7 + 11] = L0;
@@ -1664,7 +1663,15 @@ void refresh_kria(void) {
 	monomeLedBuffer[R7 + 14] = L0;
 	monomeLedBuffer[R7 + 15] = L0;
 
-	monomeLedBuffer[112+track] = L2;
+	for ( i1=0; i1<4; i1++ )
+	{
+		if ( kria_mutes[i1] )
+			monomeLedBuffer[R7+i1] = (track == i1) ? L1 : 2;
+		else
+			monomeLedBuffer[R7+i1] = (track == i1) ? L2 : L0;
+	}
+
+
 
 	switch(k_mode) {
 	case mTr:
