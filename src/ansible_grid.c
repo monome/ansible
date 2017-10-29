@@ -73,6 +73,13 @@ kria_modes_t k_mode;
 kria_mod_modes_t k_mod_mode;
 
 bool kria_mutes[4];
+bool kria_blinks[4];
+softTimer_t blinkTimer[4] = {
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL }
+};
 
 // MP
 
@@ -272,6 +279,11 @@ static void kria_off0(void* o);
 static void kria_off1(void* o);
 static void kria_off2(void* o);
 static void kria_off3(void* o);
+
+static void kria_blink_off0(void* o);
+static void kria_blink_off1(void* o);
+static void kria_blink_off2(void* o);
+static void kria_blink_off3(void* o);
 
 bool kria_next_step(uint8_t t, uint8_t p);
 static void adjust_loop_start(u8 t, u8 x, u8 m);
@@ -500,21 +512,30 @@ void clock_kria(uint8_t phase) {
 
 					switch(i1) {
 						case 0:
+							timer_remove( &blinkTimer[0] );
+							timer_add( &blinkTimer[0], max(dur[0],31), &kria_blink_off0, NULL );
 							timer_remove( &auxTimer[0]);
 							timer_add(&auxTimer[0], dur[0], &kria_off0, NULL); break;
 						case 1:
+							timer_remove( &blinkTimer[1] );
+							timer_add( &blinkTimer[1], max(dur[1],31), &kria_blink_off1, NULL );
 							timer_remove( &auxTimer[1]);
 							timer_add(&auxTimer[1], dur[1], &kria_off1, NULL); break;
 						case 2:
+							timer_remove( &blinkTimer[2] );
+							timer_add( &blinkTimer[2], max(dur[2],31), &kria_blink_off2, NULL );
 							timer_remove( &auxTimer[2]);
 							timer_add(&auxTimer[2], dur[2], &kria_off2, NULL); break;
 						case 3:
+							timer_remove( &blinkTimer[3] );
+							timer_add( &blinkTimer[3], max(dur[3],31), &kria_blink_off3, NULL );
 							timer_remove( &auxTimer[3]);
 							timer_add(&auxTimer[3], dur[3], &kria_off3, NULL); break;
 						default: break;
 					}
 
 					tr[i1] = 1;
+					kria_blinks[i1] = 1;
 				}
 			}
 		}
@@ -548,6 +569,30 @@ static void kria_off3(void* o) {
 	timer_remove( &auxTimer[3]);
 	clr_tr(TR4);
 	tr[3] = 0;
+}
+
+static void kria_blink_off0(void* o) {
+	timer_remove( &blinkTimer[0] );
+	kria_blinks[0] = 0;
+	monomeFrameDirty++;
+}
+
+static void kria_blink_off1(void* o) {
+	timer_remove( &blinkTimer[1] );
+	kria_blinks[1] = 0;
+	monomeFrameDirty++;
+}
+
+static void kria_blink_off2(void* o) {
+	timer_remove( &blinkTimer[2] );
+	kria_blinks[2] = 0;
+	monomeFrameDirty++;
+}
+
+static void kria_blink_off3(void* o) {
+	timer_remove( &blinkTimer[3] );
+	kria_blinks[3] = 0;
+	monomeFrameDirty++;
 }
 
 
@@ -870,6 +915,34 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			}
 			ii_tx_queue(dac_get_value(d[1]) >> 8);
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			break;
+		case II_KR_MUTE:
+			if ( d[1] == 0 ) {
+				for ( int i=0; i<4; i++ )
+					kria_mutes[i] = max( min( d[2], 1 ), 0 );
+				monomeFrameDirty++;
+			}
+			else if ( d[1] < 5 && d[1] > 0 ) {
+				kria_mutes[d[1]-1] = max( min( d[2], 1 ), 0 );
+				monomeFrameDirty++;
+			}
+			break;
+		case II_KR_MUTE + II_GET:
+			if ( d[1] > 0 && d[1] < 5 ) {
+				ii_tx_queue( kria_mutes[d[1]-1] );
+			}
+			break;
+		case II_KR_TOG:
+			if ( d[1] == 0 ) {
+				for ( int i=0; i<4; i++ ) {
+					kria_mutes[i] = !kria_mutes[i];
+				}
+				monomeFrameDirty++;
+			}
+			else if ( d[1] < 5 && d[1] > 0 ) {
+				kria_mutes[d[1]-1] = !kria_mutes[d[1]-1];
+				monomeFrameDirty++;
+			}
 			break;
 		default:
 			break;
@@ -1669,6 +1742,8 @@ void refresh_kria(void) {
 			monomeLedBuffer[R7+i1] = (track == i1) ? L1 : 2;
 		else
 			monomeLedBuffer[R7+i1] = (track == i1) ? L2 : L0;
+		
+		monomeLedBuffer[R7+i1] += kria_blinks[i1]*2;
 	}
 
 
