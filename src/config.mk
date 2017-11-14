@@ -78,6 +78,7 @@ CSRCS = \
        ../libavr32/src/i2c.c     \
        ../libavr32/src/init_ansible.c \
        ../libavr32/src/init_common.c \
+       ../libavr32/src/interrupts.c \
        ../libavr32/src/midi_common.c \
        ../libavr32/src/monome.c \
        ../libavr32/src/music.c \
