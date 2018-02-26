@@ -960,7 +960,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				ii_tx_queue( kria_mutes[d[1]-1] );
 			}
 			break;
-		case II_KR_TOG:
+		case II_KR_TMUTE:
 			if ( d[1] == 0 ) {
 				for ( int i=0; i<4; i++ ) {
 					kria_mutes[i] = !kria_mutes[i];
