@@ -17,13 +17,11 @@
 
 #include "init_common.h"
 #include "conf_tc_irq.h"
-
 #include "interrupts.h"
 
 // this
 #include "main.h"
 #include "ansible_midi.h"
-
 
 
 #define MONO_PITCH_CV 0
@@ -1223,7 +1221,7 @@ static bool arp_seq_switch_active(void) {
 	arp_seq_t *last_seq;
 	bool switched = false;
 
-	// disable timer interrupts
+	// disable interrupts
 	u8 irq_flags = irqs_pause();
 
 	if (next_seq->state == eSeqWaiting) {
@@ -1235,7 +1233,7 @@ static bool arp_seq_switch_active(void) {
 		switched = true;
 	}
 
-	// enable timer interrupts
+	// enable interrupts
 	irqs_resume(irq_flags);
 
 	return switched;
