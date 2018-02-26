@@ -26,7 +26,7 @@
 
 bool preset_mode;
 uint8_t preset;
-
+	
 u8 key_count = 0;
 u8 held_keys[32];
 u8 key_times[128];
@@ -40,8 +40,8 @@ uint8_t clock_mul;
 uint8_t ext_clock_count;
 uint8_t ext_clock_phase;
 
-u64 last_tick;
-u32 clock_delta;
+u64 last_ticks[4];
+u32 clock_deltas[4];
 
 uint8_t time_rough;
 uint8_t time_fine;
@@ -80,6 +80,9 @@ softTimer_t blinkTimer[4] = {
 	{ .next = NULL, .prev = NULL },
 	{ .next = NULL, .prev = NULL }
 };
+
+// manually clocking via teletype
+bool kria_tt_clocked[4];
 
 // MP
 
@@ -373,7 +376,9 @@ void init_kria() {
 	time_rough = (clock_period - 20) / 16;
 	time_fine = (clock_period - 20) % 16;
 
-	last_tick = get_ticks();
+	for ( int i=0; i<4; i++ ) {
+		last_ticks[i] = get_ticks();
+	}
 }
 
 void resume_kria() {
@@ -393,7 +398,9 @@ void resume_kria() {
 	else
 		clock = &clock_kria;
 
-	last_tick = get_ticks();
+	for ( int i=0; i<4; i++ ) {
+		last_ticks[i] = get_ticks();
+	}
 
 	dac_set_slew(0,0);
 	dac_set_slew(1,0);
@@ -444,10 +451,6 @@ void clock_kria(uint8_t phase) {
 		clock_count++;
 		cue_sub_count++;
 
-		u64 current_tick = get_ticks();
-		clock_delta = (u32)(current_tick-last_tick);
-		last_tick = current_tick;
-
 		if(cue_sub_count >= cue_div + 1) {
 			cue_sub_count = 0;
 			cue_count++;
@@ -457,6 +460,7 @@ void clock_kria(uint8_t phase) {
 				if(meta) {
 					meta_count++;
 					if(meta_count > k.meta_steps[meta_pos]) {
+						// METAMOD: this is where pattern changes happen in the meta sequencer
 						if(meta_next)
 							meta_pos = meta_next - 1;
 						else if(meta_pos == k.meta_end)
@@ -489,55 +493,10 @@ void clock_kria(uint8_t phase) {
 		}
 
 
-
-		for(uint8_t i1=0;i1<4;i1++) {
-			if(kria_next_step(i1, mDur)) {
-				f32 clock_scale = (clock_delta*k.p[k.pattern].t[i1].tmul[mTr]) / (f32)384.0;
-				f32 uncscaled = (k.p[k.pattern].t[i1].dur[pos[i1][mDur]]+1) * (k.p[k.pattern].t[i1].dur_mul<<2);
-				dur[i1] = (u16)(uncscaled * clock_scale);
-			}
-
-			if(kria_next_step(i1, mOct)) {
-				oct[i1] = k.p[k.pattern].t[i1].oct[pos[i1][mOct]];
-			}
-
-			if(kria_next_step(i1, mNote)) {
-				note[i1] = k.p[k.pattern].t[i1].note[pos[i1][mNote]];
-			}
-
-			if(kria_next_step(i1, mTr)) {
-				if(!kria_mutes[i1] && k.p[k.pattern].t[i1].tr[pos[i1][mTr]]) {
-					dac_set_value(i1, ET[cur_scale[note[i1]] + (oct[i1] * 12)] << 2);
-					gpio_set_gpio_pin(TR1 + i1);
-
-					switch(i1) {
-						case 0:
-							timer_remove( &blinkTimer[0] );
-							timer_add( &blinkTimer[0], max(dur[0],31), &kria_blink_off0, NULL );
-							timer_remove( &auxTimer[0]);
-							timer_add(&auxTimer[0], dur[0], &kria_off0, NULL); break;
-						case 1:
-							timer_remove( &blinkTimer[1] );
-							timer_add( &blinkTimer[1], max(dur[1],31), &kria_blink_off1, NULL );
-							timer_remove( &auxTimer[1]);
-							timer_add(&auxTimer[1], dur[1], &kria_off1, NULL); break;
-						case 2:
-							timer_remove( &blinkTimer[2] );
-							timer_add( &blinkTimer[2], max(dur[2],31), &kria_blink_off2, NULL );
-							timer_remove( &auxTimer[2]);
-							timer_add(&auxTimer[2], dur[2], &kria_off2, NULL); break;
-						case 3:
-							timer_remove( &blinkTimer[3] );
-							timer_add( &blinkTimer[3], max(dur[3],31), &kria_blink_off3, NULL );
-							timer_remove( &auxTimer[3]);
-							timer_add(&auxTimer[3], dur[3], &kria_off3, NULL); break;
-						default: break;
-					}
-
-					tr[i1] = 1;
-					kria_blinks[i1] = 1;
-				}
-			}
+		for ( uint8_t i=0; i<4; i++ )
+		{
+			if ( !kria_tt_clocked[i] )
+				clock_kria_track( i );
 		}
 
 		monomeFrameDirty++;
@@ -545,6 +504,77 @@ void clock_kria(uint8_t phase) {
 		// may need forced DAC update here
 		dac_timer_update();
 	}
+}
+
+void clock_kria_track( uint8_t trackNum )
+{
+	u64 current_tick = get_ticks();
+	clock_deltas[trackNum] = (u32)(current_tick-last_ticks[trackNum]);
+	last_ticks[trackNum] = current_tick;
+
+	if(kria_next_step(trackNum, mDur)) {
+		f32 clock_scale = (clock_deltas[trackNum] * k.p[k.pattern].t[trackNum].tmul[mTr]) / (f32)384.0;
+		f32 uncscaled = (k.p[k.pattern].t[trackNum].dur[pos[trackNum][mDur]]+1) * (k.p[k.pattern].t[trackNum].dur_mul<<2);
+		dur[trackNum] = (u16)(uncscaled * clock_scale);
+	}
+
+	if(kria_next_step(trackNum, mOct)) {
+		oct[trackNum] = k.p[k.pattern].t[trackNum].oct[pos[trackNum][mOct]];
+	}
+
+	if(kria_next_step(trackNum, mNote)) {
+		note[trackNum] = k.p[k.pattern].t[trackNum].note[pos[trackNum][mNote]];
+	}
+
+	if(kria_next_step(trackNum, mTr)) {
+		if(k.p[k.pattern].t[trackNum].tr[pos[trackNum][mTr]]) {
+
+			if ( !kria_mutes[trackNum] ) {
+				dac_set_value(trackNum, ET[cur_scale[note[trackNum]] + (oct[trackNum] * 12)] << 2);
+				gpio_set_gpio_pin(TR1 + trackNum);
+			}
+
+			switch(trackNum) {
+				case 0:
+					timer_remove( &blinkTimer[0] );
+					timer_add( &blinkTimer[0], max(dur[0],31), &kria_blink_off0, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[0]);
+						timer_add(&auxTimer[0], dur[0], &kria_off0, NULL);
+					}
+					break;
+				case 1:
+					timer_remove( &blinkTimer[1] );
+					timer_add( &blinkTimer[1], max(dur[1],31), &kria_blink_off1, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[1]);
+						timer_add(&auxTimer[1], dur[1], &kria_off1, NULL);
+					}
+					break;
+				case 2:
+					timer_remove( &blinkTimer[2] );
+					timer_add( &blinkTimer[2], max(dur[2],31), &kria_blink_off2, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[2]);
+						timer_add(&auxTimer[2], dur[2], &kria_off2, NULL);
+					}
+					break;
+				case 3:
+					timer_remove( &blinkTimer[3] );
+					timer_add( &blinkTimer[3], max(dur[3],31), &kria_blink_off3, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[3]);
+						timer_add(&auxTimer[3], dur[3], &kria_off3, NULL);
+					}
+					break;
+				default: break;
+			}
+
+			tr[trackNum] = 1;
+			kria_blinks[trackNum] = 1;
+		}
+	}
+
 }
 
 static void kria_off0(void* o) {
@@ -595,13 +625,11 @@ static void kria_blink_off3(void* o) {
 	monomeFrameDirty++;
 }
 
-
 void change_pattern(uint8_t x) {
 	k.pattern = x;
 	pos_reset = true;
 	calc_scale(k.p[k.pattern].scale);
 }
-
 
 void ii_kria(uint8_t *d, uint8_t l) {
 	// print_dbg("\r\nii/kria (");
@@ -944,14 +972,22 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				monomeFrameDirty++;
 			}
 			break;
+		case II_KR_CLK:
+			if ( d[1] == 0 ) {
+				for ( int i=0; i<4; i++ ) {
+					if ( kria_tt_clocked[i] )
+						clock_kria_track( i );
+				}
+			}
+			else if ( d[1] < 5 && d[1] > 0  ) {
+				if ( kria_tt_clocked[d[1]-1] )
+					clock_kria_track( d[1]-1 );
+			}
 		default:
 			break;
 		}
 	}
 }
-
-
-
 
 void handler_KriaGridKey(s32 data) {
 	u8 x, y, z, index, i1, found;
@@ -1019,6 +1055,7 @@ void handler_KriaGridKey(s32 data) {
 						}
 					}
 					else {
+						// METAMOD: this is where the pattern is set for a cell in the meta sequence
 						k.meta_pat[meta_edit] = x;
 					}
 				}
@@ -1415,7 +1452,12 @@ void handler_KriaGridKey(s32 data) {
 				break;
 			case mScale:
 				if(z) {
-					if(x < 8) {
+					// tt clocking stuff added here
+					if ( y == 0 && x < 4 )
+					{
+						kria_tt_clocked[x] = !kria_tt_clocked[x];
+					}
+					else if(x < 8) {
 						if(y > 4)
 							k.p[k.pattern].scale = (y - 5) * 8 + x;
 					}
@@ -1470,9 +1512,11 @@ void handler_KriaGridKey(s32 data) {
 				}
 				else if(z && y == 6) {
 					if(cue) {
+						// METAMOD: this line toggles on or off meta mode
 						meta ^= 1;
 					}
 					else {
+						// METAMOD: how many steps this particular meta cell gets
 						k.meta_steps[meta_edit] = x;
 					}
 				}
@@ -1743,7 +1787,9 @@ void refresh_kria(void) {
 		else
 			monomeLedBuffer[R7+i1] = (track == i1) ? L2 : L0;
 		
-		monomeLedBuffer[R7+i1] += kria_blinks[i1]*2;
+		// when a blink is happening, the LED is 2 brighter (but not when muted)
+		if ( !kria_mutes[i1] )
+			monomeLedBuffer[R7+i1] += kria_blinks[i1]*2;
 	}
 
 
@@ -1930,17 +1976,29 @@ void refresh_kria(void) {
 		}
 		break;
 	case mScale:
+		// shoehorning my track clocking feature here 
+		for ( uint8_t i=0; i<4; i++ )
+		{
+			// if teletype clocking is enabled, its brighter
+			monomeLedBuffer[i] = kria_tt_clocked[i] ? L1 : L0;
+		}
+
+		// vertical bar dividing the left and right half
 		for(i1=0;i1<7;i1++)
 			monomeLedBuffer[8+16*i1] = L0;
+		// the two rows of scale selecting buttons 
 		for(i1=0;i1<8;i1++) {
 			monomeLedBuffer[R5 + i1] = 2;
 			monomeLedBuffer[R6 + i1] = 2;
 		}
+		// highlight the selected scale
 		monomeLedBuffer[R5 + (k.p[k.pattern].scale >> 3) * 16 + (k.p[k.pattern].scale & 0x7)] = L1;
 
+		// the intervals of the selected scale
 		for(i1=0;i1<7;i1++)
 			monomeLedBuffer[scale_data[k.p[k.pattern].scale][i1] + 8 + (6-i1)*16] = L1;
 
+		// if an active step of a track is playing a note, it brightness is incremented by one
 		for(i1=0;i1<4;i1++) {
 			if(k.p[k.pattern].t[i1].tr[pos[i1][mTr]])
 				monomeLedBuffer[scale_data[k.p[k.pattern].scale][note[i1]] + 8 + (6-note[i1])*16]++;
