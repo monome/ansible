@@ -929,7 +929,7 @@ void handler_LevelsRefresh(s32 data) {
 
 void refresh_levels() {
 	uint16_t i1, i2;
-	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+	memset(monomeLedBuffer,0,MONOME_MAX_LED_BYTES);
 
 	for(i1=0;i1<4;i1++) {
 		if(l.mode[i1]) {
@@ -983,7 +983,7 @@ void refresh_levels() {
 
 void refresh_levels_change() {
 	uint16_t i1;
-	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+	memset(monomeLedBuffer,0,MONOME_MAX_LED_BYTES);
 
 	if(l.dir) {
 		for(i1=0;i1<l.len * 4;i1++) {
@@ -1021,7 +1021,7 @@ void refresh_levels_change() {
 
 void refresh_levels_config() {
 	uint16_t i1, i2, i3;
-	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+	memset(monomeLedBuffer,0,MONOME_MAX_LED_BYTES);
 
 	switch(mode_config) {
 	case LEVELS_CM_MODE:
@@ -1825,7 +1825,7 @@ static void key_long_cycles(uint8_t key) {
 
 void refresh_cycles(void) {
 	uint8_t i1;
-	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+	memset(monomeLedBuffer,0,MONOME_MAX_LED_BYTES);
 
 	if(c.mode) {
 		for(i1=1;i1<4;i1++) {
@@ -1842,7 +1842,7 @@ void refresh_cycles(void) {
 
 void refresh_cycles_config(void) {
 	uint8_t i1;
-	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+	memset(monomeLedBuffer,0,MONOME_MAX_LED_BYTES);
 
 	if(c.mode) {
 		monomeLedBuffer[36] = 7;
@@ -1890,7 +1890,7 @@ void refresh_cycles_config(void) {
 
 void refresh_cycles_config_range(void) {
 	uint8_t i1, i2;
-	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+	memset(monomeLedBuffer,0,MONOME_MAX_LED_BYTES);
 
 	for(i1=0;i1<4;i1++)
 		for(i2=0;i2<c.range[i1];i2++)
@@ -1899,7 +1899,7 @@ void refresh_cycles_config_range(void) {
 
 void refresh_cycles_config_div(void) {
 	uint8_t i1, i2;
-	memset(monomeLedBuffer,0,sizeof(monomeLedBuffer));
+	memset(monomeLedBuffer,0,MONOME_MAX_LED_BYTES);
 
 	for(i1=0;i1<4;i1++) {
 		for(i2=0; i2<(1<<c.div[i1]); i2++) {
