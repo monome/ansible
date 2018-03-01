@@ -72,6 +72,9 @@ typedef enum {
 kria_modes_t k_mode;
 kria_mod_modes_t k_mod_mode;
 
+u8 kria_track_indices[4] = {
+	0, 1, 2, 3
+};
 bool kria_mutes[4];
 bool kria_blinks[4];
 softTimer_t blinkTimer[4] = {
@@ -289,17 +292,9 @@ uint8_t meta_count;
 uint8_t meta_next;
 uint8_t meta_edit;
 
-static void kria_off0(void* o);
-static void kria_off1(void* o);
-static void kria_off2(void* o);
-static void kria_off3(void* o);
-
-static void kria_blink_off0(void* o);
-static void kria_blink_off1(void* o);
-static void kria_blink_off2(void* o);
-static void kria_blink_off3(void* o);
-
-static void kria_rpt_off0(void* o);
+static void kria_off(void* o);
+static void kria_blink_off(void* o);
+static void kria_rpt_off(void* o);
 
 bool kria_next_step(uint8_t t, uint8_t p);
 static void adjust_loop_start(u8 t, u8 x, u8 m);
@@ -527,6 +522,7 @@ void clock_kria_track( uint8_t trackNum )
 	last_ticks[trackNum] = current_tick;
 
 	kria_track * track = &k.p[k.pattern].t[trackNum];
+	u8* trackIndex = &kria_track_indices[trackNum];
 
 	if(kria_next_step(trackNum, mDur)) {
 		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)384.0;
@@ -549,57 +545,55 @@ void clock_kria_track( uint8_t trackNum )
 	if(kria_next_step(trackNum, mTr)) {
 		if( !kria_mutes[trackNum] && track->tr[pos[trackNum][mTr]]) {
 
-			// if ( !kria_mutes[trackNum] ) {
-				dac_set_value(trackNum, ET[cur_scale[note[trackNum]] + (oct[trackNum] * 12)] << 2);
-				// gpio_set_gpio_pin(TR1 + trackNum);
-				set_tr( TR1 + trackNum );
-			// }
+			dac_set_value(trackNum, ET[cur_scale[note[trackNum]] + (oct[trackNum] * 12)] << 2);
+			set_tr( TR1 + trackNum );
 
-			switch(trackNum) {
-				case 0:
-					repeats[trackNum] = rpt[trackNum] - 1;
-
-					timer_remove( &repeatTimer[trackNum] );
-					if ( repeats[trackNum] > 0 ) {
-						rptTicks[trackNum] = clock_deltas[trackNum] / rpt[trackNum];
-						timer_add( &repeatTimer[trackNum], rptTicks[trackNum], &kria_rpt_off0, NULL );
-					}
-
-					timer_remove( &auxTimer[trackNum]);
-					timer_add(&auxTimer[trackNum], dur[trackNum] / rpt[trackNum], &kria_off0, NULL);
-
-					timer_remove( &blinkTimer[trackNum] );
-					timer_add( &blinkTimer[trackNum], max(dur[trackNum]/rpt[trackNum],31), &kria_blink_off0, NULL );
-					break;
-				case 1:
-					// set_tr( TR2 );
-					timer_remove( &blinkTimer[1] );
-					timer_add( &blinkTimer[1], max(dur[1],31), &kria_blink_off1, NULL );
-					if ( !kria_mutes[trackNum] ) {
-						timer_remove( &auxTimer[1]);
-						timer_add(&auxTimer[1], dur[1], &kria_off1, NULL);
-					}
-					break;
-				case 2:
-					// set_tr( TR3 );
-					timer_remove( &blinkTimer[2] );
-					timer_add( &blinkTimer[2], max(dur[2],31), &kria_blink_off2, NULL );
-					if ( !kria_mutes[trackNum] ) {
-						timer_remove( &auxTimer[2]);
-						timer_add(&auxTimer[2], dur[2], &kria_off2, NULL);
-					}
-					break;
-				case 3:
-					// set_tr( TR4 );
-					timer_remove( &blinkTimer[3] );
-					timer_add( &blinkTimer[3], max(dur[3],31), &kria_blink_off3, NULL );
-					if ( !kria_mutes[trackNum] ) {
-						timer_remove( &auxTimer[3]);
-						timer_add(&auxTimer[3], dur[3], &kria_off3, NULL);
-					}
-					break;
-				default: break;
+			repeats[trackNum] = rpt[trackNum] - 1;
+			timer_remove( &repeatTimer[trackNum] );
+			if ( repeats[trackNum] > 0 ) {
+				rptTicks[trackNum] = (clock_deltas[trackNum] * (u32)track->tmul[mTr] ) / rpt[trackNum];
+				timer_add( &repeatTimer[trackNum], rptTicks[trackNum], &kria_rpt_off, trackIndex );
 			}
+
+			timer_remove( &auxTimer[trackNum]);
+			timer_add(&auxTimer[trackNum], ((u32)dur[trackNum]) / ((u32)rpt[trackNum]), &kria_off, trackIndex);
+			timer_remove( &blinkTimer[trackNum] );
+			timer_add( &blinkTimer[trackNum], max(dur[trackNum]/rpt[trackNum],31), &kria_blink_off, trackIndex );
+
+			// switch(trackNum) {
+			// 	case 0:
+			// 		repeats[trackNum] = rpt[trackNum] - 1;
+			// 		timer_remove( &repeatTimer[trackNum] );
+			// 		if ( repeats[trackNum] > 0 ) {
+			// 			rptTicks[trackNum] = (clock_deltas[trackNum] * (u32)track->tmul[mTr] ) / rpt[trackNum];
+			// 			timer_add( &repeatTimer[trackNum], rptTicks[trackNum], &kria_rpt_off, trackIndex );
+			// 		}
+
+			// 		timer_remove( &auxTimer[trackNum]);
+			// 		timer_add(&auxTimer[trackNum], ((u32)dur[trackNum]) / ((u32)rpt[trackNum]), &kria_off, trackIndex);
+			// 		timer_remove( &blinkTimer[trackNum] );
+			// 		timer_add( &blinkTimer[trackNum], max(dur[trackNum]/rpt[trackNum],31), &kria_blink_off, trackIndex );
+			// 		break;
+			// 	case 1:
+			// 		timer_remove( &blinkTimer[1] );
+			// 		timer_add( &blinkTimer[1], max(dur[1],31), &kria_blink_off, trackIndex );
+			// 		timer_remove( &auxTimer[1]);
+			// 		timer_add(&auxTimer[1], dur[1], &kria_off, trackIndex);
+			// 		break;
+			// 	case 2:
+			// 		timer_remove( &blinkTimer[2] );
+			// 		timer_add( &blinkTimer[2], max(dur[2],31), &kria_blink_off, trackIndex );
+			// 		timer_remove( &auxTimer[2]);
+			// 		timer_add(&auxTimer[2], dur[2], &kria_off, trackIndex);
+			// 		break;
+			// 	case 3:
+			// 		timer_remove( &blinkTimer[3] );
+			// 		timer_add( &blinkTimer[3], max(dur[3],31), &kria_blink_off, trackIndex );
+			// 		timer_remove( &auxTimer[3]);
+			// 		timer_add(&auxTimer[3], dur[3], &kria_off, trackIndex);
+			// 		break;
+			// 	default: break;
+			// }
 
 			tr[trackNum] = 1;
 			kria_blinks[trackNum] = 1;
@@ -608,71 +602,37 @@ void clock_kria_track( uint8_t trackNum )
 
 }
 
-static void kria_off0(void* o) {
-	timer_remove( &auxTimer[0]);
-	clr_tr(TR1);
-	tr[0] = 0;
+static void kria_off(void* o) {
+	int index = *(u8*)o;
+	timer_remove( &auxTimer[index] );
+	clr_tr(TR1 + index);
+	tr[index] = 0;
 }
 
-static void kria_off1(void* o) {
-	timer_remove( &auxTimer[1]);
-	clr_tr(TR2);
-	tr[1] = 0;
-}
-
-static void kria_off2(void* o) {
-	timer_remove( &auxTimer[2]);
-	clr_tr(TR3);
-	tr[2] = 0;
-}
-
-static void kria_off3(void* o) {
-	timer_remove( &auxTimer[3]);
-	clr_tr(TR4);
-	tr[3] = 0;
-}
-
-static void kria_blink_off0(void* o) {
-	timer_remove( &blinkTimer[0] );
-	kria_blinks[0] = 0;
+static void kria_blink_off(void* o) {
+	int index = *(u8*)o;
+	timer_remove( &blinkTimer[index] );
+	kria_blinks[index] = 0;
 	monomeFrameDirty++;
 }
 
-static void kria_blink_off1(void* o) {
-	timer_remove( &blinkTimer[1] );
-	kria_blinks[1] = 0;
-	monomeFrameDirty++;
-}
+static void kria_rpt_off(void* o) {
+	int index = *(u8*)o;
 
-static void kria_blink_off2(void* o) {
-	timer_remove( &blinkTimer[2] );
-	kria_blinks[2] = 0;
-	monomeFrameDirty++;
-}
+	repeats[index]--;
 
-static void kria_blink_off3(void* o) {
-	timer_remove( &blinkTimer[3] );
-	kria_blinks[3] = 0;
-	monomeFrameDirty++;
-}
-
-static void kria_rpt_off0(void* o) {
-	// timer_remove( &repeatTimer[0] );
-	repeats[0]--;
-
-	if ( repeats[0] <= 0 ) {
-		timer_remove( &repeatTimer[0] );
+	if ( repeats[index] <= 0 ) {
+		timer_remove( &repeatTimer[index] );
 	}
 
-	set_tr( TR1 );
-	tr[0] = 1;
-	kria_blinks[0] = 1;
+	set_tr( TR1 + index );
+	tr[index] = 1;
+	kria_blinks[index] = 1;
 
-	timer_remove( &auxTimer[0]);
-	timer_add(&auxTimer[0], dur[0] / rpt[0], &kria_off0, NULL);
-	timer_remove( &blinkTimer[0] );
-	timer_add( &blinkTimer[0], max(dur[0]/rpt[0],31), &kria_blink_off0, NULL );
-
+	timer_remove( &auxTimer[index]);
+	timer_add(&auxTimer[index], ((u32)dur[index]) / ((u32)rpt[index]), &kria_off, o);
+	timer_remove( &blinkTimer[index] );
+	timer_add( &blinkTimer[index], max(dur[index]/rpt[index],31), &kria_blink_off, o );
 }
 
 void change_pattern(uint8_t x) {
@@ -1556,7 +1516,9 @@ void handler_KriaGridKey(s32 data) {
 						monomeFrameDirty++;
 					}
 					break;
+				default: break;
 				}
+				break;
 			case mScale:
 				if(z) {
 					// tt clocking stuff added here
