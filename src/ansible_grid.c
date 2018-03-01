@@ -15,6 +15,8 @@
 #include "main.h"
 #include "ansible_grid.h"
 
+#include "init_ansible.h"
+
 
 #define L2 12
 #define L1 8
@@ -24,7 +26,7 @@
 
 bool preset_mode;
 uint8_t preset;
-
+	
 u8 key_count = 0;
 u8 held_keys[32];
 u8 key_times[128];
@@ -37,6 +39,9 @@ uint8_t clock_count;
 uint8_t clock_mul;
 uint8_t ext_clock_count;
 uint8_t ext_clock_phase;
+
+u64 last_ticks[4];
+u32 clock_deltas[4];
 
 uint8_t time_rough;
 uint8_t time_fine;
@@ -67,6 +72,17 @@ typedef enum {
 kria_modes_t k_mode;
 kria_mod_modes_t k_mod_mode;
 
+bool kria_mutes[4];
+bool kria_blinks[4];
+softTimer_t blinkTimer[4] = {
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL },
+	{ .next = NULL, .prev = NULL }
+};
+
+// manually clocking via teletype
+bool kria_tt_clocked[4];
 
 // MP
 
@@ -262,11 +278,15 @@ uint8_t meta_count;
 uint8_t meta_next;
 uint8_t meta_edit;
 
-
 static void kria_off0(void* o);
 static void kria_off1(void* o);
 static void kria_off2(void* o);
 static void kria_off3(void* o);
+
+static void kria_blink_off0(void* o);
+static void kria_blink_off1(void* o);
+static void kria_blink_off2(void* o);
+static void kria_blink_off3(void* o);
 
 bool kria_next_step(uint8_t t, uint8_t p);
 static void adjust_loop_start(u8 t, u8 x, u8 m);
@@ -355,6 +375,10 @@ void init_kria() {
 	clock_period = f.kria_state.clock_period;
 	time_rough = (clock_period - 20) / 16;
 	time_fine = (clock_period - 20) % 16;
+
+	for ( int i=0; i<4; i++ ) {
+		last_ticks[i] = get_ticks();
+	}
 }
 
 void resume_kria() {
@@ -373,6 +397,10 @@ void resume_kria() {
 		clock = &clock_null;
 	else
 		clock = &clock_kria;
+
+	for ( int i=0; i<4; i++ ) {
+		last_ticks[i] = get_ticks();
+	}
 
 	dac_set_slew(0,0);
 	dac_set_slew(1,0);
@@ -464,44 +492,10 @@ void clock_kria(uint8_t phase) {
 		}
 
 
-
-		for(uint8_t i1=0;i1<4;i1++) {
-			if(kria_next_step(i1, mDur)) {
-				dur[i1] = (k.p[k.pattern].t[i1].dur[pos[i1][mDur]]+1) * (k.p[k.pattern].t[i1].dur_mul<<2);
-			}
-
-			if(kria_next_step(i1, mOct)) {
-				oct[i1] = k.p[k.pattern].t[i1].oct[pos[i1][mOct]];
-			}
-
-			if(kria_next_step(i1, mNote)) {
-				note[i1] = k.p[k.pattern].t[i1].note[pos[i1][mNote]];
-			}
-
-			if(kria_next_step(i1, mTr)) {
-				if(k.p[k.pattern].t[i1].tr[pos[i1][mTr]]) {
-					dac_set_value(i1, ET[cur_scale[note[i1]] + (oct[i1] * 12)] << 2);
-					gpio_set_gpio_pin(TR1 + i1);
-
-					switch(i1) {
-						case 0:
-							timer_remove( &auxTimer[0]);
-							timer_add(&auxTimer[0], dur[0], &kria_off0, NULL); break;
-						case 1:
-							timer_remove( &auxTimer[1]);
-							timer_add(&auxTimer[1], dur[1], &kria_off1, NULL); break;
-						case 2:
-							timer_remove( &auxTimer[2]);
-							timer_add(&auxTimer[2], dur[2], &kria_off2, NULL); break;
-						case 3:
-							timer_remove( &auxTimer[3]);
-							timer_add(&auxTimer[3], dur[3], &kria_off3, NULL); break;
-						default: break;
-					}
-
-					tr[i1] = 1;
-				}
-			}
+		for ( uint8_t i=0; i<4; i++ )
+		{
+			if ( !kria_tt_clocked[i] )
+				clock_kria_track( i );
 		}
 
 		monomeFrameDirty++;
@@ -509,6 +503,77 @@ void clock_kria(uint8_t phase) {
 		// may need forced DAC update here
 		dac_timer_update();
 	}
+}
+
+void clock_kria_track( uint8_t trackNum )
+{
+	u64 current_tick = get_ticks();
+	clock_deltas[trackNum] = (u32)(current_tick-last_ticks[trackNum]);
+	last_ticks[trackNum] = current_tick;
+
+	if(kria_next_step(trackNum, mDur)) {
+		f32 clock_scale = (clock_deltas[trackNum] * k.p[k.pattern].t[trackNum].tmul[mTr]) / (f32)384.0;
+		f32 uncscaled = (k.p[k.pattern].t[trackNum].dur[pos[trackNum][mDur]]+1) * (k.p[k.pattern].t[trackNum].dur_mul<<2);
+		dur[trackNum] = (u16)(uncscaled * clock_scale);
+	}
+
+	if(kria_next_step(trackNum, mOct)) {
+		oct[trackNum] = k.p[k.pattern].t[trackNum].oct[pos[trackNum][mOct]];
+	}
+
+	if(kria_next_step(trackNum, mNote)) {
+		note[trackNum] = k.p[k.pattern].t[trackNum].note[pos[trackNum][mNote]];
+	}
+
+	if(kria_next_step(trackNum, mTr)) {
+		if(k.p[k.pattern].t[trackNum].tr[pos[trackNum][mTr]]) {
+
+			if ( !kria_mutes[trackNum] ) {
+				dac_set_value(trackNum, ET[cur_scale[note[trackNum]] + (oct[trackNum] * 12)] << 2);
+				gpio_set_gpio_pin(TR1 + trackNum);
+			}
+
+			switch(trackNum) {
+				case 0:
+					timer_remove( &blinkTimer[0] );
+					timer_add( &blinkTimer[0], max(dur[0],31), &kria_blink_off0, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[0]);
+						timer_add(&auxTimer[0], dur[0], &kria_off0, NULL);
+					}
+					break;
+				case 1:
+					timer_remove( &blinkTimer[1] );
+					timer_add( &blinkTimer[1], max(dur[1],31), &kria_blink_off1, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[1]);
+						timer_add(&auxTimer[1], dur[1], &kria_off1, NULL);
+					}
+					break;
+				case 2:
+					timer_remove( &blinkTimer[2] );
+					timer_add( &blinkTimer[2], max(dur[2],31), &kria_blink_off2, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[2]);
+						timer_add(&auxTimer[2], dur[2], &kria_off2, NULL);
+					}
+					break;
+				case 3:
+					timer_remove( &blinkTimer[3] );
+					timer_add( &blinkTimer[3], max(dur[3],31), &kria_blink_off3, NULL );
+					if ( !kria_mutes[trackNum] ) {
+						timer_remove( &auxTimer[3]);
+						timer_add(&auxTimer[3], dur[3], &kria_off3, NULL);
+					}
+					break;
+				default: break;
+			}
+
+			tr[trackNum] = 1;
+			kria_blinks[trackNum] = 1;
+		}
+	}
+
 }
 
 static void kria_off0(void* o) {
@@ -535,13 +600,35 @@ static void kria_off3(void* o) {
 	tr[3] = 0;
 }
 
+static void kria_blink_off0(void* o) {
+	timer_remove( &blinkTimer[0] );
+	kria_blinks[0] = 0;
+	monomeFrameDirty++;
+}
+
+static void kria_blink_off1(void* o) {
+	timer_remove( &blinkTimer[1] );
+	kria_blinks[1] = 0;
+	monomeFrameDirty++;
+}
+
+static void kria_blink_off2(void* o) {
+	timer_remove( &blinkTimer[2] );
+	kria_blinks[2] = 0;
+	monomeFrameDirty++;
+}
+
+static void kria_blink_off3(void* o) {
+	timer_remove( &blinkTimer[3] );
+	kria_blinks[3] = 0;
+	monomeFrameDirty++;
+}
 
 void change_pattern(uint8_t x) {
 	k.pattern = x;
 	pos_reset = true;
 	calc_scale(k.p[k.pattern].scale);
 }
-
 
 void ii_kria(uint8_t *d, uint8_t l) {
 	// print_dbg("\r\nii/kria (");
@@ -847,14 +934,59 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				ii_tx_queue(pos[d[1]-1][d[2]-1]);
 			}
 			break;
+		case II_KR_CV + II_GET:
+			if (d[1] > 3) {
+				ii_tx_queue(0);
+				ii_tx_queue(0);
+				break;
+			}
+			ii_tx_queue(dac_get_value(d[1]) >> 8);
+			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			break;
+		case II_KR_MUTE:
+			if ( d[1] == 0 ) {
+				for ( int i=0; i<4; i++ )
+					kria_mutes[i] = max( min( d[2], 1 ), 0 );
+				monomeFrameDirty++;
+			}
+			else if ( d[1] < 5 && d[1] > 0 ) {
+				kria_mutes[d[1]-1] = max( min( d[2], 1 ), 0 );
+				monomeFrameDirty++;
+			}
+			break;
+		case II_KR_MUTE + II_GET:
+			if ( d[1] > 0 && d[1] < 5 ) {
+				ii_tx_queue( kria_mutes[d[1]-1] );
+			}
+			break;
+		case II_KR_TMUTE:
+			if ( d[1] == 0 ) {
+				for ( int i=0; i<4; i++ ) {
+					kria_mutes[i] = !kria_mutes[i];
+				}
+				monomeFrameDirty++;
+			}
+			else if ( d[1] < 5 && d[1] > 0 ) {
+				kria_mutes[d[1]-1] = !kria_mutes[d[1]-1];
+				monomeFrameDirty++;
+			}
+			break;
+		case II_KR_CLK:
+			if ( d[1] == 0 ) {
+				for ( int i=0; i<4; i++ ) {
+					if ( kria_tt_clocked[i] )
+						clock_kria_track( i );
+				}
+			}
+			else if ( d[1] < 5 && d[1] > 0  ) {
+				if ( kria_tt_clocked[d[1]-1] )
+					clock_kria_track( d[1]-1 );
+			}
 		default:
 			break;
 		}
 	}
 }
-
-
-
 
 void handler_KriaGridKey(s32 data) {
 	u8 x, y, z, index, i1, found;
@@ -1036,13 +1168,14 @@ void handler_KriaGridKey(s32 data) {
 			if(z) {
 				switch(x) {
 				case 0:
-					track = 0; break;
 				case 1:
-					track = 1; break;
 				case 2:
-					track = 2; break;
 				case 3:
-					track = 3; break;
+					if ( k_mod_mode == modLoop )
+						kria_mutes[x] = !kria_mutes[x];
+					else
+						track = x;
+					break;
 				case 5:
 					k_mode = mTr; break;
 				case 6:
@@ -1317,7 +1450,12 @@ void handler_KriaGridKey(s32 data) {
 				break;
 			case mScale:
 				if(z) {
-					if(x < 8) {
+					// tt clocking stuff added here
+					if ( y == 0 && x < 4 )
+					{
+						kria_tt_clocked[x] = !kria_tt_clocked[x];
+					}
+					else if(x < 8) {
 						if(y > 4)
 							k.p[k.pattern].scale = (y - 5) * 8 + x;
 					}
@@ -1631,8 +1769,6 @@ void refresh_kria(void) {
 	memset(monomeLedBuffer,0,128);
 
 	// bottom strip
-
-	memset(monomeLedBuffer + R7, L0, 4);
 	memset(monomeLedBuffer + R7 + 5, L0, 4);
 	monomeLedBuffer[R7 + 10] = L0;
 	monomeLedBuffer[R7 + 11] = L0;
@@ -1640,7 +1776,19 @@ void refresh_kria(void) {
 	monomeLedBuffer[R7 + 14] = L0;
 	monomeLedBuffer[R7 + 15] = L0;
 
-	monomeLedBuffer[112+track] = L2;
+	for ( i1=0; i1<4; i1++ )
+	{
+		if ( kria_mutes[i1] )
+			monomeLedBuffer[R7+i1] = (track == i1) ? L1 : 2;
+		else
+			monomeLedBuffer[R7+i1] = (track == i1) ? L2 : L0;
+		
+		// when a blink is happening, the LED is 2 brighter (but not when muted)
+		if ( !kria_mutes[i1] )
+			monomeLedBuffer[R7+i1] += kria_blinks[i1]*2;
+	}
+
+
 
 	switch(k_mode) {
 	case mTr:
@@ -1824,17 +1972,29 @@ void refresh_kria(void) {
 		}
 		break;
 	case mScale:
+		// shoehorning my track clocking feature here 
+		for ( uint8_t i=0; i<4; i++ )
+		{
+			// if teletype clocking is enabled, its brighter
+			monomeLedBuffer[i] = kria_tt_clocked[i] ? L1 : L0;
+		}
+
+		// vertical bar dividing the left and right half
 		for(i1=0;i1<7;i1++)
 			monomeLedBuffer[8+16*i1] = L0;
+		// the two rows of scale selecting buttons 
 		for(i1=0;i1<8;i1++) {
 			monomeLedBuffer[R5 + i1] = 2;
 			monomeLedBuffer[R6 + i1] = 2;
 		}
+		// highlight the selected scale
 		monomeLedBuffer[R5 + (k.p[k.pattern].scale >> 3) * 16 + (k.p[k.pattern].scale & 0x7)] = L1;
 
+		// the intervals of the selected scale
 		for(i1=0;i1<7;i1++)
 			monomeLedBuffer[scale_data[k.p[k.pattern].scale][i1] + 8 + (6-i1)*16] = L1;
 
+		// if an active step of a track is playing a note, it brightness is incremented by one
 		for(i1=0;i1<4;i1++) {
 			if(k.p[k.pattern].t[i1].tr[pos[i1][mTr]])
 				monomeLedBuffer[scale_data[k.p[k.pattern].scale][note[i1]] + 8 + (6-note[i1])*16]++;
@@ -2394,6 +2554,15 @@ void ii_mp(uint8_t *d, uint8_t l) {
 			else if(d[1] < 9) {
 				position[d[1]-1] = -1;
 			}
+			break;
+		case II_MP_CV + II_GET:
+			if (d[1] > 3) {
+				ii_tx_queue(0);
+				ii_tx_queue(0);
+				break;
+			}
+			ii_tx_queue(dac_get_value(d[1]) >> 8);
+			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
 		default:
 			break;

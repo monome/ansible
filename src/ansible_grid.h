@@ -108,6 +108,7 @@ void default_kria(void);
 void init_kria(void);
 void resume_kria(void);
 void clock_kria(uint8_t phase);
+void clock_kria_track( uint8_t trackNum );
 void ii_kria(uint8_t *d, uint8_t l);
 void handler_KriaGridKey(s32 data);
 void handler_KriaRefresh(s32 data);
