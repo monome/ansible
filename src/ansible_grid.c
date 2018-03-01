@@ -460,7 +460,6 @@ void clock_kria(uint8_t phase) {
 				if(meta) {
 					meta_count++;
 					if(meta_count > k.meta_steps[meta_pos]) {
-						// METAMOD: this is where pattern changes happen in the meta sequencer
 						if(meta_next)
 							meta_pos = meta_next - 1;
 						else if(meta_pos == k.meta_end)
@@ -1055,7 +1054,6 @@ void handler_KriaGridKey(s32 data) {
 						}
 					}
 					else {
-						// METAMOD: this is where the pattern is set for a cell in the meta sequence
 						k.meta_pat[meta_edit] = x;
 					}
 				}
@@ -1512,11 +1510,9 @@ void handler_KriaGridKey(s32 data) {
 				}
 				else if(z && y == 6) {
 					if(cue) {
-						// METAMOD: this line toggles on or off meta mode
 						meta ^= 1;
 					}
 					else {
-						// METAMOD: how many steps this particular meta cell gets
 						k.meta_steps[meta_edit] = x;
 					}
 				}
