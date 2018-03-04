@@ -117,6 +117,13 @@ void handler_KriaKey(s32 data);
 void handler_KriaTr(s32 data);
 void handler_KriaTrNormal(s32 data);
 void refresh_kria(void);
+void refresh_kria_tr(void);
+void refresh_kria_note(void);
+void refresh_kria_oct(void);
+void refresh_kria_dur(void);
+void refresh_kria_rpt(void);
+void refresh_kria_scale(void);
+void refresh_kria_pattern(void);
 void refresh_kria_config(void);
 
 void default_mp(void);

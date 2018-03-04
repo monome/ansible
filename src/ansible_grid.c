@@ -278,6 +278,7 @@ u8 note[4];
 u8 oct[4];
 u16 dur[4];
 u8 rpt[4]; // holds repeat count for step
+u8 activeRpt[4]; // needed for cases when triggers have a longer clock division than repeats (for viz)
 u16 rptTicks[4]; // holds the length of a repeat
 u8 repeats[4]; // gets decremented each repeat
 
@@ -515,8 +516,7 @@ void clock_kria(uint8_t phase) {
 	}
 }
 
-void clock_kria_track( uint8_t trackNum )
-{
+void clock_kria_track( uint8_t trackNum ) {
 	u64 current_tick = get_ticks();
 	clock_deltas[trackNum] = (u32)(current_tick-last_ticks[trackNum]);
 	last_ticks[trackNum] = current_tick;
@@ -545,6 +545,8 @@ void clock_kria_track( uint8_t trackNum )
 	if(kria_next_step(trackNum, mTr)) {
 		if( !kria_mutes[trackNum] && track->tr[pos[trackNum][mTr]]) {
 
+			activeRpt[trackNum] = rpt[trackNum];
+
 			dac_set_value(trackNum, ET[cur_scale[note[trackNum]] + (oct[trackNum] * 12)] << 2);
 			set_tr( TR1 + trackNum );
 
@@ -560,46 +562,10 @@ void clock_kria_track( uint8_t trackNum )
 			timer_remove( &blinkTimer[trackNum] );
 			timer_add( &blinkTimer[trackNum], max(dur[trackNum]/rpt[trackNum],31), &kria_blink_off, trackIndex );
 
-			// switch(trackNum) {
-			// 	case 0:
-			// 		repeats[trackNum] = rpt[trackNum] - 1;
-			// 		timer_remove( &repeatTimer[trackNum] );
-			// 		if ( repeats[trackNum] > 0 ) {
-			// 			rptTicks[trackNum] = (clock_deltas[trackNum] * (u32)track->tmul[mTr] ) / rpt[trackNum];
-			// 			timer_add( &repeatTimer[trackNum], rptTicks[trackNum], &kria_rpt_off, trackIndex );
-			// 		}
-
-			// 		timer_remove( &auxTimer[trackNum]);
-			// 		timer_add(&auxTimer[trackNum], ((u32)dur[trackNum]) / ((u32)rpt[trackNum]), &kria_off, trackIndex);
-			// 		timer_remove( &blinkTimer[trackNum] );
-			// 		timer_add( &blinkTimer[trackNum], max(dur[trackNum]/rpt[trackNum],31), &kria_blink_off, trackIndex );
-			// 		break;
-			// 	case 1:
-			// 		timer_remove( &blinkTimer[1] );
-			// 		timer_add( &blinkTimer[1], max(dur[1],31), &kria_blink_off, trackIndex );
-			// 		timer_remove( &auxTimer[1]);
-			// 		timer_add(&auxTimer[1], dur[1], &kria_off, trackIndex);
-			// 		break;
-			// 	case 2:
-			// 		timer_remove( &blinkTimer[2] );
-			// 		timer_add( &blinkTimer[2], max(dur[2],31), &kria_blink_off, trackIndex );
-			// 		timer_remove( &auxTimer[2]);
-			// 		timer_add(&auxTimer[2], dur[2], &kria_off, trackIndex);
-			// 		break;
-			// 	case 3:
-			// 		timer_remove( &blinkTimer[3] );
-			// 		timer_add( &blinkTimer[3], max(dur[3],31), &kria_blink_off, trackIndex );
-			// 		timer_remove( &auxTimer[3]);
-			// 		timer_add(&auxTimer[3], dur[3], &kria_off, trackIndex);
-			// 		break;
-			// 	default: break;
-			// }
-
 			tr[trackNum] = 1;
 			kria_blinks[trackNum] = 1;
 		}
 	}
-
 }
 
 static void kria_off(void* o) {
@@ -622,6 +588,8 @@ static void kria_rpt_off(void* o) {
 	repeats[index]--;
 
 	if ( repeats[index] <= 0 ) {
+		// repeats[index] = 0;
+		// activeRpt[index] = 1;
 		timer_remove( &repeatTimer[index] );
 	}
 
@@ -633,6 +601,7 @@ static void kria_rpt_off(void* o) {
 	timer_add(&auxTimer[index], ((u32)dur[index]) / ((u32)rpt[index]), &kria_off, o);
 	timer_remove( &blinkTimer[index] );
 	timer_add( &blinkTimer[index], max(dur[index]/rpt[index],31), &kria_blink_off, o );
+	monomeFrameDirty++;
 }
 
 void change_pattern(uint8_t x) {
@@ -1468,8 +1437,8 @@ void handler_KriaGridKey(s32 data) {
 				switch(k_mod_mode) {
 				case modNone:
 					if (z) {
-						if ( y > 1 ) {
-							k.p[k.pattern].t[track].rpt[x] = 7-y;
+						if ( y > 1 && y < 6 ) {
+							k.p[k.pattern].t[track].rpt[x] = 7-(y+1);
 							monomeFrameDirty++;
 						}
 					}
@@ -1837,7 +1806,6 @@ void handler_KriaTrNormal(s32 data) {
 }
 
 void refresh_kria(void) {
-	u8 i1,i2;
 
 	memset(monomeLedBuffer,0,128);
 
@@ -1849,38 +1817,35 @@ void refresh_kria(void) {
 	monomeLedBuffer[R7 + 14] = L0;
 	monomeLedBuffer[R7 + 15] = L0;
 
-	for ( i1=0; i1<4; i1++ )
+	for ( uint8_t i=0; i<4; i++ )
 	{
-		if ( kria_mutes[i1] )
-			monomeLedBuffer[R7+i1] = (track == i1) ? L1 : 2;
+		if ( kria_mutes[i] )
+			monomeLedBuffer[R7+i] = (track == i) ? L1 : 2;
 		else
-			monomeLedBuffer[R7+i1] = (track == i1) ? L2 : L0;
+			monomeLedBuffer[R7+i] = (track == i) ? L2 : L0;
 		
 		// when a blink is happening, the LED is 2 brighter (but not when muted)
-		if ( !kria_mutes[i1] )
-			monomeLedBuffer[R7+i1] += kria_blinks[i1]*2;
+		if ( !kria_mutes[i] )
+			monomeLedBuffer[R7+i] += kria_blinks[i]*2;
 	}
-
-
 
 	switch(k_mode) {
 	case mTr:
-		i1 = 5; break;
+	case mRpt:
+		monomeLedBuffer[R7+5] = L2; break;
 	case mNote:
-		i1 = 6; break;
+		monomeLedBuffer[R7+6] = L2; break;
 	case mOct:
-		i1 = 7; break;
+		monomeLedBuffer[R7+7] = L2; break;
 	case mDur:
-		i1 = 8; break;
+		monomeLedBuffer[R7+8] = L2; break;
 	case mScale:
-		i1 = 14; break;
+		monomeLedBuffer[R7+14] = L2; break;
 	case mPattern:
-		i1 = 15; break;
+		monomeLedBuffer[R7+15] = L2; break;
 	default:
-		i1 = 0; break;
+		monomeLedBuffer[R7+0] = L2; break;
 	}
-
-	monomeLedBuffer[R7 + i1] = L2;
 
 	if(k_mod_mode == modLoop)
 		monomeLedBuffer[R7 + 10] = L1;
@@ -1889,270 +1854,296 @@ void refresh_kria(void) {
 	else if(k_mod_mode == modProb)
 		monomeLedBuffer[R7 + 12] = L1;
 
-
-
 	// modes
-
 	switch(k_mode) {
 	case mTr:
-		switch(k_mod_mode) {
-		case modTime:
-			memset(monomeLedBuffer + R1, 3, 16);
-			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mTr] - 1] = L1;
-			break;
-		case modProb:
-			memset(monomeLedBuffer + R5, 3, 16);
-			for(i1=0;i1<16;i1++)
-				if(k.p[k.pattern].t[track].p[mTr][i1])
-					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mTr][i1]) * 16 + i1] = 6;
-			break;
-		default:
-			// steps
-			for(i2=0;i2<4;i2++) {
-				for(i1=0;i1<16;i1++) {
-					if(k.p[k.pattern].t[i2].tr[i1])
-						monomeLedBuffer[i2*16 + i1] = 3;
-				}
-				// playhead
-				// if(tr[i2])
-				monomeLedBuffer[i2*16 + pos[i2][mTr]] += 4;
-			}
-
-			// loop highlight
-			for(i1=0;i1<4;i1++) {
-				if(k.p[k.pattern].t[i1].lswap[mTr]) {
-					for(i2=0;i2<k.p[k.pattern].t[i1].llen[mTr];i2++)
-						monomeLedBuffer[i1*16 + (i2+k.p[k.pattern].t[i1].lstart[mTr])%16] += 2 + (k_mod_mode == modLoop);
-				}
-				else {
-					for(i2=k.p[k.pattern].t[i1].lstart[mTr];i2<=k.p[k.pattern].t[i1].lend[mTr];i2++)
-						monomeLedBuffer[i1*16 + i2] += 2 + (k_mod_mode == modLoop);
-				}
-			}
-			break;
-		}
+		refresh_kria_tr();
 		break;
 	case mNote:
-		switch(k_mod_mode) {
-		case modTime:
-			memset(monomeLedBuffer + R1, 3, 16);
-			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mNote] - 1] = L1;
-			break;
-		case modProb:
-			memset(monomeLedBuffer + R5, 3, 16);
-			for(i1=0;i1<16;i1++)
-				if(k.p[k.pattern].t[track].p[mNote][i1])
-					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mNote][i1]) * 16 + i1] = 6;
-			break;
-		default:
-			if(note_sync) {
-				for(i1=0;i1<16;i1++)
-					monomeLedBuffer[i1 + (6 - k.p[k.pattern].t[track].note[i1] ) * 16] =
-						k.p[k.pattern].t[track].tr[i1] * 3;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					monomeLedBuffer[i1 + (6 - k.p[k.pattern].t[track].note[i1] ) * 16] = 3;
-			}
-
-			monomeLedBuffer[pos[track][mNote] + (6-k.p[k.pattern].t[track].note[pos[track][mNote]])*16] += 4;
-
-			if(k.p[k.pattern].t[track].lswap[mNote]) {
-				for(i1=0;i1<k.p[k.pattern].t[track].llen[mNote];i1++)
-					monomeLedBuffer[((i1+k.p[k.pattern].t[track].lstart[mNote])%16)+
-						(6-k.p[k.pattern].t[track].note[i1])*16] += 3 + (k_mod_mode == modLoop)*2;
-					// monomeLedBuffer[i1*16 + (i2+k.p[k.pattern].t[i1].lstart[mTr])%16] += 2 + (k_mod_mode == modLoop);
-			}
-			else {
-				for(i1=k.p[k.pattern].t[track].lstart[mNote];i1<=k.p[k.pattern].t[track].lend[mNote];i1++)
-					monomeLedBuffer[i1+(6-k.p[k.pattern].t[track].note[i1])*16] += 3 + (k_mod_mode == modLoop)*2;
-			}
-			break;
-		}
+		refresh_kria_note();
 		break;
 	case mOct:
-		switch(k_mod_mode) {
-		case modTime:
-			memset(monomeLedBuffer + R1, 3, 16);
-			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mOct] - 1] = L1;
-			break;
-		case modProb:
-			memset(monomeLedBuffer + R5, 3, 16);
-			for(i1=0;i1<16;i1++)
-				if(k.p[k.pattern].t[track].p[mOct][i1])
-					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mOct][i1]) * 16 + i1] = 6;
-			break;
-		default:
-			for(i1=0;i1<16;i1++) {
-					for(i2=0;i2<=k.p[k.pattern].t[track].oct[i1];i2++)
-						monomeLedBuffer[R6-16*i2+i1] = L0;
-
-					if(i1 == pos[track][mOct])
-						monomeLedBuffer[R6 - k.p[k.pattern].t[track].oct[i1]*16 + i1] += 4;
-				}
-
-			if(k.p[k.pattern].t[track].lswap[mOct]) {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.p[k.pattern].t[track].lstart[mOct]) && (i1 > k.p[k.pattern].t[track].lend[mOct]))
-						for(i2=0;i2<=k.p[k.pattern].t[track].oct[i1];i2++)
-							monomeLedBuffer[R6-16*i2+i1] -= 2;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.p[k.pattern].t[track].lstart[mOct]) || (i1 > k.p[k.pattern].t[track].lend[mOct]))
-						for(i2=0;i2<=k.p[k.pattern].t[track].oct[i1];i2++)
-							monomeLedBuffer[R6-16*i2+i1] -= 2;
-			}
-			break;
-		}
+		refresh_kria_oct();
 		break;
 	case mDur:
-		switch(k_mod_mode) {
-		case modTime:
-			memset(monomeLedBuffer + R1, 3, 16);
-			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mDur] - 1] = L1;
-			break;
-		case modProb:
-			memset(monomeLedBuffer + R5, 3, 16);
-			for(i1=0;i1<16;i1++)
-				if(k.p[k.pattern].t[track].p[mDur][i1])
-					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mDur][i1]) * 16 + i1] = 6;
-			break;
-		default:
-			monomeLedBuffer[k.p[k.pattern].t[track].dur_mul - 1] = L1;
-
-			for(i1=0;i1<16;i1++) {
-				for(i2=0;i2<=k.p[k.pattern].t[track].dur[i1];i2++)
-					monomeLedBuffer[R1+16*i2+i1] = L0;
-
-				if(i1 == pos[track][mDur])
-					monomeLedBuffer[R1+i1+16*k.p[k.pattern].t[track].dur[i1]] += 4;
-			}
-
-			if(k.p[k.pattern].t[track].lswap[mDur]) {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.p[k.pattern].t[track].lstart[mDur]) && (i1 > k.p[k.pattern].t[track].lend[mDur]))
-						for(i2=0;i2<=k.p[k.pattern].t[track].dur[i1];i2++)
-							monomeLedBuffer[R1+16*i2+i1] -= 2;
-			}
-			else {
-				for(i1=0;i1<16;i1++)
-					if((i1 < k.p[k.pattern].t[track].lstart[mDur]) || (i1 > k.p[k.pattern].t[track].lend[mDur]))
-						for(i2=0;i2<=k.p[k.pattern].t[track].dur[i1];i2++)
-							monomeLedBuffer[R1+16*i2+i1] -= 2;
-			}
-			break;
-		}
+		refresh_kria_dur();
 		break;
 	case mRpt:
-		switch(k_mod_mode) {
-		case modTime:
-			memset(monomeLedBuffer + R1, 3, 16);
-			monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mRpt] - 1] = L1;
-			break;
-		case modProb:
-			memset(monomeLedBuffer + R5, 3, 16);
-			for(i1=0;i1<16;i1++)
-				if(k.p[k.pattern].t[track].p[mRpt][i1])
-					monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mRpt][i1]) * 16 + i1] = 6;
-			break;
-		default:
-			for ( uint8_t i=0; i<16; i++ ) {
-				// alternate 
-				if ( (i + kria_blinks[track]) % 2 == 0 )
-					monomeLedBuffer[i] = L0-4;
-				for ( uint8_t j=1; j<=k.p[k.pattern].t[track].rpt[i]; j++ ) {
-					monomeLedBuffer[R7-j*16+i] = L0;
-				}
-				if ( i == pos[track][mRpt] )
-					monomeLedBuffer[R7 - k.p[k.pattern].t[track].rpt[i] * 16 + i] += 4;
-			}
-
-			if ( k.p[k.pattern].t[track].lswap[mRpt] ) {
-				for ( uint8_t i=0; i<16; i++ )
-					if ( (i < k.p[k.pattern].t[track].lstart[mRpt]) && (i > k.p[k.pattern].t[track].lend[mRpt]) )
-						for ( uint8_t j=1; j<=k.p[k.pattern].t[track].rpt[i]; j++ )
-							monomeLedBuffer[R7-j*16+i] -= 2;
-			}
-			else {
-				for ( uint8_t i=0; i<16; i++ )
-					if ( (i < k.p[k.pattern].t[track].lstart[mRpt]) || (i > k.p[k.pattern].t[track].lend[mRpt]) )
-						for ( uint8_t j=1; j<=k.p[k.pattern].t[track].rpt[i]; j++ )
-							monomeLedBuffer[R7-j*16+i] -= 2;
-			}
-			break;
-		}
+		refresh_kria_rpt();
 		break;
 	case mScale:
-		// shoehorning my track clocking feature here 
-		for ( uint8_t i=0; i<4; i++ )
-		{
-			// if teletype clocking is enabled, its brighter
-			monomeLedBuffer[i] = kria_tt_clocked[i] ? L1 : L0;
-		}
-
-		// vertical bar dividing the left and right half
-		for(i1=0;i1<7;i1++)
-			monomeLedBuffer[8+16*i1] = L0;
-		// the two rows of scale selecting buttons 
-		for(i1=0;i1<8;i1++) {
-			monomeLedBuffer[R5 + i1] = 2;
-			monomeLedBuffer[R6 + i1] = 2;
-		}
-		// highlight the selected scale
-		monomeLedBuffer[R5 + (k.p[k.pattern].scale >> 3) * 16 + (k.p[k.pattern].scale & 0x7)] = L1;
-
-		// the intervals of the selected scale
-		for(i1=0;i1<7;i1++)
-			monomeLedBuffer[scale_data[k.p[k.pattern].scale][i1] + 8 + (6-i1)*16] = L1;
-
-		// if an active step of a track is playing a note, it brightness is incremented by one
-		for(i1=0;i1<4;i1++) {
-			if(k.p[k.pattern].t[i1].tr[pos[i1][mTr]])
-				monomeLedBuffer[scale_data[k.p[k.pattern].scale][note[i1]] + 8 + (6-note[i1])*16]++;
-		}
+		refresh_kria_scale();
 		break;
 	case mPattern:
-		if(!meta) {
-			memset(monomeLedBuffer, 3, 16);
-			monomeLedBuffer[k.pattern] = L1;
+		refresh_kria_pattern();
+	default: break;
+	}
+}
+
+void refresh_kria_tr(void) {
+	switch(k_mod_mode) {
+	case modTime:
+		memset(monomeLedBuffer + R1, 3, 16);
+		monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mTr] - 1] = L1;
+		break;
+	case modProb:
+		memset(monomeLedBuffer + R5, 3, 16);
+		for(uint8_t i=0;i<16;i++)
+			if(k.p[k.pattern].t[track].p[mTr][i])
+				monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mTr][i]) * 16 + i] = 6;
+		break;
+	default:
+		// steps
+		for(uint8_t i=0;i<4;i++) {
+			for(uint8_t j=0;j<16;j++) {
+				if(k.p[k.pattern].t[i].tr[j])
+					monomeLedBuffer[i*16 + j] = 3;
+			}
+			// playhead
+			// if(tr[i2])
+			monomeLedBuffer[i*16 + pos[i][mTr]] += 4;
+		}
+
+		// loop highlight
+		for(uint8_t i=0;i<4;i++) {
+			if(k.p[k.pattern].t[i].lswap[mTr]) {
+				for(uint8_t j=0;j<k.p[k.pattern].t[i].llen[mTr];j++)
+					monomeLedBuffer[i*16 + (j+k.p[k.pattern].t[i].lstart[mTr])%16] += 2 + (k_mod_mode == modLoop);
+			}
+			else {
+				for(uint8_t j=k.p[k.pattern].t[i].lstart[mTr];j<=k.p[k.pattern].t[i].lend[mTr];j++)
+					monomeLedBuffer[i*16 + j] += 2 + (k_mod_mode == modLoop);
+			}
+		}
+		break;
+	}
+}
+
+void refresh_kria_note(void) {
+	switch(k_mod_mode) {
+	case modTime:
+		memset(monomeLedBuffer + R1, 3, 16);
+		monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mNote] - 1] = L1;
+		break;
+	case modProb:
+		memset(monomeLedBuffer + R5, 3, 16);
+		for(uint8_t i=0;i<16;i++)
+			if(k.p[k.pattern].t[track].p[mNote][i])
+				monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mNote][i]) * 16 + i] = 6;
+		break;
+	default:
+		if(note_sync) {
+			for(uint8_t i=0;i<16;i++)
+				monomeLedBuffer[i + (6 - k.p[k.pattern].t[track].note[i] ) * 16] =
+					k.p[k.pattern].t[track].tr[i] * 3;
 		}
 		else {
-			// bar
-			memset(monomeLedBuffer + 96, 3, k.meta_steps[meta_pos]+1);
-			monomeLedBuffer[96 + meta_count] = L1;
-			monomeLedBuffer[96 + k.meta_steps[meta_edit]] = L2;
-			// top
-			monomeLedBuffer[k.pattern] = L0;
-			monomeLedBuffer[k.meta_pat[meta_edit]] = L1;
-			// meta data
-			if(!k.meta_lswap)
-				memset(monomeLedBuffer + 32 + k.meta_start, 3, k.meta_len);
-			else {
-				memset(monomeLedBuffer + 32, 3, k.meta_end);
-				memset(monomeLedBuffer + 32 + k.meta_start, 3, 64 - k.meta_start);
+			for(uint8_t i=0;i<16;i++)
+				monomeLedBuffer[i + (6 - k.p[k.pattern].t[track].note[i] ) * 16] = 3;
+		}
+
+		monomeLedBuffer[pos[track][mNote] + (6-k.p[k.pattern].t[track].note[pos[track][mNote]])*16] += 4;
+
+		if(k.p[k.pattern].t[track].lswap[mNote]) {
+			for(uint8_t i=0;i<k.p[k.pattern].t[track].llen[mNote];i++)
+				monomeLedBuffer[((i+k.p[k.pattern].t[track].lstart[mNote])%16)+
+					(6-k.p[k.pattern].t[track].note[i])*16] += 3 + (k_mod_mode == modLoop)*2;
+				// monomeLedBuffer[i*16 + (i2+k.p[k.pattern].t[i].lstart[mTr])%16] += 2 + (k_mod_mode == modLoop);
+		}
+		else {
+			for(uint8_t i=k.p[k.pattern].t[track].lstart[mNote];i<=k.p[k.pattern].t[track].lend[mNote];i++)
+				monomeLedBuffer[i+(6-k.p[k.pattern].t[track].note[i])*16] += 3 + (k_mod_mode == modLoop)*2;
+		}
+		break;
+	}
+}
+
+void refresh_kria_oct(void) {
+	switch(k_mod_mode) {
+	case modTime:
+		memset(monomeLedBuffer + R1, 3, 16);
+		monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mOct] - 1] = L1;
+		break;
+	case modProb:
+		memset(monomeLedBuffer + R5, 3, 16);
+		for(uint8_t i=0;i<16;i++)
+			if(k.p[k.pattern].t[track].p[mOct][i])
+				monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mOct][i]) * 16 + i] = 6;
+		break;
+	default:
+		for(uint8_t i=0;i<16;i++) {
+				for(uint8_t j=0;j<=k.p[k.pattern].t[track].oct[i];j++)
+					monomeLedBuffer[R6-16*j+i] = L0;
+
+				if(i == pos[track][mOct])
+					monomeLedBuffer[R6 - k.p[k.pattern].t[track].oct[i]*16 + i] += 4;
 			}
-			monomeLedBuffer[32 + meta_pos] = L1;
-			monomeLedBuffer[32 + meta_edit] = L2;
-			if(meta_next) {
-				monomeLedBuffer[32 + meta_next - 1] = L2;
-				monomeLedBuffer[k.meta_pat[meta_next] - 1] = L2;
+
+		if(k.p[k.pattern].t[track].lswap[mOct]) {
+			for(uint8_t i=0;i<16;i++)
+				if((i < k.p[k.pattern].t[track].lstart[mOct]) && (i > k.p[k.pattern].t[track].lend[mOct]))
+					for(uint8_t j=0;j<=k.p[k.pattern].t[track].oct[i];j++)
+						monomeLedBuffer[R6-16*j+i] -= 2;
+		}
+		else {
+			for(uint8_t i=0;i<16;i++)
+				if((i < k.p[k.pattern].t[track].lstart[mOct]) || (i > k.p[k.pattern].t[track].lend[mOct]))
+					for(uint8_t j=0;j<=k.p[k.pattern].t[track].oct[i];j++)
+						monomeLedBuffer[R6-16*j+i] -= 2;
+		}
+		break;
+	}
+}
+
+void refresh_kria_dur(void) {
+	switch(k_mod_mode) {
+	case modTime:
+		memset(monomeLedBuffer + R1, 3, 16);
+		monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mDur] - 1] = L1;
+		break;
+	case modProb:
+		memset(monomeLedBuffer + R5, 3, 16);
+		for(uint8_t i=0;i<16;i++)
+			if(k.p[k.pattern].t[track].p[mDur][i])
+				monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mDur][i]) * 16 + i] = 6;
+		break;
+	default:
+		monomeLedBuffer[k.p[k.pattern].t[track].dur_mul - 1] = L1;
+
+		for(uint8_t i=0;i<16;i++) {
+			for(uint8_t j=0;j<=k.p[k.pattern].t[track].dur[i];j++)
+				monomeLedBuffer[R1+16*j+i] = L0;
+
+			if(i == pos[track][mDur])
+				monomeLedBuffer[R1+i+16*k.p[k.pattern].t[track].dur[i]] += 4;
+		}
+
+		if(k.p[k.pattern].t[track].lswap[mDur]) {
+			for(uint8_t i=0;i<16;i++)
+				if((i < k.p[k.pattern].t[track].lstart[mDur]) && (i > k.p[k.pattern].t[track].lend[mDur]))
+					for(uint8_t j=0;j<=k.p[k.pattern].t[track].dur[i];j++)
+						monomeLedBuffer[R1+16*j+i] -= 2;
+		}
+		else {
+			for(uint8_t i=0;i<16;i++)
+				if((i < k.p[k.pattern].t[track].lstart[mDur]) || (i > k.p[k.pattern].t[track].lend[mDur]))
+					for(uint8_t j=0;j<=k.p[k.pattern].t[track].dur[i];j++)
+						monomeLedBuffer[R1+16*j+i] -= 2;
+		}
+		break;
+	}
+}
+
+void refresh_kria_rpt(void) {
+	switch(k_mod_mode) {
+	case modTime:
+		memset(monomeLedBuffer + R1, 3, 16);
+		monomeLedBuffer[R1 + k.p[k.pattern].t[track].tmul[mRpt] - 1] = L1;
+		break;
+	case modProb:
+		memset(monomeLedBuffer + R5, 3, 16);
+		for(uint8_t i=0;i<16;i++)
+			if(k.p[k.pattern].t[track].p[mRpt][i])
+				monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mRpt][i]) * 16 + i] = 6;
+		break;
+	default:
+		for ( uint8_t i=0; i<16; i++ ) {
+			for ( uint8_t j=1; j<=k.p[k.pattern].t[track].rpt[i]; j++ ) {
+				monomeLedBuffer[R7-(j+1)*16+i] = L0;
+			}
+			if ( i == pos[track][mRpt] ) {
+				// u8 yPos = min( activeRpt[track] - repeats[track], 5 );
+				// u8 yPos = (activeRpt[track]) - (repeats[track]);
+				monomeLedBuffer[R6 - ( activeRpt[track] - repeats[track] ) * 16 + i] += 4;
+				// monomeLedBuffer[repeats[track] * 16 + i] = L2;
 			}
 		}
-		if(cue_pat_next) {
-			monomeLedBuffer[cue_pat_next-1] = L2;
+
+		if ( k.p[k.pattern].t[track].lswap[mRpt] ) {
+			for ( uint8_t i=0; i<16; i++ )
+				if ( (i < k.p[k.pattern].t[track].lstart[mRpt]) && (i > k.p[k.pattern].t[track].lend[mRpt]) )
+					for ( uint8_t j=1; j<=k.p[k.pattern].t[track].rpt[i]; j++ )
+						monomeLedBuffer[R7-(j+1)*16+i] -= 2;
 		}
-		switch(k_mod_mode) {
-			case modTime:
-			monomeLedBuffer[16 + cue_count] = L0;
-			monomeLedBuffer[16 + cue_div] = L1;
-			break;
-		default:
-			monomeLedBuffer[16 + cue_steps] = L0;
-			monomeLedBuffer[16 + cue_count] = L1;
-			break;
+		else {
+			for ( uint8_t i=0; i<16; i++ )
+				if ( (i < k.p[k.pattern].t[track].lstart[mRpt]) || (i > k.p[k.pattern].t[track].lend[mRpt]) )
+					for ( uint8_t j=1; j<=k.p[k.pattern].t[track].rpt[i]; j++ )
+						monomeLedBuffer[R7-(j+1)*16+i] -= 2;
 		}
-	default: break;
+		break;
+	}
+}
+
+void refresh_kria_scale(void) {
+	// shoehorning my track clocking feature here 
+	for ( uint8_t i=0; i<4; i++ )
+	{
+		// if teletype clocking is enabled, its brighter
+		monomeLedBuffer[i] = kria_tt_clocked[i] ? L1 : L0;
+	}
+
+	// vertical bar dividing the left and right half
+	for(uint8_t i=0;i<7;i++)
+		monomeLedBuffer[8+16*i] = L0;
+	// the two rows of scale selecting buttons 
+	for(uint8_t i=0;i<8;i++) {
+		monomeLedBuffer[R5 + i] = 2;
+		monomeLedBuffer[R6 + i] = 2;
+	}
+	// highlight the selected scale
+	monomeLedBuffer[R5 + (k.p[k.pattern].scale >> 3) * 16 + (k.p[k.pattern].scale & 0x7)] = L1;
+
+	// the intervals of the selected scale
+	for(uint8_t i=0;i<7;i++)
+		monomeLedBuffer[scale_data[k.p[k.pattern].scale][i] + 8 + (6-i)*16] = L1;
+
+	// if an active step of a track is playing a note, it brightness is incremented by one
+	for(uint8_t i=0;i<4;i++) {
+		if(k.p[k.pattern].t[i].tr[pos[i][mTr]])
+			monomeLedBuffer[scale_data[k.p[k.pattern].scale][note[i]] + 8 + (6-note[i])*16]++;
+	}
+}
+
+void refresh_kria_pattern(void) {
+	if(!meta) {
+		memset(monomeLedBuffer, 3, 16);
+		monomeLedBuffer[k.pattern] = L1;
+	}
+	else {
+		// bar
+		memset(monomeLedBuffer + 96, 3, k.meta_steps[meta_pos]+1);
+		monomeLedBuffer[96 + meta_count] = L1;
+		monomeLedBuffer[96 + k.meta_steps[meta_edit]] = L2;
+		// top
+		monomeLedBuffer[k.pattern] = L0;
+		monomeLedBuffer[k.meta_pat[meta_edit]] = L1;
+		// meta data
+		if(!k.meta_lswap)
+			memset(monomeLedBuffer + 32 + k.meta_start, 3, k.meta_len);
+		else {
+			memset(monomeLedBuffer + 32, 3, k.meta_end);
+			memset(monomeLedBuffer + 32 + k.meta_start, 3, 64 - k.meta_start);
+		}
+		monomeLedBuffer[32 + meta_pos] = L1;
+		monomeLedBuffer[32 + meta_edit] = L2;
+		if(meta_next) {
+			monomeLedBuffer[32 + meta_next - 1] = L2;
+			monomeLedBuffer[k.meta_pat[meta_next] - 1] = L2;
+		}
+	}
+	if(cue_pat_next) {
+		monomeLedBuffer[cue_pat_next-1] = L2;
+	}
+	switch(k_mod_mode) {
+		case modTime:
+		monomeLedBuffer[16 + cue_count] = L0;
+		monomeLedBuffer[16 + cue_div] = L1;
+		break;
+	default:
+		monomeLedBuffer[16 + cue_steps] = L0;
+		monomeLedBuffer[16 + cue_count] = L1;
+		break;
 	}
 }
 
