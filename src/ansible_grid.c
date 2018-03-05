@@ -619,6 +619,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 	// }
 
 	int n;
+	int track, param;
 
 	if(l) {
 		switch(d[0]) {
@@ -666,52 +667,57 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			ii_tx_queue(clock_period & 0xff);
 			break;
 		case II_KR_RESET:
+			track = d[1];
+			param = d[2];
 			switch(loop_sync) {
 			case 2:
-				for(int i1=0;i1<4;i1++)
-				for(int i2=0;i2<4;i2++) {
-					pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
-					pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
+				for ( int i=0; i<KRIA_NUM_TRACKS; i++ ) {
+					for ( int j=0; j<KRIA_NUM_PARAMS; j++ ) {
+						pos[i][j] = k.p[k.pattern].t[i].lend[j];
+						pos_mul[i][j] = k.p[k.pattern].t[i].tmul[j];
+					}
 				}
 				break;
 			case 1:
-				if(d[1] == 0) {
-					for(int i1=0;i1<4;i1++)
-					for(int i2=0;i2<4;i2++) {
-						pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
-						pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
+				if(track == 0) {
+					for ( int i=0; i<KRIA_NUM_TRACKS; i++ ) {
+						for ( int j=0; j<KRIA_NUM_PARAMS; j++ ) {
+							pos[i][j] = k.p[k.pattern].t[i].lend[j];
+							pos_mul[i][j] = k.p[k.pattern].t[i].tmul[j];
+						}
 					}
 				}
-				else if(d[1] < 5) {
-					for(int i1=0;i1<4;i1++) {
-						pos[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].lend[i1];
-						pos_mul[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].tmul[i1];
+				else if( track <= KRIA_NUM_TRACKS ) {
+					for( int i=0; i<KRIA_NUM_PARAMS; i++ ) {
+						pos[track-1][i] = k.p[k.pattern].t[track-1].lend[i];
+						pos_mul[track-1][i] = k.p[k.pattern].t[track-1].tmul[i];
 					}
 				}
 				break;
 			case 0:
-				if(d[1] == 0 && d[2] == 0) {
-					for(int i1=0;i1<4;i1++)
-					for(int i2=0;i2<4;i2++) {
-						pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
-						pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
+				if( track == 0 && param == 0 ) {
+					for ( int i=0; i<KRIA_NUM_TRACKS; i++ ) {
+						for ( int j=0; j<KRIA_NUM_PARAMS; j++ ) {
+							pos[i][j] = k.p[k.pattern].t[i].lend[j];
+							pos_mul[i][j] = k.p[k.pattern].t[i].tmul[j];
+						}
 					}
 				}
-				else if(d[1] == 0 && d[2] < 5) {
-					for(int i1=0;i1<4;i1++) {
-						pos[i1][d[2]-1] = k.p[k.pattern].t[i1].lend[d[2]-1];
-						pos_mul[i1][d[2]-1] = k.p[k.pattern].t[i1].tmul[d[2]-1];
+				else if( track == 0 && param <= KRIA_NUM_PARAMS ) {
+					for ( int i=0; i<KRIA_NUM_TRACKS; i++ ) {
+						pos[i][param-1] = k.p[k.pattern].t[i].lend[param-1];
+						pos_mul[i][param-1] = k.p[k.pattern].t[i].tmul[param-1];
 					}
 				}
-				else if(d[2] == 0 && d[1] < 5) {
-					for(int i1=0;i1<4;i1++) {
-						pos[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].lend[i1];
-						pos_mul[d[1]-1][i1] = k.p[k.pattern].t[d[1]-1].tmul[i1];
+				else if( param == 0 && track <= KRIA_NUM_TRACKS ) {
+					for ( int i=0; i<KRIA_NUM_PARAMS; i++ ) {
+						pos[track-1][i] = k.p[k.pattern].t[track-1].lend[i];
+						pos_mul[track-1][i] = k.p[k.pattern].t[track-1].tmul[i];
 					}
 				}
-				else if(d[1] < 5 && d[2] < 5) {
-					pos[d[1]-1][d[2]-1] = k.p[k.pattern].t[d[1]-1].lend[d[2]-1];
-					pos_mul[d[1]-1][d[2]-1] = k.p[k.pattern].t[d[1]-1].tmul[d[2]-1];
+				else if(track <= KRIA_NUM_TRACKS && param <= KRIA_NUM_PARAMS) {
+					pos[track-1][param-1] = k.p[k.pattern].t[track-1].lend[param-1];
+					pos_mul[track-1][param-1] = k.p[k.pattern].t[track-1].tmul[param-1];
 				}
 				break;
 			default:
@@ -719,174 +725,194 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			}
 			break;
 		case II_KR_LOOP_ST:
-			if(d[3] < 16)
-			switch(loop_sync) {
-			case 2:
-				for(int i1=0;i1<4;i1++)
-					for(int i2=0;i2<4;i2++)
-						adjust_loop_start(i1, d[3], i2);
-				break;
-			case 1:
-				if(d[1] == 0) {
-					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++)
-							adjust_loop_start(i1, d[3], i2);
+			if(d[3] < 16) {
+				track = d[1];
+				param = d[2];
+				int loopStart = d[3];	
+				switch(loop_sync) {
+				case 2:
+					for(int i=0;i<4;i++)
+						for(int j=0;j<4;j++)
+							adjust_loop_start(i, loopStart, j);
+					break;
+				case 1:
+					if(d[1] == 0) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							for(int j=0;j<KRIA_NUM_PARAMS;j++)
+								adjust_loop_start(i, loopStart, j);
+					}
+					else if( track <= KRIA_NUM_TRACKS ) {
+						for(int i=0;i<KRIA_NUM_PARAMS;i++)
+							adjust_loop_start(track-1, loopStart, i);
+					}
+					break;
+				case 0:
+					if(track == 0 && param == 0) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							for(int j=0;j<KRIA_NUM_PARAMS;j++)
+								adjust_loop_start(i, loopStart, j);
+					}
+					else if(track == 0 && param <= KRIA_NUM_PARAMS) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							adjust_loop_start(i, loopStart, param-1);
+					}
+					else if(param == 0 && track <= KRIA_NUM_TRACKS) {
+						for(int i=0;i<KRIA_NUM_PARAMS;i++)
+							adjust_loop_start(track-1, loopStart, i);
+					}
+					else if(track <= KRIA_NUM_TRACKS && param <= KRIA_NUM_PARAMS) {
+						adjust_loop_start(track-1, loopStart, param-1);
+					}
+					break;
+				default:
+					break;
 				}
-				else if(d[1] < 5) {
-					for(int i1=0;i1<4;i1++)
-						adjust_loop_start(d[1]-1, d[3], i1);
-				}
-				break;
-			case 0:
-				if(d[1] == 0 && d[2] == 0) {
-					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++)
-							adjust_loop_start(i1, d[3], i2);
-				}
-				else if(d[1] == 0 && d[2] < 5) {
-					for(int i1=0;i1<4;i1++)
-						adjust_loop_start(i1, d[3], d[2]-1);
-				}
-				else if(d[2] == 0 && d[1] < 5) {
-					for(int i1=0;i1<4;i1++)
-						adjust_loop_start(d[1]-1, d[3], i1);
-				}
-				else if(d[1] < 5 && d[2] < 5) {
-					adjust_loop_start(d[1]-1, d[3], d[2]-1);
-				}
-				break;
-			default:
-				break;
 			}
 			break;
 		case II_KR_LOOP_ST + II_GET:
-			if(d[1]==0 && d[2] == 0) {
+			track = d[1];
+			param = d[2];
+			if( track == 0 && param == 0) {
 				int n = 0;
-				for(int i1=0;i1<4;i1++)
-					for(int i2=0;i2<4;i2++)
-						n += k.p[k.pattern].t[i1].lstart[i2];
+				for(int i=0; i<KRIA_NUM_TRACKS; i++)
+					for(int j=0;j<KRIA_NUM_PARAMS;j++)
+						n += k.p[k.pattern].t[i].lstart[j];
 				ii_tx_queue(n>>4);
 			}
-			else if(d[1] == 0) {
+			else if(track == 0) {
 				int n = 0;
-				for(int i1=0;i1<4;i1++)
-					n += k.p[k.pattern].t[i1].lstart[d[2]-1];
+				for(int i=0; i<KRIA_NUM_TRACKS; i++)
+					n += k.p[k.pattern].t[i].lstart[param-1];
 				ii_tx_queue(n>>2);
 			}
-			else if(d[2] == 0) {
+			else if(param == 0) {
 				int n = 0;
-				for(int i1=0;i1<4;i1++)
-					n += k.p[k.pattern].t[d[1]-1].lstart[i1];
+				for(int i=0;i<KRIA_NUM_PARAMS;i++)
+					n += k.p[k.pattern].t[track-1].lstart[i];
 				ii_tx_queue(n>>2);
 			}
 			else {
-				ii_tx_queue(k.p[k.pattern].t[d[1]-1].lstart[d[2]-1]);
+				ii_tx_queue(k.p[k.pattern].t[track-1].lstart[param-1]);
 			}
 			break;
 		case II_KR_LOOP_LEN:
-			if(d[3] < 17 && d[3] > 0)
-			switch(loop_sync) {
-			case 2:
-				for(int i1=0;i1<4;i1++)
-					for(int i2=0;i2<4;i2++)
-						adjust_loop_len(i1, d[3], i2);
-				break;
-			case 1:
-				if(d[1] == 0) {
-					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++)
-							adjust_loop_len(i1, d[3], i2);
+			if(d[3] < 17 && d[3] > 0) {
+
+				track = d[1];
+				param = d[2];
+				int loopLength = d[3];
+
+				switch(loop_sync) {
+				case 2:
+					for(int i=0;i<KRIA_NUM_TRACKS;i++)
+						for(int j=0;j<KRIA_NUM_PARAMS;j++)
+							adjust_loop_len(i, d[3], j);
+					break;
+				case 1:
+					if(track == 0) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							for(int j=0;j<KRIA_NUM_PARAMS;j++)
+								adjust_loop_len(i, loopLength, j);
+					}
+					else if(track <= KRIA_NUM_TRACKS) {
+						for(int i=0;i<KRIA_NUM_PARAMS;i++)
+							adjust_loop_len(d[1]-1, d[3], i);
+					}
+					break;
+				case 0:
+					if(track == 0 && param == 0) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							for(int j=0;j<KRIA_NUM_PARAMS;j++)
+								adjust_loop_len(i, loopLength, j);
+					}
+					else if(track == 0 && param <= KRIA_NUM_PARAMS) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							adjust_loop_len(i, loopLength, param-1);
+					}
+					else if(param == 0 && track <= KRIA_NUM_TRACKS) {
+						for(int i=0;i<KRIA_NUM_PARAMS;i++)
+							adjust_loop_len(d[1]-1, loopLength, i);
+					}
+					else if(track <= KRIA_NUM_TRACKS && param < KRIA_NUM_PARAMS) {
+						adjust_loop_len(track-1, loopLength, param-1);
+					}
+					break;
+				default:
+					break;
 				}
-				else if(d[1] < 5) {
-					for(int i1=0;i1<4;i1++)
-						adjust_loop_len(d[1]-1, d[3], i1);
-				}
-				break;
-			case 0:
-				if(d[1] == 0 && d[2] == 0) {
-					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++)
-							adjust_loop_len(i1, d[3], i2);
-				}
-				else if(d[1] == 0 && d[2] < 5) {
-					for(int i1=0;i1<4;i1++)
-						adjust_loop_len(i1, d[3], d[2]-1);
-				}
-				else if(d[2] == 0 && d[1] < 5) {
-					for(int i1=0;i1<4;i1++)
-						adjust_loop_len(d[1]-1, d[3], i1);
-				}
-				else if(d[1] < 5 && d[2] < 5) {
-					adjust_loop_len(d[1]-1, d[3], d[2]-1);
-				}
-				break;
-			default:
-				break;
 			}
 			break;
 		case II_KR_LOOP_LEN + II_GET:
-			if(d[1]==0 && d[2] == 0) {
+			track = d[1];
+			param = d[2];
+			if( track == 0 && param == 0) {
 				int n = 0;
-				for(int i1=0;i1<4;i1++)
-					for(int i2=0;i2<4;i2++)
-						n += k.p[k.pattern].t[i1].llen[i2];
+				for(int i=0;i<KRIA_NUM_TRACKS;i++)
+					for(int j=0;j<KRIA_NUM_PARAMS;j++)
+						n += k.p[k.pattern].t[i].llen[j];
 				ii_tx_queue(n>>4);
 			}
-			else if(d[1] == 0) {
+			else if(track == 0) {
 				int n = 0;
-				for(int i1=0;i1<4;i1++)
-					n += k.p[k.pattern].t[i1].llen[d[2]-1];
+				for(int i=0;i<KRIA_NUM_TRACKS;i++)
+					n += k.p[k.pattern].t[i].llen[param-1];
 				ii_tx_queue(n>>2);
 			}
-			else if(d[2] == 0) {
+			else if(param == 0) {
 				int n = 0;
-				for(int i1=0;i1<4;i1++)
-					n += k.p[k.pattern].t[d[1]-1].llen[i1];
+				for(int i=0;i<KRIA_NUM_PARAMS;i++)
+					n += k.p[k.pattern].t[track-1].llen[i];
 				ii_tx_queue(n>>2);
 			}
 			else {
-				ii_tx_queue(k.p[k.pattern].t[d[1]-1].llen[d[2]-1]);
+				ii_tx_queue(k.p[k.pattern].t[track-1].llen[param-1]);
 			}
 			break;
 		case II_KR_POS:
-			if(d[3] < 17)
-			switch(loop_sync) {
-			case 2:
-				for(int i1=0;i1<4;i1++)
-					for(int i2=0;i2<4;i2++)
-						jump_pos(i1, d[3], i2);
-				break;
-			case 1:
-				if(d[1] == 0) {
-					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++)
-							jump_pos(i1, d[3], i2);
+			if(d[3] < 17) {
+
+				track = d[1];
+				param = d[2];
+				int pos = d[3];
+
+				switch(loop_sync) {
+				case 2:
+					for(int i=0;i<KRIA_NUM_TRACKS;i++)
+						for(int j=0;j<KRIA_NUM_PARAMS;j++)
+							jump_pos(i, pos, j);
+					break;
+				case 1:
+					if(d[1] == 0) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							for(int j=0;j<KRIA_NUM_PARAMS;j++)
+								jump_pos(i, pos, j);
+					}
+					else if(d[1] < 5) {
+						for(int i=0;i<KRIA_NUM_PARAMS;i++)
+							jump_pos(d[1]-1, pos, i);
+					}
+					break;
+				case 0:
+					if(track == 0 && param == 0) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							for(int j=0;j<KRIA_NUM_PARAMS;j++)
+								jump_pos(i, pos, j);
+					}
+					else if(track == 0 && param <= KRIA_NUM_PARAMS) {
+						for(int i=0;i<KRIA_NUM_TRACKS;i++)
+							jump_pos(i, pos, param-1);
+					}
+					else if(param == 0 && track <= KRIA_NUM_TRACKS) {
+						for(int i=0;i<KRIA_NUM_PARAMS;i++)
+							jump_pos(track-1, pos, i);
+					}
+					else if(track <= KRIA_NUM_TRACKS && param <= KRIA_NUM_PARAMS) {
+						jump_pos(track-1, pos, param-1);
+					}
+					break;
+				default:
+					break;
 				}
-				else if(d[1] < 5) {
-					for(int i1=0;i1<4;i1++)
-						jump_pos(d[1]-1, d[3], i1);
-				}
-				break;
-			case 0:
-				if(d[1] == 0 && d[2] == 0) {
-					for(int i1=0;i1<4;i1++)
-						for(int i2=0;i2<4;i2++)
-							jump_pos(i1, d[3], i2);
-				}
-				else if(d[1] == 0 && d[2] < 5) {
-					for(int i1=0;i1<4;i1++)
-						jump_pos(i1, d[3], d[2]-1);
-				}
-				else if(d[2] == 0 && d[1] < 5) {
-					for(int i1=0;i1<4;i1++)
-						jump_pos(d[1]-1, d[3], i1);
-				}
-				else if(d[1] < 5 && d[2] < 5) {
-					jump_pos(d[1]-1, d[3], d[2]-1);
-				}
-				break;
-			default:
-				break;
 			}
 			break;
 		case II_KR_POS + II_GET:
@@ -952,12 +978,12 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			break;
 		case II_KR_CLK:
 			if ( d[1] == 0 ) {
-				for ( int i=0; i<4; i++ ) {
+				for ( int i=0; i<KRIA_NUM_TRACKS; i++ ) {
 					if ( kria_tt_clocked[i] )
 						clock_kria_track( i );
 				}
 			}
-			else if ( d[1] < 5 && d[1] > 0  ) {
+			else if ( d[1] <= KRIA_NUM_TRACKS && d[1] > 0  ) {
 				if ( kria_tt_clocked[d[1]-1] )
 					clock_kria_track( d[1]-1 );
 			}

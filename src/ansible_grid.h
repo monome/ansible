@@ -11,6 +11,7 @@
 
 #define GRID_PRESETS 8
 
+#define KRIA_NUM_TRACKS 4
 #define KRIA_NUM_PARAMS 5
 #define KRIA_NUM_PATTERNS 16
 
