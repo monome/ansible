@@ -62,7 +62,7 @@ void (*grid_refresh)(void);
 kria_data_t k;
 
 typedef enum {
-	mTr, mNote, mOct, mDur, mRpt, mScale, mPattern
+	mTr, mNote, mOct, mDur, mRpt, mAltNote, mScale, mPattern
 } kria_modes_t;
 
 typedef enum {

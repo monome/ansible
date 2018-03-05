@@ -12,7 +12,7 @@
 #define GRID_PRESETS 8
 
 #define KRIA_NUM_TRACKS 4
-#define KRIA_NUM_PARAMS 5
+#define KRIA_NUM_PARAMS 6
 #define KRIA_NUM_PATTERNS 16
 
 typedef struct {
@@ -21,6 +21,7 @@ typedef struct {
 	u8 note[16];
 	u8 dur[16];
 	u8 rpt[16];
+	u8 alt_note[16];
 
 	u8 p[KRIA_NUM_PARAMS][16];
 
