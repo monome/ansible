@@ -78,8 +78,6 @@ ansible_mode_t ansible_mode;
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
 
-void clock_null(u8 phase);
-
 // start/stop monome polling/refresh timers
 extern void timers_set_monome(void);
 extern void timers_unset_monome(void);
@@ -94,8 +92,6 @@ static void handler_FrontShort(s32 data);
 static void handler_FrontLong(s32 data);
 static void handler_MidiConnect(s32 data);
 static void handler_MidiDisconnect(s32 data);
-
-static void ii_null(uint8_t *d, uint8_t l);
 
 u8 flash_is_fresh(void);
 void flash_unfresh(void);
@@ -465,7 +461,7 @@ void clock_set_tr(uint32_t n, uint8_t phase) {
 	timer_manual(&clockTimer);
 }
 
-static void ii_null(uint8_t *d, uint8_t l) {
+void ii_null(uint8_t *d, uint8_t l) {
 	print_dbg("\r\nii/null");
 }
 
