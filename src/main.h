@@ -29,6 +29,7 @@ typedef enum {
 	mArcCycles,
 	mGridKria,
 	mGridMP,
+	mGridES,
 	mMidiStandard,
 	mMidiArp,
 	mTT
@@ -50,6 +51,7 @@ typedef const struct {
 	ansible_state_t state;
 	kria_state_t kria_state;
 	mp_state_t mp_state;
+	es_state_t es_state;
 	levels_state_t levels_state;
 	cycles_state_t cycles_state;
 	midi_standard_state_t midi_standard_state;

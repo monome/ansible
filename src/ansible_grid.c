@@ -23,12 +23,13 @@
 #define L0 4
 
 #define GRID_KEY_HOLD_TIME 15
+#define MAX_HELD_KEYS 32
 
 bool preset_mode;
 uint8_t preset;
 	
 u8 key_count = 0;
-u8 held_keys[32];
+u8 held_keys[MAX_HELD_KEYS];
 u8 key_times[128];
 
 bool clock_external;
@@ -90,6 +91,9 @@ mp_data_t m;
 u8 sound;
 u8 voice_mode;
 
+// ES
+
+es_data_t e;
 
 void set_mode_grid() {
 	switch(ansible_mode) {
@@ -121,6 +125,20 @@ void set_mode_grid() {
 		resume_mp();
 		update_leds(2);
 		break;
+	case mGridES:
+		// print_dbg("\r\n> mode grid es");
+		app_event_handlers[kEventKey] = &handler_ESKey;
+		app_event_handlers[kEventTr] = &handler_ESTr;
+		app_event_handlers[kEventTrNormal] = &handler_ESTrNormal;
+		app_event_handlers[kEventMonomeGridKey] = &handler_ESGridKey;
+		app_event_handlers[kEventMonomeRefresh] = &handler_ESRefresh;
+		clock = &clock_null;
+		clock_set(clock_period);
+		init_i2c_slave(II_ANSIBLE_ADDR);
+		process_ii = &ii_null;
+		resume_es();
+		update_leds(3);
+		break;
 	default:
 		break;
 	}
@@ -140,10 +158,20 @@ void handler_GridFrontShort(s32 data) {
 		// print_dbg("\r\n> PRESET EXIT");
 		preset_mode = false;
 
-		if(ansible_mode == mGridMP)
-			grid_refresh = &refresh_mp;
-		else
-			grid_refresh = &refresh_kria;
+		switch (ansible_mode) {
+			case mGridKria:
+				grid_refresh = &refresh_kria;
+				break;
+			case mGridMP:
+				grid_refresh = &refresh_mp;
+				break;
+			case mGridES:
+				grid_refresh = &refresh_es;
+				break;
+			default:
+				break;
+		}
+			
 		view_config = false;
 		view_clock = false;
 	}
@@ -154,13 +182,24 @@ void handler_GridFrontShort(s32 data) {
 		view_config = false;
 		view_clock = false;
 	}
+	monomeFrameDirty++;
 }
 
 void handler_GridFrontLong(s32 data) {
-	if(ansible_mode == mGridKria)
-		set_mode(mGridMP);
-	else
-		set_mode(mGridKria);
+	switch (ansible_mode) {
+		case mGridKria:
+			set_mode(mGridMP);
+			break;
+		case mGridMP:
+			set_mode(mGridES);
+			break;
+		case mGridES:
+			set_mode(mGridKria);
+			break;
+		default:
+			break;
+	}
+	monomeFrameDirty++;
 }
 
 void refresh_preset(void) {
@@ -186,6 +225,12 @@ void refresh_preset(void) {
 				if(k.glyph[i1] & (1<<i2))
 					monomeLedBuffer[i1*16+i2+8] = 9;
 		break;
+	case mGridES:
+		for(i1=0;i1<8;i1++)
+			for(i2=0;i2<8;i2++)
+				if(e.glyph[i1] & (1<<i2))
+					monomeLedBuffer[i1*16+i2+8] = 9;
+		break;
 	default: break;
 	}
 
@@ -203,7 +248,8 @@ void grid_keytimer(void) {
 
 					// WRITE PRESET
 
-					if(ansible_mode == mGridMP) {
+					switch (ansible_mode) {
+					case mGridMP:
 						flashc_memset8((void*)&(f.mp_state.preset), preset, 1, true);
 						flashc_memset8((void*)&(f.mp_state.sound), sound, 1, true);
 						flashc_memset8((void*)&(f.mp_state.voice_mode), voice_mode, 1, true);
@@ -213,7 +259,9 @@ void grid_keytimer(void) {
 
 						preset_mode = false;
 						grid_refresh = &refresh_mp;
-					} else if(ansible_mode == mGridKria) {
+						break;
+						
+					case mGridKria:
 						flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
 						flashc_memset8((void*)&(f.kria_state.cue_div), cue_div, 1, true);
 						flashc_memset8((void*)&(f.kria_state.cue_steps), cue_steps, 1, true);
@@ -224,10 +272,21 @@ void grid_keytimer(void) {
 
 						preset_mode = false;
 						grid_refresh = &refresh_kria;
+						break;
+
+					case mGridES:
+						flashc_memset8((void*)&(f.es_state.preset), preset, 1, true);
+						flashc_memcpy((void *)&f.es_state.e[preset], &e, sizeof(e), true);
+						preset_mode = false;
+						grid_refresh = &refresh_es;
+						break;
+						
+					default:
+						break;
 					}
-
+					
 					flashc_memset32((void*)&(f.kria_state.clock_period), clock_period, 4, true);
-
+					monomeFrameDirty++;
 				}
 			}
 			else if(ansible_mode == mGridKria) {
@@ -3140,4 +3199,198 @@ void calc_scale(uint8_t s) {
 		// print_dbg_ulong(cur_scale[i1]);
 
 	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// ES
+
+es_note_t es_notes[4];
+
+
+static void es_note_off(u8 x, u8 y) {
+    for (u8 i = 0; i < 4; i++)
+        if (es_notes[i].x == x && es_notes[i].y == y) {
+            es_notes[i].on = 0;
+            clr_tr(TR1 + i);
+            break;
+        }
+
+    monomeFrameDirty++;
+}
+
+
+static void es_note_on(u8 x, u8 y) {
+    u8 note = 255;
+    
+    for (u8 i = 0; i < 4; i++)
+        if (!es_notes[i].on) {
+            note = i;
+            break;
+        }
+
+    if (note == 255) {
+        u32 earliest = 0xffffffff;
+        for (u8 i = 0; i < 4; i++)
+            if (es_notes[i].start < earliest) {
+                earliest = es_notes[i].start;
+                note = i;
+            }
+    }
+
+    if (es_notes[note].on) es_note_off(es_notes[note].x, es_notes[note].y);
+
+    es_notes[note].on = 1;
+    es_notes[note].x = x;
+    es_notes[note].y = y;
+    es_notes[note].start = get_ticks();
+
+    u8 note_index = min(119, x + (7 - y) * 5 - 1);
+    dac_set_value(note, ET[note_index] << 2);
+    set_tr(TR1 + note);
+
+    monomeFrameDirty++;
+}
+
+
+void default_es(void) {
+    uint8_t i;
+    flashc_memset8((void*)&(f.es_state.preset), 0, 1, true);
+    for(i = 0; i < 8; i++) e.glyph[i] = 0;
+    for(i = 0; i < GRID_PRESETS; i++)
+        flashc_memcpy((void *)&f.es_state.e[i], &e, sizeof(e), true);
+}
+
+
+void init_es(void) {
+    preset = f.es_state.preset;
+    e = f.es_state.e[preset];
+    for (u8 i = 0; i < 4; i++) es_notes[i].on = 0;
+}
+
+
+void resume_es(void) {
+    grid_refresh = &refresh_es;
+    preset_mode = false;
+
+    preset = f.es_state.preset;
+
+    // re-check clock jack
+    clock_external = !gpio_get_pin_value(B10);
+    clock = &clock_null;
+
+    dac_set_slew(0,0);
+    dac_set_slew(1,0);
+    dac_set_slew(2,0);
+    dac_set_slew(3,0);
+
+    clr_tr(TR1);
+    clr_tr(TR2);
+    clr_tr(TR3);
+    clr_tr(TR4);
+
+    monomeFrameDirty++;
+}
+
+
+void handler_ESRefresh(s32 data) {
+    if(monomeFrameDirty) {
+        grid_refresh();
+        monome_set_quadrant_flag(0);
+        monome_set_quadrant_flag(1);
+        (*monome_refresh)();
+    }
+}
+
+
+void handler_ESKey(s32 data) {
+    switch(data) {
+    case 0: // button 1 released
+        break;
+    case 1: // button 1 pressed
+        break;
+    case 2: // button 2 released
+        break;
+    case 3: // button 2 released
+        break;
+    default:
+        break;
+    }
+}
+
+
+void handler_ESTr(s32 data) {
+    switch(data) {
+    case 0: // input 1 low
+        break;
+    case 1: // input 1 high
+        break;
+    case 2: // input 2 low
+        break;
+    case 3: // input 2 high
+        break;
+    default:
+        break;
+    }
+}
+
+
+void handler_ESTrNormal(s32 data) {
+    clock_external = data;
+}
+
+
+void handler_ESGridKey(s32 data) {
+    u8 x, y, z;
+    monome_grid_key_parse_event_data(data, &x, &y, &z);
+    u8 index = (y << 4) + x;
+
+    // track held keys and long presses
+    if (z) {
+        held_keys[key_count] = index;
+        if (key_count < MAX_HELD_KEYS) key_count++;
+        key_times[index] = 10;
+    } else {
+        u8 found = 0;
+        for (u8 i = 0; i < key_count; i++) {
+            if (held_keys[i] == index) found++;
+            if (found) held_keys[i] = held_keys[i + 1];
+        }
+        if (found) key_count--;
+    }
+
+    // preset screen
+    if (preset_mode) {
+        if (!z && x == 0) {
+            if (y != preset) {
+                preset = y;
+                for (u8 i = 0; i < GRID_PRESETS; i++)
+                e.glyph[i] = f.es_state.e[preset].glyph[i];
+            } else {
+                // flash read
+                flashc_memset8((void*)&(f.es_state.preset), preset, 1, true);
+                init_es();
+                preset_mode = false;
+                grid_refresh = &refresh_es;
+            }
+        } else if (z && x > 7) {
+            e.glyph[y] ^= 1 << (x - 8);
+        }
+
+        monomeFrameDirty++;
+        return;
+    }
+
+    if (z) {
+        es_note_on(x, y);
+    } else {
+        es_note_off(x, y);
+    }
+}
+
+
+void refresh_es(void) {
+    memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
+    for (u8 i = 0; i < 4; i++)
+        if (es_notes[i].on) monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
 }

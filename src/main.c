@@ -180,6 +180,7 @@ void set_mode(ansible_mode_t m) {
 	switch (m) {
 	case mGridKria:
 	case mGridMP:
+	case mGridES:
 		set_mode_grid();
 		break;
 	case mArcLevels:
@@ -493,6 +494,7 @@ int main(void)
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		default_kria();
 		default_mp();
+		default_es();
 		default_levels();
 		default_cycles();
 		default_midi_standard();
@@ -517,6 +519,7 @@ int main(void)
 	init_cycles();
 	init_kria();
 	init_mp();
+	init_es();
 	init_tt();
 
 	print_dbg("\r\ni2c addr: ");

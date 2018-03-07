@@ -97,6 +97,25 @@ typedef struct {
 } mp_state_t;
 
 
+
+
+typedef struct {
+	u8 on;
+    u8 x;
+    u8 y;
+    u32 start;
+} es_note_t;
+
+typedef struct {
+	u8 glyph[8];
+} es_data_t;
+
+typedef struct {
+	uint8_t preset;
+	es_data_t e[GRID_PRESETS];
+} es_state_t;
+
+
 void set_mode_grid(void);
 
 void handler_GridFrontShort(s32 data);
@@ -131,3 +150,13 @@ void handler_MPTrNormal(s32 data);
 void refresh_mp(void);
 void refresh_mp_config(void);
 void refresh_clock(void);
+
+void default_es(void);
+void init_es(void);
+void resume_es(void);
+void handler_ESGridKey(s32 data);
+void handler_ESRefresh(s32 data);
+void handler_ESKey(s32 data);
+void handler_ESTr(s32 data);
+void handler_ESTrNormal(s32 data);
+void refresh_es(void);
