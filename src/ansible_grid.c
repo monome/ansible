@@ -3543,31 +3543,52 @@ void calc_scale(uint8_t s) {
 ////////////////////////////////////////////////////////////////////////////////
 // ES
 
+es_mode_t es_mode;
+es_view_t es_view;
+
+u32 es_tick;
+u16 es_pos;
+u8 es_blinker;
 es_note_t es_notes[4];
 
+softTimer_t es_blinker_timer = { .next = NULL, .prev = NULL };
+softTimer_t es_play_timer = { .next = NULL, .prev = NULL };
+
+static void es_blinker_callback(void* o) {
+    if (ansible_mode != mGridES) {
+        timer_remove(&es_blinker_timer);
+        return;
+    }
+    
+    es_blinker = !es_blinker;
+    if (es_mode == es_recording) monomeFrameDirty++;
+}
+
+static void es_note_off_i(u8 i) {
+    if (!es_notes[i].active) return;
+    es_notes[i].active = 0;
+    clr_tr(TR1 + i);
+}
 
 static void es_note_off(u8 x, u8 y) {
     for (u8 i = 0; i < 4; i++)
         if (es_notes[i].x == x && es_notes[i].y == y) {
-            es_notes[i].on = 0;
-            clr_tr(TR1 + i);
+            es_note_off_i(i);
             break;
         }
-
-    monomeFrameDirty++;
 }
 
-
-static void es_note_on(u8 x, u8 y) {
+static void es_note_on(u8 x, u8 y, u8 from_pattern) {
     u8 note = 255;
     
     for (u8 i = 0; i < 4; i++)
-        if (!es_notes[i].on) {
+        if (!es_notes[i].active) {
             note = i;
             break;
         }
 
     if (note == 255) {
+        note = 0;
         u32 earliest = 0xffffffff;
         for (u8 i = 0; i < 4; i++)
             if (es_notes[i].start < earliest) {
@@ -3575,61 +3596,157 @@ static void es_note_on(u8 x, u8 y) {
                 note = i;
             }
     }
+    
+    es_note_off_i(note);
 
-    if (es_notes[note].on) es_note_off(es_notes[note].x, es_notes[note].y);
-
-    es_notes[note].on = 1;
+    es_notes[note].active = 1;
     es_notes[note].x = x;
     es_notes[note].y = y;
     es_notes[note].start = get_ticks();
+    es_notes[note].from_pattern = from_pattern;
 
     u8 note_index = min(119, x + (7 - y) * 5 - 1);
     dac_set_value(note, ET[note_index] << 2);
     set_tr(TR1 + note);
+}
 
+static void es_complete_recording(void) {
+    if (!e.p[e.p_select].length) return;
+    e.p[e.p_select].e[e.p[e.p_select].length - 1].interval = get_ticks() - es_tick;
+}
+
+static void es_record_pattern_note(u8 x, u8 y, u8 on) {
+    u16 l = e.p[e.p_select].length;
+    if (l >= ES_EVENTS_PER_PATTERN) {
+        es_complete_recording(); // will update interval for the last event
+        return;
+    }
+    
+    if (l) e.p[e.p_select].e[l - 1].interval = get_ticks() - es_tick;
+    es_tick = get_ticks();
+    
+    e.p[e.p_select].e[l].index = x + (y << 4);
+    e.p[e.p_select].e[l].on = on;
+    e.p[e.p_select].length++;
+}
+
+static void es_play_pattern_note(void) {
+    u8 x = e.p[e.p_select].e[es_pos].index & 15;
+    u8 y = e.p[e.p_select].e[es_pos].index >> 4;
+    if (e.p[e.p_select].e[es_pos].on)
+        es_note_on(x, y, 1);
+    else
+        es_note_off(x, y);
     monomeFrameDirty++;
 }
 
+static void es_kill_pattern_notes(void) {
+    for (u8 i = 0; i < 4; i++)
+        if (es_notes[i].from_pattern) es_note_off_i(i);
+    monomeFrameDirty++;
+}
+
+static void es_play_callback(void* o) {
+    timer_remove(&es_play_timer);
+    if (ansible_mode != mGridES) {
+        es_mode = es_stopped;
+        return;
+    }
+    
+    if (++es_pos >= e.p[e.p_select].length) {
+        es_pos = 0;
+        if (!e.p[e.p_select].loop) {
+            es_kill_pattern_notes();
+            es_mode = es_stopped;
+            return;
+        }
+    }
+
+    timer_add(&es_play_timer, e.p[e.p_select].e[es_pos].interval, &es_play_callback, NULL);
+    es_play_pattern_note();
+}
+
+static void es_start_playback(void) {
+    es_pos = 0;
+    if (!e.p[e.p_select].length) {
+        es_mode = es_stopped;
+        monomeFrameDirty++;
+        return;
+    }
+    
+    es_mode = es_playing;
+    es_play_pattern_note();
+    timer_add(&es_play_timer, e.p[e.p_select].e[0].interval, &es_play_callback, NULL );
+}
+
+static void es_stop_playback(void) {
+    timer_remove(&es_play_timer);
+    es_mode = es_stopped;
+    es_kill_pattern_notes();
+}
+
+static void es_start_recording(void) {
+    e.p[e.p_select].length = 0;
+    es_mode = es_recording;
+    monomeFrameDirty++;
+}
+
+// init functions
 
 void default_es(void) {
     uint8_t i;
     flashc_memset8((void*)&(f.es_state.preset), 0, 1, true);
-    for(i = 0; i < 8; i++) e.glyph[i] = 0;
-    for(i = 0; i < GRID_PRESETS; i++)
+    for (i = 0; i < 8; i++) {
+        e.arp = 0;
+        e.p_select = 0;
+        for (u8 j = 0; j < 16; j++) {
+            e.p[i].length = 0;
+            e.p[i].loop = 0;
+        }
+        e.glyph[i] = 0;
+    }
+    for (i = 0; i < GRID_PRESETS; i++)
         flashc_memcpy((void *)&f.es_state.e[i], &e, sizeof(e), true);
 }
-
 
 void init_es(void) {
     preset = f.es_state.preset;
     e = f.es_state.e[preset];
-    for (u8 i = 0; i < 4; i++) es_notes[i].on = 0;
+    es_mode = es_stopped;
+    es_view = es_main;
 }
 
-
 void resume_es(void) {
-    grid_refresh = &refresh_es;
+    es_mode = es_stopped;
+    es_view = es_main;
+    
     preset_mode = false;
-
-    preset = f.es_state.preset;
+    grid_refresh = &refresh_es;
 
     // re-check clock jack
     clock_external = !gpio_get_pin_value(B10);
     clock = &clock_null;
 
-    dac_set_slew(0,0);
-    dac_set_slew(1,0);
-    dac_set_slew(2,0);
-    dac_set_slew(3,0);
+    for (u8 i = 0; i < 4; i++) {
+        dac_set_slew(i, 0);
+        clr_tr(TR1 + i);
+        es_notes[i].active = 0;
+    }
 
-    clr_tr(TR1);
-    clr_tr(TR2);
-    clr_tr(TR3);
-    clr_tr(TR4);
-
+    timer_remove(&es_blinker_timer);
+    timer_add(&es_blinker_timer, 288, &es_blinker_callback, NULL);
+    timer_remove(&es_play_timer);
+    
     monomeFrameDirty++;
 }
 
+static void es_load_preset(void) {
+    flashc_memset8((void*)&(f.es_state.preset), preset, 1, true);
+    init_es();
+    resume_es();
+}
+
+// handlers
 
 void handler_ESRefresh(s32 data) {
     if(monomeFrameDirty) {
@@ -3639,7 +3756,6 @@ void handler_ESRefresh(s32 data) {
         (*monome_refresh)();
     }
 }
-
 
 void handler_ESKey(s32 data) {
     switch(data) {
@@ -3656,7 +3772,6 @@ void handler_ESKey(s32 data) {
     }
 }
 
-
 void handler_ESTr(s32 data) {
     switch(data) {
     case 0: // input 1 low
@@ -3672,11 +3787,9 @@ void handler_ESTr(s32 data) {
     }
 }
 
-
 void handler_ESTrNormal(s32 data) {
     clock_external = data;
 }
-
 
 void handler_ESGridKey(s32 data) {
     u8 x, y, z;
@@ -3706,10 +3819,7 @@ void handler_ESGridKey(s32 data) {
                 e.glyph[i] = f.es_state.e[preset].glyph[i];
             } else {
                 // flash read
-                flashc_memset8((void*)&(f.es_state.preset), preset, 1, true);
-                init_es();
-                preset_mode = false;
-                grid_refresh = &refresh_es;
+                es_load_preset();
             }
         } else if (z && x > 7) {
             e.glyph[y] ^= 1 << (x - 8);
@@ -3719,16 +3829,78 @@ void handler_ESGridKey(s32 data) {
         return;
     }
 
-    if (z) {
-        es_note_on(x, y);
-    } else {
-        es_note_off(x, y);
+    if (z && x == 0) {
+        if (y == 0) { // start/stop
+            if (es_mode == es_stopped || es_mode == es_armed) {
+                es_start_playback();
+            } else if (es_mode == es_recording) {
+                es_complete_recording();
+                e.p[e.p_select].loop = 1;
+                es_start_playback();
+            } else if (es_mode == es_playing) {
+                es_stop_playback();
+            }
+        } else if (y == 2) { // arm
+            es_view = es_main;
+            if (es_mode == es_stopped) {
+                es_mode = es_armed;
+            } else if (es_mode == es_armed) {
+                es_mode = es_stopped;
+            } else if (es_mode == es_recording) {
+                es_complete_recording();
+                es_mode = es_stopped;
+            } else if (es_mode == es_playing) {
+                es_stop_playback();
+                es_mode = es_armed;
+            }
+        } else if (y == 3) { // loop
+            e.p[e.p_select].loop = !e.p[e.p_select].loop;
+        }
+        
+        monomeFrameDirty++;
+        return;
     }
-}
 
+    if (es_view != es_main) return;
+    if (x == 0) return;
+
+    if (es_mode == es_armed) es_start_recording(); // will change mode to recording
+    if (es_mode == es_recording) es_record_pattern_note(x, y, z);
+    
+    if (z)
+        es_note_on(x, y, 0);
+    else
+        es_note_off(x, y);
+
+    monomeFrameDirty++;
+}
 
 void refresh_es(void) {
     memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
+    
+    if (es_mode == es_playing)
+        monomeLedBuffer[0] = 15;
+    else if (e.p[e.p_select].length)
+        monomeLedBuffer[0] = 4;
+    
+    if (es_view == es_patterns) monomeLedBuffer[16] = 15;
+    
+    if (es_mode == es_recording)
+        monomeLedBuffer[32] = 11 + (es_blinker ? 0 : 4);
+    else if (es_mode == es_armed)
+        monomeLedBuffer[32] = 7;
+    
+	if (e.p[e.p_select].loop) monomeLedBuffer[48] = 11;
+    if (e.arp) monomeLedBuffer[64] = 11;
+    
     for (u8 i = 0; i < 4; i++)
-        if (es_notes[i].on) monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
+        if (es_notes[i].active)
+            monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
+        
+    /*
+    monomeLedBuffer[112] = es_mode == es_stopped ? 15 : 0;
+    monomeLedBuffer[113] = es_mode == es_armed ? 15 : 0;
+    monomeLedBuffer[114] = es_mode == es_recording ? 15 : 0;
+    monomeLedBuffer[115] = es_mode == es_playing ? 15 : 0;
+    */
 }
