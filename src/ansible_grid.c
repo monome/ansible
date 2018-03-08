@@ -3247,7 +3247,7 @@ static void es_note_on(u8 x, u8 y, u8 from_pattern) {
     u8 note = 255;
     
     for (u8 i = 0; i < 4; i++)
-        if (!es_notes[i].active) {
+        if (!es_notes[i].active || (es_notes[i].x == x && es_notes[i].y == y)) {
             note = i;
             break;
         }
@@ -3327,6 +3327,8 @@ static void es_play_callback(void* o) {
         return;
     }
     
+    if (clock_external) return;
+    
     if (++es_pos >= e.p[e.p_select].length) {
         es_pos = 0;
         es_p_start = get_ticks();
@@ -3358,6 +3360,8 @@ static void es_start_playback(void) {
         es_p_total += e.p[e.p_select].e[i].interval;
     
     es_mode = es_playing;
+    if (clock_external) return;
+    
     timer_add(&es_play_pos_timer, 25, &es_play_pos_callback, NULL);
     timer_add(&es_play_timer, e.p[e.p_select].e[0].interval, &es_play_callback, NULL );
     es_play_pattern_note();
@@ -3472,6 +3476,22 @@ void handler_ESTr(s32 data) {
     case 0: // input 1 low
         break;
     case 1: // input 1 high
+        if (es_mode != es_playing) break;
+        while (true) {
+            es_play_pattern_note();
+            if (e.p[e.p_select].e[es_pos].interval > 30) break;
+            if (++es_pos >= e.p[e.p_select].length) {
+                es_pos--;
+                break;
+            }
+        }
+        if (++es_pos >= e.p[e.p_select].length) {
+            es_pos = 0;
+            if (!e.p[e.p_select].loop) {
+                es_kill_pattern_notes();
+                es_mode = es_stopped;
+            }
+        }
         break;
     case 2: // input 2 low
         break;
@@ -3484,6 +3504,16 @@ void handler_ESTr(s32 data) {
 
 void handler_ESTrNormal(s32 data) {
     clock_external = data;
+    if (es_mode != es_playing) return;
+
+    es_kill_pattern_notes();
+    if (clock_external) {
+        timer_remove(&es_play_timer);
+        timer_remove(&es_play_pos_timer);
+    } else {
+        timer_add(&es_play_pos_timer, 25, &es_play_pos_callback, NULL);
+        es_play_callback(NULL);
+    }
 }
 
 void handler_ESGridKey(s32 data) {
@@ -3608,7 +3638,11 @@ void refresh_es(void) {
             monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
         
     if (es_mode == es_playing) {
-        u8 pos = ((get_ticks() - es_p_start) << 4) / es_p_total;
+        u8 pos;
+        if (clock_external)
+            pos = e.p[e.p_select].length ? (es_pos << 4) / (e.p[e.p_select].length - 1) : 0;
+        else
+            pos = ((get_ticks() - es_p_start) << 4) / es_p_total;
         for (u8 i = 1; i < 16; i++) 
             if (i <= pos) monomeLedBuffer[i] = 4;
     }
