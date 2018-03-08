@@ -3550,9 +3550,12 @@ u32 es_tick;
 u16 es_pos;
 u8 es_blinker;
 es_note_t es_notes[4];
+u32 es_p_start, es_p_total;
+u8 es_ignore_arm_release;
 
 softTimer_t es_blinker_timer = { .next = NULL, .prev = NULL };
 softTimer_t es_play_timer = { .next = NULL, .prev = NULL };
+softTimer_t es_play_pos_timer = { .next = NULL, .prev = NULL };
 
 static void es_blinker_callback(void* o) {
     if (ansible_mode != mGridES) {
@@ -3646,6 +3649,15 @@ static void es_kill_pattern_notes(void) {
     monomeFrameDirty++;
 }
 
+static void es_play_pos_callback(void* o) {
+    if (ansible_mode != mGridES) {
+        timer_remove(&es_play_pos_timer);
+        return;
+    }
+    
+    if (es_mode == es_playing) monomeFrameDirty++;
+}
+
 static void es_play_callback(void* o) {
     timer_remove(&es_play_timer);
     if (ansible_mode != mGridES) {
@@ -3655,8 +3667,10 @@ static void es_play_callback(void* o) {
     
     if (++es_pos >= e.p[e.p_select].length) {
         es_pos = 0;
+        es_p_start = get_ticks();
         if (!e.p[e.p_select].loop) {
             es_kill_pattern_notes();
+            timer_remove(&es_play_pos_timer);
             es_mode = es_stopped;
             return;
         }
@@ -3667,20 +3681,29 @@ static void es_play_callback(void* o) {
 }
 
 static void es_start_playback(void) {
-    es_pos = 0;
     if (!e.p[e.p_select].length) {
         es_mode = es_stopped;
         monomeFrameDirty++;
         return;
     }
     
+    if (es_mode == es_playing) es_kill_pattern_notes();
+    
+    es_pos = 0;
+    es_p_start = get_ticks();
+    es_p_total = 0;
+    for (u16 i = 0; i < e.p[e.p_select].length; i++)
+        es_p_total += e.p[e.p_select].e[i].interval;
+    
     es_mode = es_playing;
-    es_play_pattern_note();
+    timer_add(&es_play_pos_timer, 25, &es_play_pos_callback, NULL);
     timer_add(&es_play_timer, e.p[e.p_select].e[0].interval, &es_play_callback, NULL );
+    es_play_pattern_note();
 }
 
 static void es_stop_playback(void) {
     timer_remove(&es_play_timer);
+    timer_remove(&es_play_pos_timer);
     es_mode = es_stopped;
     es_kill_pattern_notes();
 }
@@ -3689,6 +3712,15 @@ static void es_start_recording(void) {
     e.p[e.p_select].length = 0;
     es_mode = es_recording;
     monomeFrameDirty++;
+}
+
+static u8 is_arm_pressed(void) {
+    u8 found = 0;
+    for (u8 i = 0; i < key_count; i++) {
+        if (held_keys[i] == 32) found = 1;
+        break;
+    }
+    return found;
 }
 
 // init functions
@@ -3736,6 +3768,7 @@ void resume_es(void) {
     timer_remove(&es_blinker_timer);
     timer_add(&es_blinker_timer, 288, &es_blinker_callback, NULL);
     timer_remove(&es_play_timer);
+    timer_remove(&es_play_pos_timer);
     
     monomeFrameDirty++;
 }
@@ -3829,31 +3862,46 @@ void handler_ESGridKey(s32 data) {
         return;
     }
 
-    if (z && x == 0) {
-        if (y == 0) { // start/stop
+    if (x == 0) {
+        if (z && y == 0) { // start/stop
             if (es_mode == es_stopped || es_mode == es_armed) {
                 es_start_playback();
+                if (is_arm_pressed()) es_ignore_arm_release = 1;
             } else if (es_mode == es_recording) {
                 es_complete_recording();
                 e.p[e.p_select].loop = 1;
                 es_start_playback();
             } else if (es_mode == es_playing) {
-                es_stop_playback();
+                if (is_arm_pressed()) {
+                    es_start_playback();
+                    es_ignore_arm_release = 1;
+                } else
+                    es_stop_playback();
             }
         } else if (y == 2) { // arm
             es_view = es_main;
-            if (es_mode == es_stopped) {
-                es_mode = es_armed;
-            } else if (es_mode == es_armed) {
-                es_mode = es_stopped;
-            } else if (es_mode == es_recording) {
-                es_complete_recording();
-                es_mode = es_stopped;
-            } else if (es_mode == es_playing) {
-                es_stop_playback();
-                es_mode = es_armed;
+            if (z) {
+                if (es_mode == es_armed) {
+                    es_mode = es_stopped;
+                    es_ignore_arm_release = 1;
+                } else if (es_mode == es_recording) {
+                    es_complete_recording();
+                    es_mode = es_stopped;
+                    es_ignore_arm_release = 1;
+                }
+            } else {
+                if (es_ignore_arm_release) {
+                    es_ignore_arm_release = 0;
+                    return;
+                }
+                if (es_mode == es_stopped) {
+                    es_mode = es_armed;
+                } else if (es_mode == es_playing) {
+                    es_stop_playback();
+                    es_mode = es_armed;
+                }
             }
-        } else if (y == 3) { // loop
+        } else if (z && y == 3) { // loop
             e.p[e.p_select].loop = !e.p[e.p_select].loop;
         }
         
@@ -3896,6 +3944,13 @@ void refresh_es(void) {
     for (u8 i = 0; i < 4; i++)
         if (es_notes[i].active)
             monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
+        
+    if (es_mode == es_playing) {
+        u8 pos = ((get_ticks() - es_p_start) << 4) / es_p_total;
+        for (u8 i = 1; i < 16; i++) 
+            if (i <= pos) monomeLedBuffer[i] = 4;
+    }
+        
         
     /*
     monomeLedBuffer[112] = es_mode == es_stopped ? 15 : 0;
