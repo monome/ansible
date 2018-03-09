@@ -3210,6 +3210,7 @@ void calc_scale(uint8_t s) {
 es_mode_t es_mode;
 es_view_t es_view;
 u8 es_runes;
+u8 es_edge;
 
 u32 es_tick;
 u16 es_pos;
@@ -3459,6 +3460,8 @@ void default_es(void) {
     for (i = 0; i < 8; i++) {
         e.arp = 0;
         e.p_select = 0;
+        e.edge = es_edge_pat;
+        e.edge_time = 16;
         for (u8 j = 0; j < 16; j++) {
             e.p[i].length = 0;
             e.p[i].loop = 0;
@@ -3674,22 +3677,18 @@ void handler_ESGridKey(s32 data) {
             e.p[e.p_select].loop = !e.p[e.p_select].loop;
         } else if (z && y == 4) { // arp
             e.arp = !e.arp;
+        } else if (y == 5) { // edge mode
+            es_edge = z;
         } else if (y == 6) { // runes
             es_runes = z;
         }
         
-        monomeFrameDirty++;
-        return;
+        if (!es_edge) {
+            monomeFrameDirty++;
+            return;
+        }
     }
 
-    if (es_view == es_patterns_held || es_view == es_patterns) {
-        if (!z || x < 2 || x > 5 || y < 2 || y > 5) return;
-        e.p_select = (x - 2) + ((y - 2) << 2);
-        if (es_view == es_patterns) es_start_playback();
-        monomeFrameDirty++;
-        return;
-    }
-    
     if (es_runes) {
         if (!z) return;
         
@@ -3703,6 +3702,30 @@ void handler_ESGridKey(s32 data) {
             es_double_speed();
         else if (x > 11 && x < 15 && y > 3 && y < 6)
             es_half_speed();
+        monomeFrameDirty++;
+        return;
+    } else if (es_edge) {
+        if (!z) return;
+        
+        if (y == 7) {
+            e.edge = es_edge_fixed;
+            e.edge_time = (x + 1) << 4;
+        } else {
+            if (x < 6)
+                e.edge = es_edge_pat;
+            else if (x < 11)
+                e.edge = es_edge_fixed;
+            else
+                e.edge = es_edge_drone;
+        }
+        monomeFrameDirty++;
+        return;
+    }
+    
+    if (es_view == es_patterns_held || es_view == es_patterns) {
+        if (!z || x < 2 || x > 5 || y < 2 || y > 5) return;
+        e.p_select = (x - 2) + ((y - 2) << 2);
+        if (es_view == es_patterns) es_start_playback();
         monomeFrameDirty++;
         return;
     }
@@ -3754,46 +3777,89 @@ void refresh_es(void) {
             if (i <= pos) monomeLedBuffer[i] = 4;
     }
 
+    u8 l;
+    if (es_runes) {
+        l = 8;
+        monomeLedBuffer[29] = l;
+        monomeLedBuffer[34] = l;
+        monomeLedBuffer[36] = l;
+        monomeLedBuffer[39] = l;
+        monomeLedBuffer[41] = l;
+        monomeLedBuffer[44] = l;
+        monomeLedBuffer[46] = l;
+        monomeLedBuffer[54] = l;
+        monomeLedBuffer[58] = l;
+        monomeLedBuffer[66] = l;
+        monomeLedBuffer[68] = l;
+        monomeLedBuffer[71] = l;
+        monomeLedBuffer[73] = l;
+        monomeLedBuffer[76] = l;
+        monomeLedBuffer[78] = l;
+        monomeLedBuffer[93] = l;
+        return;
+    }
+
+    if (es_edge) {
+        l = e.edge == es_edge_pat ? 11 : 7;
+        monomeLedBuffer[34] = l;
+        monomeLedBuffer[35] = l;
+        monomeLedBuffer[36] = l;
+        monomeLedBuffer[50] = l;
+        monomeLedBuffer[52] = l;
+        monomeLedBuffer[66] = l;
+        monomeLedBuffer[68] = l;
+        monomeLedBuffer[82] = l;
+        monomeLedBuffer[84] = l;
+        monomeLedBuffer[85] = l;
+
+        l = e.edge == es_edge_fixed ? 11 : 7;
+        monomeLedBuffer[39] = l;
+        monomeLedBuffer[40] = l;
+        monomeLedBuffer[41] = l;
+        monomeLedBuffer[42] = l;
+        monomeLedBuffer[55] = l;
+        monomeLedBuffer[58] = l;
+        monomeLedBuffer[71] = l;
+        monomeLedBuffer[74] = l;
+        monomeLedBuffer[87] = l;
+        monomeLedBuffer[90] = l;
+        
+        l = e.edge == es_edge_drone ? 11 : 7;
+        monomeLedBuffer[44] = l;
+        monomeLedBuffer[45] = l;
+        monomeLedBuffer[46] = l;
+        monomeLedBuffer[47] = l;
+        
+		if (e.edge == es_edge_fixed) {
+			for (u8 i = 0; i < 16; i++)
+				monomeLedBuffer[112 + i] = 4;
+            u8 edge_index = 111 + (e.edge_time >> 4);
+			if (edge_index <= 127) monomeLedBuffer[edge_index] = 11;
+		}
+        
+        return;
+    }
+
     if (es_view == es_main) {
-        if (es_runes) {
-            u8 l = 8;
-            monomeLedBuffer[29] = l;
-            monomeLedBuffer[34] = l;
-            monomeLedBuffer[36] = l;
-            monomeLedBuffer[39] = l;
-            monomeLedBuffer[41] = l;
-            monomeLedBuffer[44] = l;
-            monomeLedBuffer[46] = l;
-            monomeLedBuffer[54] = l;
-            monomeLedBuffer[58] = l;
-            monomeLedBuffer[66] = l;
-            monomeLedBuffer[68] = l;
-            monomeLedBuffer[71] = l;
-            monomeLedBuffer[73] = l;
-            monomeLedBuffer[76] = l;
-            monomeLedBuffer[78] = l;
-            monomeLedBuffer[93] = l;
-        } else {
-            if (e.arp)
-                monomeLedBuffer[e.p[e.p_select].root_x + (e.p[e.p_select].root_y << 4)] = 7;
-            s16 index, x, y;
-            for (u8 i = 0; i < 4; i++)
-                if (es_notes[i].active) {
-                    x = es_notes[i].x;
-                    y = es_notes[i].y;
-                    while (x < 0) {
-                        y++;
-                        x += 5;
-                    }
-                    while (x > 15) {
-                        y--;
-                        x -= 5;
-                    }
-                    index = (y << 4) + x;
-                    if (index >= 0 && index <= MONOME_MAX_LED_BYTES && (index & 15) != 0)
-                        monomeLedBuffer[index] = 15;
+        if (e.arp)
+            monomeLedBuffer[e.p[e.p_select].root_x + (e.p[e.p_select].root_y << 4)] = 7;
+        s16 index, x, y;
+        for (u8 i = 0; i < 4; i++)
+            if (es_notes[i].active) {
+                x = es_notes[i].x;
+                y = es_notes[i].y;
+                while (x < 0) {
+                    y++;
+                    x += 5;
                 }
-        }
+                while (x > 15) {
+                    y--;
+                    x -= 5;
+                }
+                index = (y << 4) + x;
+                if (index >= 0 && index <= MONOME_MAX_LED_BYTES && (index & 15) != 0)
+                    monomeLedBuffer[index] = 15;
+            }
     } else {
         for (u8 i = 0; i < 16; i++)
             monomeLedBuffer[(i & 3) + 34 + ((i >> 2) << 4)] = e.p[i].length ? 7 : 4;
