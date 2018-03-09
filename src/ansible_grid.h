@@ -132,6 +132,8 @@ typedef struct {
 	es_event_t e[ES_EVENTS_PER_PATTERN];
 	u16 length;
 	u8 loop;
+    u8 root_x;
+    u8 root_y;
 } es_pattern_t;
 
 typedef struct {
