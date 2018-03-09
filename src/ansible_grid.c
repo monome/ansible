@@ -4019,7 +4019,7 @@ void handler_ESGridKey(s32 data) {
         return;
     }
     
-    if (es_runes) {
+    if (z && es_runes) {
         if (x > 1 && x < 5 && y > 1 && y < 5)
             es_linearize();
         else if (x > 5 && x < 8 && y > 1 && y < 5)
