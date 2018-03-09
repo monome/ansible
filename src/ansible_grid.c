@@ -3545,6 +3545,7 @@ void calc_scale(uint8_t s) {
 
 es_mode_t es_mode;
 es_view_t es_view;
+u8 es_runes;
 
 u32 es_tick;
 u16 es_pos;
@@ -3697,6 +3698,13 @@ static void es_play_callback(void* o) {
     es_play_pattern_note();
 }
 
+static void es_stop_playback(void) {
+    timer_remove(&es_play_timer);
+    timer_remove(&es_play_pos_timer);
+    es_mode = es_stopped;
+    es_kill_pattern_notes();
+}
+
 static void es_start_playback(void) {
     if (es_mode == es_playing) es_stop_playback();
     
@@ -3722,13 +3730,6 @@ static void es_start_playback(void) {
     es_play_pattern_note();
 }
 
-static void es_stop_playback(void) {
-    timer_remove(&es_play_timer);
-    timer_remove(&es_play_pos_timer);
-    es_mode = es_stopped;
-    es_kill_pattern_notes();
-}
-
 static void es_start_recording(void) {
     e.p[e.p_select].length = 0;
     es_mode = es_recording;
@@ -3742,6 +3743,33 @@ static u8 is_arm_pressed(void) {
         break;
     }
     return found;
+}
+
+static void es_linearize(void) {
+    for (u16 i = 1; i < e.p[e.p_select].length; i++)
+        e.p[e.p_select].e[i].interval = e.p[e.p_select].e[0].interval;
+}
+
+static void es_prev_pattern(void) {
+    if (!e.p_select) return;
+    e.p_select--;
+    es_start_playback();
+}
+
+static void es_next_pattern(void) {
+    if (e.p_select >= 15) return;
+    e.p_select++;
+    es_start_playback();
+}
+
+static void es_double_speed(void) {
+    for (u16 i = 0; i < e.p[e.p_select].length; i++)
+        e.p[e.p_select].e[i].interval = max(1, e.p[e.p_select].e[i].interval >> 1);
+}
+
+static void es_half_speed(void) {
+    for (u16 i = 0; i < e.p[e.p_select].length; i++)
+        e.p[e.p_select].e[i].interval <<= 1;
 }
 
 // init functions
@@ -3965,6 +3993,8 @@ void handler_ESGridKey(s32 data) {
             e.p[e.p_select].loop = !e.p[e.p_select].loop;
         } else if (z && y == 4) { // arp
             e.arp = !e.arp;
+        } else if (y == 6) { // runes
+            es_runes = z;
         }
         
         monomeFrameDirty++;
@@ -3975,6 +4005,21 @@ void handler_ESGridKey(s32 data) {
         if (!z || x < 2 || x > 5 || y < 2 || y > 5) return;
         e.p_select = (x - 2) + ((y - 2) << 2);
         if (es_view == es_patterns) es_start_playback();
+        monomeFrameDirty++;
+        return;
+    }
+    
+    if (es_runes) {
+        if (x > 1 && x < 5 && y > 1 && y < 5)
+            es_linearize();
+        else if (x > 5 && x < 8 && y > 1 && y < 5)
+            es_prev_pattern();
+        else if (x > 8 && x < 11 && y > 1 && y < 5)
+            es_next_pattern();
+        else if (x > 11 && x < 15 && y > 0 && y < 3)
+            es_double_speed();
+        else if (x > 11 && x < 15 && y > 3 && y < 6)
+            es_half_speed();
         monomeFrameDirty++;
         return;
     }
@@ -4027,11 +4072,31 @@ void refresh_es(void) {
     }
 
     if (es_view == es_main) {
-        if (e.arp)
-            monomeLedBuffer[e.p[e.p_select].root_x + (e.p[e.p_select].root_y << 4)] = 7;
-        for (u8 i = 0; i < 4; i++)
-            if (es_notes[i].active)
-                monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
+        if (es_runes) {
+            u8 l = 8;
+            monomeLedBuffer[29] = l;
+            monomeLedBuffer[34] = l;
+            monomeLedBuffer[36] = l;
+            monomeLedBuffer[39] = l;
+            monomeLedBuffer[41] = l;
+            monomeLedBuffer[44] = l;
+            monomeLedBuffer[46] = l;
+            monomeLedBuffer[54] = l;
+            monomeLedBuffer[58] = l;
+            monomeLedBuffer[66] = l;
+            monomeLedBuffer[68] = l;
+            monomeLedBuffer[71] = l;
+            monomeLedBuffer[73] = l;
+            monomeLedBuffer[76] = l;
+            monomeLedBuffer[78] = l;
+            monomeLedBuffer[93] = l;
+        } else {
+            if (e.arp)
+                monomeLedBuffer[e.p[e.p_select].root_x + (e.p[e.p_select].root_y << 4)] = 7;
+            for (u8 i = 0; i < 4; i++)
+                if (es_notes[i].active)
+                    monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
+        }
     } else {
         for (u8 i = 0; i < 16; i++)
             monomeLedBuffer[(i & 3) + 34 + ((i >> 2) << 4)] = e.p[i].length ? 7 : 4;
