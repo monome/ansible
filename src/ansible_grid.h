@@ -120,8 +120,8 @@ typedef enum {
 
 typedef struct {
 	u8 active;
-    u8 x;
-    u8 y;
+    s8 x;
+    s8 y;
     u32 start;
     u8 from_pattern;
 } es_note_t;
