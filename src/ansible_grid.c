@@ -3894,7 +3894,9 @@ void handler_ESGridKey(s32 data) {
 
     if (x == 0) {
         if (z && y == 0) { // start/stop
-            if (es_mode == es_stopped || es_mode == es_armed) {
+            if (es_view == es_patterns_held) {
+                es_view = es_patterns;
+            } else if (es_mode == es_stopped || es_mode == es_armed) {
                 es_start_playback();
                 if (is_arm_pressed()) es_ignore_arm_release = 1;
             } else if (es_mode == es_recording) {
@@ -3908,6 +3910,17 @@ void handler_ESGridKey(s32 data) {
                 } else
                     es_stop_playback();
             }
+        } else if (y == 1) { // p_select
+            if (z && es_mode == es_recording) {
+                es_complete_recording();
+                es_mode = es_stopped;
+            }
+            if (z && es_view == es_patterns)
+                es_view = es_main;
+            else if (z && es_view == es_main)
+                es_view = es_patterns_held;
+            else if (!z && es_view == es_patterns_held)
+                es_view = es_main;
         } else if (y == 2) { // arm
             es_view = es_main;
             if (z) {
@@ -3939,7 +3952,17 @@ void handler_ESGridKey(s32 data) {
         return;
     }
 
-    if (es_view != es_main) return;
+    if (es_view == es_patterns_held || es_view == es_patterns) {
+        if (!z || x < 2 || x > 5 || y < 2 || y > 5) return;
+        e.p_select = (x - 2) + ((y - 2) << 2);
+        if (es_view == es_patterns) {
+            if (es_mode == es_playing) es_stop_playback();
+            es_start_playback();
+        }
+        monomeFrameDirty++;
+        return;
+    }
+    
     if (x == 0) return;
 
     if (es_mode == es_armed) es_start_recording(); // will change mode to recording
@@ -3971,10 +3994,6 @@ void refresh_es(void) {
 	if (e.p[e.p_select].loop) monomeLedBuffer[48] = 11;
     if (e.arp) monomeLedBuffer[64] = 11;
     
-    for (u8 i = 0; i < 4; i++)
-        if (es_notes[i].active)
-            monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
-        
     if (es_mode == es_playing) {
         u8 pos;
         if (clock_external)
@@ -3984,12 +4003,14 @@ void refresh_es(void) {
         for (u8 i = 1; i < 16; i++) 
             if (i <= pos) monomeLedBuffer[i] = 4;
     }
-        
-        
-    /*
-    monomeLedBuffer[112] = es_mode == es_stopped ? 15 : 0;
-    monomeLedBuffer[113] = es_mode == es_armed ? 15 : 0;
-    monomeLedBuffer[114] = es_mode == es_recording ? 15 : 0;
-    monomeLedBuffer[115] = es_mode == es_playing ? 15 : 0;
-    */
+
+    if (es_view == es_main) {
+        for (u8 i = 0; i < 4; i++)
+            if (es_notes[i].active)
+                monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
+    } else {
+        for (u8 i = 0; i < 16; i++)
+            monomeLedBuffer[(i & 3) + 34 + ((i >> 2) << 4)] = e.p[i].length ? 7 : 4;
+        monomeLedBuffer[(e.p_select & 3) + 34 + ((e.p_select >> 2) << 4)] = 15;
+    }
 }
