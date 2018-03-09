@@ -25,6 +25,8 @@
 #define GRID_KEY_HOLD_TIME 15
 #define MAX_HELD_KEYS 32
 
+#define ES_CHORD_THRESHOLD 30
+
 bool preset_mode;
 uint8_t preset;
 	
@@ -3700,7 +3702,9 @@ static void es_play_callback(void* o) {
         }
     }
 
-    timer_add(&es_play_timer, e.p[e.p_select].e[es_pos].interval, &es_play_callback, NULL);
+    u16 interval = e.p[e.p_select].e[es_pos].interval;
+    if (!interval) interval = 1;
+    timer_add(&es_play_timer, interval, &es_play_callback, NULL);
     es_play_pattern_note();
 }
 
@@ -3730,8 +3734,10 @@ static void es_start_playback(void) {
     es_mode = es_playing;
     if (clock_external) return;
     
+    u16 interval = e.p[e.p_select].e[0].interval;
+    if (!interval) interval = 1;
     timer_add(&es_play_pos_timer, 25, &es_play_pos_callback, NULL);
-    timer_add(&es_play_timer, e.p[e.p_select].e[0].interval, &es_play_callback, NULL );
+    timer_add(&es_play_timer, interval, &es_play_callback, NULL );
     es_play_pattern_note();
 }
 
@@ -3751,8 +3757,15 @@ static u8 is_arm_pressed(void) {
 }
 
 static void es_linearize(void) {
+    u32 interval = 0;
+    for (u16 i = 0; i < e.p[e.p_select].length; i++) {
+        interval += e.p[e.p_select].e[i].interval;
+        if (interval > ES_CHORD_THRESHOLD) break;
+    }
+    
     for (u16 i = 1; i < e.p[e.p_select].length; i++)
-        e.p[e.p_select].e[i].interval = e.p[e.p_select].e[0].interval;
+        e.p[e.p_select].e[i].interval = e.p[e.p_select].e[i].interval < ES_CHORD_THRESHOLD ?
+            1 : interval;
     es_update_total_time();
 }
 
@@ -3872,7 +3885,7 @@ void handler_ESTr(s32 data) {
         if (es_mode != es_playing) break;
         while (true) {
             es_play_pattern_note();
-            if (e.p[e.p_select].e[es_pos].interval > 30) break;
+            if (e.p[e.p_select].e[es_pos].interval > ES_CHORD_THRESHOLD) break;
             if (++es_pos >= e.p[e.p_select].length) {
                 es_pos--;
                 break;
@@ -4019,7 +4032,9 @@ void handler_ESGridKey(s32 data) {
         return;
     }
     
-    if (z && es_runes) {
+    if (es_runes) {
+        if (!z) return;
+        
         if (x > 1 && x < 5 && y > 1 && y < 5)
             es_linearize();
         else if (x > 5 && x < 8 && y > 1 && y < 5)
