@@ -3327,6 +3327,12 @@ static void es_kill_pattern_notes(void) {
     monomeFrameDirty++;
 }
 
+static void es_update_total_time(void) {
+    es_p_total = 0;
+    for (u16 i = 0; i < e.p[e.p_select].length; i++)
+        es_p_total += e.p[e.p_select].e[i].interval;
+}
+
 static void es_play_pos_callback(void* o) {
     if (ansible_mode != mGridES) {
         timer_remove(&es_play_pos_timer);
@@ -3369,6 +3375,7 @@ static void es_stop_playback(void) {
 
 static void es_start_playback(void) {
     if (es_mode == es_playing) es_stop_playback();
+    else if (es_mode == es_recording) es_complete_recording();
     
     if (!e.p[e.p_select].length) {
         es_mode = es_stopped;
@@ -3380,9 +3387,7 @@ static void es_start_playback(void) {
     
     es_pos = 0;
     es_p_start = get_ticks();
-    es_p_total = 0;
-    for (u16 i = 0; i < e.p[e.p_select].length; i++)
-        es_p_total += e.p[e.p_select].e[i].interval;
+    es_update_total_time();
     
     es_mode = es_playing;
     if (clock_external) return;
@@ -3410,6 +3415,7 @@ static u8 is_arm_pressed(void) {
 static void es_linearize(void) {
     for (u16 i = 1; i < e.p[e.p_select].length; i++)
         e.p[e.p_select].e[i].interval = e.p[e.p_select].e[0].interval;
+    es_update_total_time();
 }
 
 static void es_prev_pattern(void) {
@@ -3427,11 +3433,13 @@ static void es_next_pattern(void) {
 static void es_double_speed(void) {
     for (u16 i = 0; i < e.p[e.p_select].length; i++)
         e.p[e.p_select].e[i].interval = max(1, e.p[e.p_select].e[i].interval >> 1);
+    es_update_total_time();
 }
 
 static void es_half_speed(void) {
     for (u16 i = 0; i < e.p[e.p_select].length; i++)
         e.p[e.p_select].e[i].interval <<= 1;
+    es_update_total_time();
 }
 
 // init functions
@@ -3506,8 +3514,10 @@ void handler_ESKey(s32 data) {
     case 0: // button 1 released
         break;
     case 1: // button 1 pressed
+        es_prev_pattern();
         break;
     case 2: // button 2 released
+        es_next_pattern();
         break;
     case 3: // button 2 released
         break;
@@ -3541,6 +3551,7 @@ void handler_ESTr(s32 data) {
     case 2: // input 2 low
         break;
     case 3: // input 2 high
+        if (es_mode != es_armed && es_mode != es_recording) es_start_playback();
         break;
     default:
         break;
@@ -3607,7 +3618,6 @@ void handler_ESGridKey(s32 data) {
                 es_start_playback();
                 if (is_arm_pressed()) es_ignore_arm_release = 1;
             } else if (es_mode == es_recording) {
-                es_complete_recording();
                 e.p[e.p_select].loop = 1;
                 es_start_playback();
             } else if (es_mode == es_playing) {
