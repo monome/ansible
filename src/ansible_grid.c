@@ -3583,7 +3583,6 @@ static void es_note_off(u8 x, u8 y) {
 
 static void es_note_on(u8 x, u8 y, u8 from_pattern) {
     u8 note = 255;
-    
     for (u8 i = 0; i < 4; i++)
         if (!es_notes[i].active || (es_notes[i].x == x && es_notes[i].y == y)) {
             note = i;
@@ -3625,6 +3624,11 @@ static void es_record_pattern_note(u8 x, u8 y, u8 on) {
         return;
     }
     
+    if (!l) {
+        e.p[e.p_select].root_x = x;
+        e.p[e.p_select].root_y = y;
+    } 
+    
     if (l) e.p[e.p_select].e[l - 1].interval = get_ticks() - es_tick;
     es_tick = get_ticks();
     
@@ -3634,8 +3638,19 @@ static void es_record_pattern_note(u8 x, u8 y, u8 on) {
 }
 
 static void es_play_pattern_note(void) {
-    u8 x = e.p[e.p_select].e[es_pos].index & 15;
-    u8 y = e.p[e.p_select].e[es_pos].index >> 4;
+    u8 first_note_x = e.p[e.p_select].e[0].index & 15;
+    u8 first_note_y = e.p[e.p_select].e[0].index >> 4;
+    s16 x = (e.p[e.p_select].e[es_pos].index & 15) + e.p[e.p_select].root_x - first_note_x;
+    s16 y = (e.p[e.p_select].e[es_pos].index >> 4) + e.p[e.p_select].root_y - first_note_y;
+    if (x < 1)
+        x = 1;
+    else if (x > 15)
+        x = 15;
+    if (y < 0)
+        y = 0;
+    else if (y > 7)
+        y = 7;
+    
     if (e.p[e.p_select].e[es_pos].on)
         es_note_on(x, y, 1);
     else
@@ -3946,6 +3961,8 @@ void handler_ESGridKey(s32 data) {
             }
         } else if (z && y == 3) { // loop
             e.p[e.p_select].loop = !e.p[e.p_select].loop;
+        } else if (z && y == 4) { // arp
+            e.arp = !e.arp;
         }
         
         monomeFrameDirty++;
@@ -3965,13 +3982,20 @@ void handler_ESGridKey(s32 data) {
     
     if (x == 0) return;
 
-    if (es_mode == es_armed) es_start_recording(); // will change mode to recording
+    if (es_mode == es_armed) es_start_recording(); // will change es_mode to es_recording
     if (es_mode == es_recording) es_record_pattern_note(x, y, z);
     
-    if (z)
-        es_note_on(x, y, 0);
-    else
-        es_note_off(x, y);
+    if (e.arp && es_mode != es_recording) {
+        e.p[e.p_select].root_x = x;
+        e.p[e.p_select].root_y = y;
+        if (es_mode == es_playing) es_stop_playback();
+        es_start_playback();
+    } else {
+        if (z)
+            es_note_on(x, y, 0);
+        else
+            es_note_off(x, y);
+    }
 
     monomeFrameDirty++;
 }
@@ -4005,6 +4029,8 @@ void refresh_es(void) {
     }
 
     if (es_view == es_main) {
+        if (e.arp)
+            monomeLedBuffer[e.p[e.p_select].root_x + (e.p[e.p_select].root_y << 4)] = 7;
         for (u8 i = 0; i < 4; i++)
             if (es_notes[i].active)
                 monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
