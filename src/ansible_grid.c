@@ -3238,7 +3238,7 @@ static void es_note_off_i(u8 i) {
     clr_tr(TR1 + i);
 }
 
-static void es_note_off(u8 x, u8 y) {
+static void es_note_off(s8 x, s8 y) {
     for (u8 i = 0; i < 4; i++)
         if (es_notes[i].x == x && es_notes[i].y == y) {
             es_note_off_i(i);
@@ -3246,7 +3246,7 @@ static void es_note_off(u8 x, u8 y) {
         }
 }
 
-static void es_note_on(u8 x, u8 y, u8 from_pattern) {
+static void es_note_on(s8 x, s8 y, u8 from_pattern) {
     u8 note = 255;
     for (u8 i = 0; i < 4; i++)
         if (!es_notes[i].active || (es_notes[i].x == x && es_notes[i].y == y)) {
@@ -3272,7 +3272,11 @@ static void es_note_on(u8 x, u8 y, u8 from_pattern) {
     es_notes[note].start = get_ticks();
     es_notes[note].from_pattern = from_pattern;
 
-    u8 note_index = min(119, x + (7 - y) * 5 - 1);
+    s16 note_index = x + (7 - y) * 5 - 1;
+    if (note_index < 0)
+        note_index = 0;
+    else if (note_index > 119)
+        note_index = 119;
     dac_set_value(note, ET[note_index] << 2);
     set_tr(TR1 + note);
 }
@@ -3307,14 +3311,6 @@ static void es_play_pattern_note(void) {
     u8 first_note_y = e.p[e.p_select].e[0].index >> 4;
     s16 x = (e.p[e.p_select].e[es_pos].index & 15) + e.p[e.p_select].root_x - first_note_x;
     s16 y = (e.p[e.p_select].e[es_pos].index >> 4) + e.p[e.p_select].root_y - first_note_y;
-    if (x < 1)
-        x = 1;
-    else if (x > 15)
-        x = 15;
-    if (y < 0)
-        y = 0;
-    else if (y > 7)
-        y = 7;
     
     if (e.p[e.p_select].e[es_pos].on)
         es_note_on(x, y, 1);
@@ -3780,9 +3776,23 @@ void refresh_es(void) {
         } else {
             if (e.arp)
                 monomeLedBuffer[e.p[e.p_select].root_x + (e.p[e.p_select].root_y << 4)] = 7;
+            s16 index, x, y;
             for (u8 i = 0; i < 4; i++)
-                if (es_notes[i].active)
-                    monomeLedBuffer[(es_notes[i].y << 4) + es_notes[i].x] = 15;
+                if (es_notes[i].active) {
+                    x = es_notes[i].x;
+                    y = es_notes[i].y;
+                    while (x < 0) {
+                        y++;
+                        x += 5;
+                    }
+                    while (x > 15) {
+                        y--;
+                        x -= 5;
+                    }
+                    index = (y << 4) + x;
+                    if (index >= 0 && index <= MONOME_MAX_LED_BYTES && (index & 15) != 0)
+                        monomeLedBuffer[index] = 15;
+                }
         }
     } else {
         for (u8 i = 0; i < 16; i++)
