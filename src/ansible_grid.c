@@ -3698,6 +3698,8 @@ static void es_play_callback(void* o) {
 }
 
 static void es_start_playback(void) {
+    if (es_mode == es_playing) es_stop_playback();
+    
     if (!e.p[e.p_select].length) {
         es_mode = es_stopped;
         monomeFrameDirty++;
@@ -3972,10 +3974,7 @@ void handler_ESGridKey(s32 data) {
     if (es_view == es_patterns_held || es_view == es_patterns) {
         if (!z || x < 2 || x > 5 || y < 2 || y > 5) return;
         e.p_select = (x - 2) + ((y - 2) << 2);
-        if (es_view == es_patterns) {
-            if (es_mode == es_playing) es_stop_playback();
-            es_start_playback();
-        }
+        if (es_view == es_patterns) es_start_playback();
         monomeFrameDirty++;
         return;
     }
@@ -3988,7 +3987,6 @@ void handler_ESGridKey(s32 data) {
     if (e.arp && es_mode != es_recording) {
         e.p[e.p_select].root_x = x;
         e.p[e.p_select].root_y = y;
-        if (es_mode == es_playing) es_stop_playback();
         es_start_playback();
     } else {
         if (z)
