@@ -3236,6 +3236,7 @@ static void es_blinker_callback(void* o) {
 static void es_note_off_i(u8 i) {
     if (!es_notes[i].active) return;
     es_notes[i].active = 0;
+    timer_remove(&auxTimer[i]);
     clr_tr(TR1 + i);
 }
 
@@ -3247,7 +3248,19 @@ static void es_note_off(s8 x, s8 y) {
         }
 }
 
-static void es_note_on(s8 x, s8 y, u8 from_pattern) {
+static void es_note_off_callback(void* o) {
+    u8 i = (intptr_t)o;
+    timer_remove(&auxTimer[i]);
+    es_note_off_i(i);
+    monomeFrameDirty++;
+}
+
+static void es_kill_all_notes(void) {
+    for (u8 i = 0; i < 4; i++) es_note_off_i(i);
+    monomeFrameDirty++;
+}
+
+static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer) {
     u8 note = 255;
     for (u8 i = 0; i < 4; i++)
         if (!es_notes[i].active || (es_notes[i].x == x && es_notes[i].y == y)) {
@@ -3280,6 +3293,8 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern) {
         note_index = 119;
     dac_set_value(note, ET[note_index] << 2);
     set_tr(TR1 + note);
+    
+    if (timer) timer_add(&auxTimer[note], timer, &es_note_off_callback, (void *)(intptr_t)note);
 }
 
 static void es_complete_recording(void) {
@@ -3314,8 +3329,8 @@ static void es_play_pattern_note(void) {
     s16 y = (e.p[e.p_select].e[es_pos].index >> 4) + e.p[e.p_select].root_y - first_note_y;
     
     if (e.p[e.p_select].e[es_pos].on)
-        es_note_on(x, y, 1);
-    else
+        es_note_on(x, y, 1, e.p[e.p_select].edge == ES_EDGE_FIXED ? e.p[e.p_select].edge_time : 0);
+    else if (e.p[e.p_select].edge == ES_EDGE_PATTERN)
         es_note_off(x, y);
     monomeFrameDirty++;
 }
@@ -3460,11 +3475,11 @@ void default_es(void) {
     for (i = 0; i < 8; i++) {
         e.arp = 0;
         e.p_select = 0;
-        e.edge = es_edge_pat;
-        e.edge_time = 16;
         for (u8 j = 0; j < 16; j++) {
             e.p[i].length = 0;
             e.p[i].loop = 0;
+            e.p[i].edge = ES_EDGE_PATTERN;
+            e.p[i].edge_time = 16;
         }
         e.glyph[i] = 0;
     }
@@ -3702,22 +3717,30 @@ void handler_ESGridKey(s32 data) {
             es_double_speed();
         else if (x > 11 && x < 15 && y > 3 && y < 6)
             es_half_speed();
+        
         monomeFrameDirty++;
         return;
     } else if (es_edge) {
         if (!z) return;
         
         if (y == 7) {
-            e.edge = es_edge_fixed;
-            e.edge_time = (x + 1) << 4;
+            e.p[e.p_select].edge = ES_EDGE_FIXED;
+            e.p[e.p_select].edge_time = (x + 1) << 4;
+            es_kill_all_notes();
         } else {
-            if (x < 6)
-                e.edge = es_edge_pat;
-            else if (x < 11)
-                e.edge = es_edge_fixed;
-            else
-                e.edge = es_edge_drone;
+            if (x) {
+                if (x < 6) {
+                    e.p[e.p_select].edge = ES_EDGE_PATTERN;
+                    es_kill_all_notes();
+                } else if (x < 11) {
+                    e.p[e.p_select].edge = ES_EDGE_FIXED;
+                    es_kill_all_notes();
+                } else {
+                    e.p[e.p_select].edge = ES_EDGE_DRONE;
+                }
+            }
         }
+        
         monomeFrameDirty++;
         return;
     }
@@ -3740,10 +3763,22 @@ void handler_ESGridKey(s32 data) {
         e.p[e.p_select].root_y = y;
         es_start_playback();
     } else {
-        if (z)
-            es_note_on(x, y, 0);
-        else
-            es_note_off(x, y);
+        if (e.p[e.p_select].edge == ES_EDGE_DRONE) {
+            if (z) {
+                u8 found = 0;
+                for (u8 i = 0; i < 4; i++)
+                    if (x == es_notes[i].x && y == es_notes[i].y && es_notes[i].active) {
+                        es_note_off(x, y);
+                        found = 1;
+                    }
+                if (!found) es_note_on(x, y, 0, 0); 
+            }
+        } else {
+            if (z) 
+                es_note_on(x, y, 0, 0); 
+            else
+                es_note_off(x, y);
+        }
     }
 
     monomeFrameDirty++;
@@ -3800,7 +3835,7 @@ void refresh_es(void) {
     }
 
     if (es_edge) {
-        l = e.edge == es_edge_pat ? 11 : 7;
+        l = e.p[e.p_select].edge == ES_EDGE_PATTERN ? 11 : 7;
         monomeLedBuffer[34] = l;
         monomeLedBuffer[35] = l;
         monomeLedBuffer[36] = l;
@@ -3812,7 +3847,7 @@ void refresh_es(void) {
         monomeLedBuffer[84] = l;
         monomeLedBuffer[85] = l;
 
-        l = e.edge == es_edge_fixed ? 11 : 7;
+        l = e.p[e.p_select].edge == ES_EDGE_FIXED ? 11 : 7;
         monomeLedBuffer[39] = l;
         monomeLedBuffer[40] = l;
         monomeLedBuffer[41] = l;
@@ -3824,16 +3859,16 @@ void refresh_es(void) {
         monomeLedBuffer[87] = l;
         monomeLedBuffer[90] = l;
         
-        l = e.edge == es_edge_drone ? 11 : 7;
+        l = e.p[e.p_select].edge == ES_EDGE_DRONE ? 11 : 7;
         monomeLedBuffer[44] = l;
         monomeLedBuffer[45] = l;
         monomeLedBuffer[46] = l;
         monomeLedBuffer[47] = l;
         
-		if (e.edge == es_edge_fixed) {
+		if (e.p[e.p_select].edge == ES_EDGE_FIXED) {
 			for (u8 i = 0; i < 16; i++)
 				monomeLedBuffer[112 + i] = 4;
-            u8 edge_index = 111 + (e.edge_time >> 4);
+            u8 edge_index = 111 + (e.p[e.p_select].edge_time >> 4);
 			if (edge_index <= 127) monomeLedBuffer[edge_index] = 11;
 		}
         
