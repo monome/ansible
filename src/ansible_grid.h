@@ -16,6 +16,9 @@
 #define KRIA_NUM_PATTERNS 16
 
 #define ES_EVENTS_PER_PATTERN 256
+#define ES_EDGE_PATTERN 0
+#define ES_EDGE_FIXED 1
+#define ES_EDGE_DRONE 2
 
 typedef struct {
 	u8 tr[16];
@@ -118,12 +121,6 @@ typedef enum {
 	es_patterns
 } es_view_t;
 
-typedef enum {
-	es_edge_pat,
-	es_edge_fixed,
-	es_edge_drone
-} es_edge_t;
-
 typedef struct {
 	u8 active;
     s8 x;
@@ -144,12 +141,12 @@ typedef struct {
 	u8 loop;
     u8 root_x;
     u8 root_y;
+    u8 edge;
+    u16 edge_time;
 } es_pattern_t;
 
 typedef struct {
 	u8 arp;
-    es_edge_t edge;
-    u16 edge_time;
     u8 p_select;
     es_pattern_t p[16];
 	u8 glyph[8];
