@@ -140,12 +140,14 @@ typedef struct {
     u8 edge;
     u16 edge_time;
     u8 voices;
+    u8 dir;
 } es_pattern_t;
 
 typedef struct {
 	u8 arp;
     u8 p_select;
     u8 voices;
+    u8 octave;
     es_pattern_t p[16];
 	u8 glyph[8];
 } es_data_t;
