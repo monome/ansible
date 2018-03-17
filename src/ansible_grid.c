@@ -3624,7 +3624,7 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
     es_notes[note].start = get_ticks();
     es_notes[note].from_pattern = from_pattern;
 
-    s16 note_index = x + (7 - y) * 5 - 1 + e.octave * 12;
+    s16 note_index = x + (7 - y) * 5 - 1;
     if (note_index < 0)
         note_index = 0;
     else if (note_index > 119)
@@ -3656,7 +3656,14 @@ static void es_update_pitches(void) {
 
 static void es_complete_recording(void) {
     if (!e.p[e.p_select].length) return;
+    
     e.p[e.p_select].e[e.p[e.p_select].length - 1].interval = get_ticks() - es_tick;
+    for (u16 i = 0; i < e.p[e.p_select].length; i++) {
+        if (e.p[e.p_select].e[i].interval > ES_CHORD_THRESHOLD) {
+            e.p[e.p_select].interval_ind = i;
+            break;
+        }
+    }
 }
 
 static void es_record_pattern_note(u8 x, u8 y, u8 on) {
@@ -3702,9 +3709,18 @@ static void es_kill_pattern_notes(void) {
 }
 
 static void es_update_total_time(void) {
+    u16 interval;
     es_p_total = 0;
-    for (u16 i = 0; i < e.p[e.p_select].length; i++)
-        es_p_total += e.p[e.p_select].e[i].interval;
+    for (u16 i = 0; i < e.p[e.p_select].length; i++) {
+        interval = e.p[e.p_select].e[i].interval;
+        if (e.p[e.p_select].linearize) {
+            if (interval < ES_CHORD_THRESHOLD)
+                interval = 1;
+            else
+                interval = e.p[e.p_select].e[e.p[e.p_select].interval_ind].interval;
+        }
+        es_p_total += interval;
+    }
 }
 
 static void es_play_pos_callback(void* o) {
@@ -3737,6 +3753,12 @@ static void es_play_callback(void* o) {
     }
 
     u16 interval = e.p[e.p_select].e[es_pos].interval;
+    if (e.p[e.p_select].linearize) {
+        if (interval < ES_CHORD_THRESHOLD)
+            interval = 1;
+        else
+            interval = e.p[e.p_select].e[e.p[e.p_select].interval_ind].interval;
+    }
     if (!interval) interval = 1;
     timer_add(&es_play_timer, interval, &es_play_callback, NULL);
     es_play_pattern_note();
@@ -3749,7 +3771,7 @@ static void es_stop_playback(void) {
     es_kill_pattern_notes();
 }
 
-static void es_start_playback(void) {
+static void es_start_playback(u8 pos) {
     if (es_mode == es_playing) es_stop_playback();
     else if (es_mode == es_recording) es_complete_recording();
     
@@ -3761,7 +3783,16 @@ static void es_start_playback(void) {
     
     if (es_mode == es_playing) es_kill_pattern_notes();
     
-    es_pos = 0;
+    if (pos) {
+        u32 start = (es_p_total * pos) >> 4;
+        u32 tick = 0;
+        for (es_pos = 0; es_pos < e.p[e.p_select].length; es_pos++) {
+            if (tick > start) break;
+            tick += e.p[e.p_select].e[es_pos].interval;
+        }
+        es_p_start = get_ticks() - tick;
+    } else es_pos = 0;
+    
     es_p_start = get_ticks();
     es_update_total_time();
     
@@ -3769,6 +3800,12 @@ static void es_start_playback(void) {
     if (clock_external) return;
     
     u16 interval = e.p[e.p_select].e[0].interval;
+    if (e.p[e.p_select].linearize) {
+        if (interval < ES_CHORD_THRESHOLD)
+            interval = 1;
+        else
+            interval = e.p[e.p_select].e[e.p[e.p_select].interval_ind].interval;
+    }
     if (!interval) interval = 1;
     timer_add(&es_play_pos_timer, 25, &es_play_pos_callback, NULL);
     timer_add(&es_play_timer, interval, &es_play_callback, NULL );
@@ -3777,6 +3814,8 @@ static void es_start_playback(void) {
 
 static void es_start_recording(void) {
     e.p[e.p_select].length = 0;
+    e.p[e.p_select].start = 0;
+    e.p[e.p_select].end = 15;
     es_mode = es_recording;
     monomeFrameDirty++;
 }
@@ -3790,29 +3829,27 @@ static u8 is_arm_pressed(void) {
     return found;
 }
 
-static void es_linearize(void) {
-    u32 interval = 0;
-    for (u16 i = 0; i < e.p[e.p_select].length; i++) {
-        interval += e.p[e.p_select].e[i].interval;
-        if (interval > ES_CHORD_THRESHOLD) break;
+/*
+static s8 top_row_pressed(void) {
+    s8 found = -1;
+    for (u8 i = 0; i < key_count; i++) {
+        if (held_keys[i] < 16) found = held_keys[i];
+        break;
     }
-    
-    for (u16 i = 1; i < e.p[e.p_select].length; i++)
-        e.p[e.p_select].e[i].interval = e.p[e.p_select].e[i].interval < ES_CHORD_THRESHOLD ?
-            1 : interval;
-    es_update_total_time();
+    return found;
 }
+*/
 
 static void es_prev_pattern(void) {
     if (!e.p_select) return;
     e.p_select--;
-    es_start_playback();
+    es_start_playback(0);
 }
 
 static void es_next_pattern(void) {
     if (e.p_select >= 15) return;
     e.p_select++;
-    es_start_playback();
+    es_start_playback(0);
 }
 
 static void es_double_speed(void) {
@@ -3855,12 +3892,16 @@ void default_es(void) {
         e.voices = 0b1111;
         e.octave = 0;
         for (u8 j = 0; j < 16; j++) {
+            e.p[i].interval_ind = 0;
             e.p[i].length = 0;
             e.p[i].loop = 0;
             e.p[i].edge = ES_EDGE_PATTERN;
             e.p[i].edge_time = 16;
             e.p[i].voices = 0b1111;
             e.p[i].dir = 0;
+            e.p[i].linearize = 0;
+            e.p[i].start = 0;
+            e.p[i].end = 15;
         }
         e.glyph[i] = 0;
     }
@@ -3959,7 +4000,7 @@ void handler_ESTr(s32 data) {
     case 2: // input 2 low
         break;
     case 3: // input 2 high
-        if (es_mode != es_armed && es_mode != es_recording) es_start_playback();
+        if (es_mode != es_armed && es_mode != es_recording) es_start_playback(0);
         break;
     default:
         break;
@@ -4023,14 +4064,14 @@ void handler_ESGridKey(s32 data) {
             if (es_view == es_patterns_held) {
                 es_view = es_patterns;
             } else if (es_mode == es_stopped || es_mode == es_armed) {
-                es_start_playback();
+                es_start_playback(0);
                 if (is_arm_pressed()) es_ignore_arm_release = 1;
             } else if (es_mode == es_recording) {
                 e.p[e.p_select].loop = 1;
-                es_start_playback();
+                es_start_playback(0);
             } else if (es_mode == es_playing) {
                 if (is_arm_pressed()) {
-                    es_start_playback();
+                    es_start_playback(0);
                     es_ignore_arm_release = 1;
                 } else
                     es_stop_playback();
@@ -4090,9 +4131,10 @@ void handler_ESGridKey(s32 data) {
     if (es_runes) {
         if (!z) return;
         
-        if (x > 1 && x < 5 && y > 1 && y < 5)
-            es_linearize();
-        else if (x > 5 && x < 8 && y > 1 && y < 5) {
+        if (x > 1 && x < 5 && y > 1 && y < 5) {
+            e.p[e.p_select].linearize = !e.p[e.p_select].linearize;
+            es_update_total_time();
+        } else if (x > 5 && x < 8 && y > 1 && y < 5) {
             e.p[e.p_select].dir = 1;
             es_reverse();
             if (es_mode == es_playing) es_kill_pattern_notes();
@@ -4156,10 +4198,25 @@ void handler_ESGridKey(s32 data) {
     if (es_view == es_patterns_held || es_view == es_patterns) {
         if (!z || x < 2 || x > 5 || y < 2 || y > 5) return;
         e.p_select = (x - 2) + ((y - 2) << 2);
-        if (es_view == es_patterns) es_start_playback();
+        if (es_view == es_patterns) es_start_playback(0);
         monomeFrameDirty++;
         return;
     }
+    
+    /*
+    if (y == 0 && es_mode == es_playing) {
+        if (!z) return;
+        s8 start = top_row_pressed();
+        if (start == -1 || start == x) {
+            es_start_playback(x);
+        } else {
+            e.p[e.p_select].start = min(x, start);
+            e.p[e.p_select].end = max(x, start);
+        }
+        monomeFrameDirty++;
+        return;
+    }
+    */
     
     if (x == 0) return;
 
@@ -4169,7 +4226,7 @@ void handler_ESGridKey(s32 data) {
     if (e.arp && es_mode != es_recording) {
         e.p[e.p_select].root_x = x;
         e.p[e.p_select].root_y = y;
-        es_start_playback();
+        es_start_playback(0);
         // es_update_pitches();
     } else {
         if (e.p[e.p_select].edge == ES_EDGE_DRONE) {
@@ -4196,10 +4253,13 @@ void handler_ESGridKey(s32 data) {
 void refresh_es(void) {
     memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
     
+    for (u8 i = 0; i < 8; i++)
+        monomeLedBuffer[i << 4] = 2;
+    
     if (es_mode == es_playing)
         monomeLedBuffer[0] = 15;
     else if (e.p[e.p_select].length)
-        monomeLedBuffer[0] = 4;
+        monomeLedBuffer[0] = 8;
     
     if (es_view == es_patterns) monomeLedBuffer[16] = 15;
     
@@ -4212,18 +4272,21 @@ void refresh_es(void) {
     if (e.arp) monomeLedBuffer[64] = 11;
     
     if (es_mode == es_playing) {
+        //for (u8 i = e.p[e.p_select].start; i <= e.p[e.p_select].end; i++) 
+        //    monomeLedBuffer[i] = 4;
         u8 pos;
         if (clock_external)
             pos = e.p[e.p_select].length ? (es_pos << 4) / (e.p[e.p_select].length - 1) : 0;
         else
             pos = ((get_ticks() - es_p_start) << 4) / es_p_total;
-        for (u8 i = 1; i < 16; i++) 
-            if (i <= pos) monomeLedBuffer[i] = 4;
+        if (e.p[e.p_select].dir) pos = 15 - pos;
+        for (u8 i = 1; i < 16; i++)
+            if (i <= pos) monomeLedBuffer[i] = 11;
     }
 
     u8 l;
     if (es_runes) {
-        l = 8;
+        l = e.p[e.p_select].linearize ? 15 : 7;
         
         // linearize
         monomeLedBuffer[34] = l;
@@ -4231,13 +4294,13 @@ void refresh_es(void) {
         monomeLedBuffer[66] = l;
         monomeLedBuffer[68] = l;
         
-        l = e.p[e.p_select].dir ? 13 : 7;
+        l = e.p[e.p_select].dir ? 15 : 7;
         // reverse
         monomeLedBuffer[39] = l;
         monomeLedBuffer[54] = l;
         monomeLedBuffer[71] = l;
         
-        l = e.p[e.p_select].dir ? 7 : 13;
+        l = e.p[e.p_select].dir ? 7 : 15;
         // forward
         monomeLedBuffer[41] = l;
         monomeLedBuffer[58] = l;
@@ -4258,7 +4321,7 @@ void refresh_es(void) {
     }
 
     if (es_edge) {
-        l = e.p[e.p_select].edge == ES_EDGE_PATTERN ? 13 : 7;
+        l = e.p[e.p_select].edge == ES_EDGE_PATTERN ? 15 : 7;
         monomeLedBuffer[34] = l;
         monomeLedBuffer[35] = l;
         monomeLedBuffer[36] = l;
@@ -4270,7 +4333,7 @@ void refresh_es(void) {
         monomeLedBuffer[84] = l;
         monomeLedBuffer[85] = l;
 
-        l = e.p[e.p_select].edge == ES_EDGE_FIXED ? 13 : 7;
+        l = e.p[e.p_select].edge == ES_EDGE_FIXED ? 15 : 7;
         monomeLedBuffer[39] = l;
         monomeLedBuffer[40] = l;
         monomeLedBuffer[41] = l;
@@ -4282,7 +4345,7 @@ void refresh_es(void) {
         monomeLedBuffer[87] = l;
         monomeLedBuffer[90] = l;
         
-        l = e.p[e.p_select].edge == ES_EDGE_DRONE ? 13 : 7;
+        l = e.p[e.p_select].edge == ES_EDGE_DRONE ? 15 : 7;
         monomeLedBuffer[44] = l;
         monomeLedBuffer[45] = l;
         monomeLedBuffer[46] = l;

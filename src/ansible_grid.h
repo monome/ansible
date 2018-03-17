@@ -137,6 +137,7 @@ typedef struct {
 
 typedef struct {
 	es_event_t e[ES_EVENTS_PER_PATTERN];
+    u16 interval_ind;
 	u16 length;
 	u8 loop;
     u8 root_x;
@@ -145,6 +146,9 @@ typedef struct {
     u16 edge_time;
     u8 voices;
     u8 dir;
+    u8 linearize;
+    u8 start;
+    u8 end;
 } es_pattern_t;
 
 typedef struct {
