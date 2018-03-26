@@ -215,6 +215,7 @@ void grid_keytimer(void) {
 
 						preset_mode = false;
 						grid_refresh = &refresh_mp;
+						monomeFrameDirty++;
 					} else if(ansible_mode == mGridKria) {
 						flashc_memset8((void*)&(f.kria_state.preset), preset, 1, true);
 						flashc_memset8((void*)&(f.kria_state.cue_div), cue_div, 1, true);
@@ -226,6 +227,7 @@ void grid_keytimer(void) {
 
 						preset_mode = false;
 						grid_refresh = &refresh_kria;
+						monomeFrameDirty++;
 					}
 
 					flashc_memset32((void*)&(f.kria_state.clock_period), clock_period, 4, true);
