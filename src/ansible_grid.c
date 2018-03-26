@@ -2101,6 +2101,8 @@ u8 tick[8]; 		// position in speed countdown
 u8 pushed[8];		// manual key reset
 u8 reset[8];
 
+u16 mp_clock_count;	// how many note triggers per clock
+
 s8 note_now[4];
 u16 note_age[4];
 
@@ -2236,6 +2238,8 @@ void resume_mp() {
 
 void clock_mp(uint8_t phase) {
 	static u8 i;
+
+	mp_clock_count = 0;
 
 	if(phase) {
 		clock_count++;
@@ -2435,21 +2439,30 @@ void mp_note_on(uint8_t n) {
 				dac_set_value(n-4, DAC_10V);
 		break;
 	case MP_1V:
-		note_now[0] = n;
-		dac_set_value(0, ET[cur_scale[7-n]] << 2);
-		set_tr(TR1);
+		if(mp_clock_count) {
+			mp_clock_count++;
+			note_now[0] = n;
+			dac_set_value(0, ET[cur_scale[7-n]] << 2);
+			set_tr(TR1);
+		}
 		break;
 	case MP_2V:
-		w = get_note_slot(2);
-		note_now[w] = n;
-		dac_set_value(w, ET[cur_scale[7-n]] << 2);
-		set_tr(TR1 + w);
+		if(mp_clock_count < 2) {
+			mp_clock_count++;
+			w = get_note_slot(2);
+			note_now[w] = n;
+			dac_set_value(w, ET[cur_scale[7-n]] << 2);
+			set_tr(TR1 + w);
+		}
 		break;
 	case MP_4V:
-		w = get_note_slot(4);
-		note_now[w] = n;
-		dac_set_value(w, ET[cur_scale[7-n]] << 2);
-		set_tr(TR1 + w);
+		if(mp_clock_count < 4) {
+			mp_clock_count++;
+			w = get_note_slot(4);
+			note_now[w] = n;
+			dac_set_value(w, ET[cur_scale[7-n]] << 2);
+			set_tr(TR1 + w);
+		}
 		break;
 	default:
 		break;
