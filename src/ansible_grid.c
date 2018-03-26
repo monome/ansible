@@ -146,13 +146,15 @@ void handler_GridFrontShort(s32 data) {
 			grid_refresh = &refresh_kria;
 		view_config = false;
 		view_clock = false;
+		monomeFrameDirty++;
 	}
 	else {
 		// print_dbg("\r\n> PRESET ENTER");
 		preset_mode = true;
 		grid_refresh = &refresh_preset;
 		view_config = false;
-		view_clock = false;
+		view_clock = false; 
+		monomeFrameDirty++;
 	}
 }
 
