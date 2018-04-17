@@ -11,7 +11,8 @@
 
 #define GRID_PRESETS 8
 
-#define KRIA_NUM_PARAMS 4
+#define KRIA_NUM_TRACKS 4
+#define KRIA_NUM_PARAMS 7
 #define KRIA_NUM_PATTERNS 16
 
 typedef struct {
@@ -19,6 +20,9 @@ typedef struct {
 	u8 oct[16];
 	u8 note[16];
 	u8 dur[16];
+	u8 rpt[16];
+	u8 alt_note[16];
+	u8 glide[16];
 
 	u8 p[KRIA_NUM_PARAMS][16];
 
@@ -116,6 +120,14 @@ void handler_KriaKey(s32 data);
 void handler_KriaTr(s32 data);
 void handler_KriaTrNormal(s32 data);
 void refresh_kria(void);
+void refresh_kria_tr(void);
+void refresh_kria_note(bool isAlt);
+void refresh_kria_oct(void);
+void refresh_kria_dur(void);
+void refresh_kria_rpt(void);
+void refresh_kria_glide(void);
+void refresh_kria_scale(void);
+void refresh_kria_pattern(void);
 void refresh_kria_config(void);
 
 void default_mp(void);
