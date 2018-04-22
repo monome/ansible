@@ -2762,7 +2762,7 @@ void mp_note_on(uint8_t n) {
 				dac_set_value(n-4, DAC_10V);
 		break;
 	case MP_1V:
-		if(mp_clock_count) {
+		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
 			dac_set_value(0, ET[cur_scale[7-n]] << 2);
