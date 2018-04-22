@@ -26,7 +26,7 @@
 
 bool preset_mode;
 uint8_t preset;
-	
+
 u8 key_count = 0;
 u8 held_keys[32];
 u8 key_times[128];
@@ -163,7 +163,7 @@ void handler_GridFrontShort(s32 data) {
 		preset_mode = true;
 		grid_refresh = &refresh_preset;
 		view_config = false;
-		view_clock = false; 
+		view_clock = false;
 		monomeFrameDirty++;
 	}
 }
@@ -752,7 +752,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			if(d[3] < 16) {
 				track = d[1];
 				param = d[2];
-				int loopStart = d[3];	
+				int loopStart = d[3];
 				switch(loop_sync) {
 				case 2:
 					for(int i=0;i<4;i++)
@@ -1994,7 +1994,7 @@ void refresh_kria(void) {
 			monomeLedBuffer[R7+i] = (track == i) ? L1 : 2;
 		else
 			monomeLedBuffer[R7+i] = (track == i) ? L2 : L0;
-		
+
 		// when a blink is happening, the LED is 2 brighter (but not when muted)
 		if ( !kria_mutes[i] )
 			monomeLedBuffer[R7+i] += kria_blinks[i]*2;
@@ -2300,7 +2300,7 @@ void refresh_kria_glide(void) {
 }
 
 void refresh_kria_scale(void) {
-	// shoehorning my track clocking feature here 
+	// shoehorning my track clocking feature here
 	for ( uint8_t i=0; i<4; i++ )
 	{
 		// if teletype clocking is enabled, its brighter
@@ -2310,7 +2310,7 @@ void refresh_kria_scale(void) {
 	// vertical bar dividing the left and right half
 	for(uint8_t i=0;i<7;i++)
 		monomeLedBuffer[8+16*i] = L0;
-	// the two rows of scale selecting buttons 
+	// the two rows of scale selecting buttons
 	for(uint8_t i=0;i<8;i++) {
 		monomeLedBuffer[R5 + i] = 2;
 		monomeLedBuffer[R6 + i] = 2;
@@ -2762,7 +2762,7 @@ void mp_note_on(uint8_t n) {
 				dac_set_value(n-4, DAC_10V);
 		break;
 	case MP_1V:
-		if(mp_clock_count) {
+		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
 			dac_set_value(0, ET[cur_scale[7-n]] << 2);
