@@ -4224,6 +4224,7 @@ void handler_ESGridKey(s32 data) {
     if (es_mode == es_recording) es_record_pattern_note(x, y, z);
     
     if (e.arp && es_mode != es_recording) {
+        if (!z) return;
         e.p[e.p_select].root_x = x;
         e.p[e.p_select].root_y = y;
         es_start_playback(0);
