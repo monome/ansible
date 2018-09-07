@@ -3629,7 +3629,8 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
         note_index = 0;
     else if (note_index > 119)
         note_index = 119;
-    dac_set_value(note, ET[note_index] << 2);
+    dac_set_value_noslew(note, ET[note_index] << 2);
+    dac_update_now();
     set_tr(TR1 + note);
     
     if (timer) timer_add(&auxTimer[note], timer, &es_note_off_callback, (void *)(intptr_t)note);
@@ -3649,7 +3650,8 @@ static void es_update_pitches(void) {
             note_index = 0;
         else if (note_index > 119)
             note_index = 119;
-        dac_set_value(i, ET[note_index] << 2);
+        dac_set_value_noslew(i, ET[note_index] << 2);
+        dac_update_now();
     }
 }
 */
