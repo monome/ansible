@@ -156,6 +156,8 @@ typedef struct {
     u8 p_select;
     u8 voices;
     u8 octave;
+    u8 scale;
+    u16 keymap[128];
     es_pattern_t p[16];
 	u8 glyph[8];
 } es_data_t;
@@ -218,3 +220,4 @@ void handler_ESKey(s32 data);
 void handler_ESTr(s32 data);
 void handler_ESTrNormal(s32 data);
 void refresh_es(void);
+void ii_es(uint8_t *d, uint8_t l);
