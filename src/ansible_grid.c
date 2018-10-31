@@ -4304,7 +4304,7 @@ void handler_ESGridKey(s32 data) {
     
     if (y == 0 && es_mode == es_playing) {
         if (!z) return;
-        es_start_playback(x);
+        es_start_playback(e.p[e.p_select].dir ? 15 - x : x);
         /*
         s8 start = top_row_pressed();
         if (start == -1 || start == x) {
