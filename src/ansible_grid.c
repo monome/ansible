@@ -3909,8 +3909,12 @@ static void es_double_speed(void) {
 }
 
 static void es_half_speed(void) {
+    u16 interval;
     for (u16 i = 0; i < e.p[e.p_select].length; i++)
-        if (e.p[e.p_select].e[i].interval > ES_CHORD_THRESHOLD) e.p[e.p_select].e[i].interval <<= 1;
+        if (e.p[e.p_select].e[i].interval > ES_CHORD_THRESHOLD) {
+            interval = e.p[e.p_select].e[i].interval << 1;
+            if (interval > e.p[e.p_select].e[i].interval) e.p[e.p_select].e[i].interval = interval;
+        }
     es_update_total_time();
 }
 
