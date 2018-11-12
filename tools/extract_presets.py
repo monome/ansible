@@ -26,7 +26,7 @@ def main():
     args = parser.parse_args()
 
     extractor = PresetExtractor(args.hexfile, args.version)
-    presets = extractor.extract()
+    presets, image = extractor.extract()
     with open(args.out, 'w') as outf:
         outf.write(json.dumps(presets))
 

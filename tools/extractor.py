@@ -1,27 +1,65 @@
+import faulthandler
+
 from cffi import FFI
 from intelhex import IntelHex
 
-from ansible_cdefs import CDEFS
+from preset_schemata import PRESET_SCHEMATA
 
 
 class PresetExtractor:
+    target_version = '1.6.1-dev'
+
     def __init__(self, hexfile, version):
         self.ih = IntelHex()
         self.ih.fromfile(hexfile, format='hex')
         self.ffi = FFI()
         try:
-            cdef = CDEFS[version]
+            self.schema = PRESET_SCHEMATA[version]()
         except KeyError:
             raise NotImplementedError("don't know how to read version {}".format(version))
         else:
-            self.ffi.cdef(cdef)
+            self.ffi.cdef(self.schema.cdef())
 
     def extract(self):
-        flash_range = self.ih.segments()[1]
-        nvram_data = self.ffi.cast(
-            'nvram_data_t *',
-            self.ffi.from_buffer(
-                self.ih.tobinarray(*flash_range)
-            )
+        # without this, the program will just silently exit if it
+        # segfaults trying to read values from the CFFI object
+        faulthandler.enable()
+
+        nvram_data = self.ffi.new('nvram_data_t *')
+        nvram_buffer = self.ffi.buffer(nvram_data)
+
+        # address from the ansible.sym symbol table
+        nvram_dump = self.ih.tobinarray(
+            0x80040000,
+            0x80040000 + len(nvram_buffer) - 1
         )
-        import pdb; pdb.set_trace()
+        nvram_buffer[:] = nvram_dump
+
+        if nvram_data.fresh != 0x22:
+            print("this firmware image hasn't ever been run, no preset to extract")
+            quit()
+
+        preset = {
+            'meta': {
+                'firmware': 'ansible',
+                'version': self.target_version,
+                'i2c_addr': nvram_data.state.i2c_addr,
+            },
+            'apps': {
+                app: self.extract_app_state(nvram_data, app)
+                for app in self.schema.app_list()
+            },
+            'shared': {
+                'scales': [
+                    [interval for interval in scale]
+                    for scale in nvram_data.scale
+                ],
+            },
+        }
+
+        return (preset, nvram_data)
+
+    def extract_app_state(self, nvram_data, app_name):
+        extractor = getattr(self.schema, 'extract_{}_state'.format(app_name))
+        state = getattr(nvram_data, '{}_state'.format(app_name))
+        return extractor(state)
