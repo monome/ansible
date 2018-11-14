@@ -14,7 +14,7 @@ class PresetExtractor:
         self.ih.fromfile(hexfile, format='hex')
         self.ffi = FFI()
         try:
-            self.schema = PRESET_SCHEMATA[version]()
+            self.schema = PRESET_SCHEMATA[version](self.ffi)
         except KeyError:
             raise NotImplementedError("don't know how to read version {}".format(version))
         else:
