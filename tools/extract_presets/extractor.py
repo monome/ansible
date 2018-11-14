@@ -45,15 +45,15 @@ class PresetExtractor:
                 'version': self.target_version,
                 'i2c_addr': nvram_data.state.i2c_addr,
             },
+            'shared': {
+                'scales': [
+                    self.schema.encode_buffer(scale)
+                    for scale in nvram_data.scale
+                ],
+            },
             'apps': {
                 app: self.extract_app_state(nvram_data, app)
                 for app in self.schema.app_list()
-            },
-            'shared': {
-                'scales': [
-                    [interval for interval in scale]
-                    for scale in nvram_data.scale
-                ],
             },
         }
 
