@@ -4,8 +4,14 @@ import json
 from extractor import PresetExtractor
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def extract(args):
+    extractor = PresetExtractor(args.hexfile, args.version)
+    presets, image = extractor.extract()
+    with open(args.out, 'w') as outf:
+        outf.write(json.dumps(presets))
+    print('{} preset written to {}'.format(extractor.target_version, args.out))
+
+def command(parser):
     parser.add_argument(
         'hexfile',
         type=str,
@@ -23,13 +29,4 @@ def main():
         help='JSON file to write the preset to',
         default='ansible-presets.json'
     )
-    args = parser.parse_args()
-
-    extractor = PresetExtractor(args.hexfile, args.version)
-    presets, image = extractor.extract()
-    with open(args.out, 'w') as outf:
-        outf.write(json.dumps(presets))
-
-
-if __name__ == '__main__':
-    main()
+    parser.set_defaults(func=extract)
