@@ -43,14 +43,9 @@ class PresetExtractor:
             'meta': {
                 'firmware': 'ansible',
                 'version': self.target_version,
-                'i2c_addr': nvram_data.state.i2c_addr,
+                **self.schema.meta(nvram_data),
             },
-            'shared': {
-                'scales': [
-                    self.schema.encode_buffer(scale)
-                    for scale in nvram_data.scale
-                ],
-            },
+            'shared': self.schema.shared(nvram_data),
             'apps': {
                 app: self.extract_app_state(nvram_data, app)
                 for app in self.schema.app_list()
