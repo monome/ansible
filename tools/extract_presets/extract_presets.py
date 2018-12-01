@@ -8,7 +8,7 @@ def extract(args):
     extractor = PresetExtractor(args.hexfile, args.version)
     presets, image = extractor.extract()
     with open(args.out, 'w') as outf:
-        outf.write(json.dumps(presets))
+        outf.write(json.dumps(presets, indent=4 if args.pretty else None))
     print('{} preset written to {}'.format(extractor.target_version, args.out))
 
 def command(parser):
@@ -28,5 +28,11 @@ def command(parser):
         type=str,
         help='JSON file to write the preset to',
         default='ansible-presets.json'
+    )
+    parser.add_argument(
+        '--pretty',
+        action='store_true',
+        help='pretty-print the JSON output',
+        default=False,
     )
     parser.set_defaults(func=extract)

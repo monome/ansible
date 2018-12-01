@@ -13,6 +13,21 @@ class PresetSchema_v161(PresetSchema):
             'tt',
         ]   
 
+    def meta(self, nvram):
+        return self.combine(
+            self.scalar_settings(nvram.state, ['i2c_addr']),
+            self.enum_settings(nvram.state, [
+                ('connected', 'connected_t'),
+                ('arc_mode', 'ansible_mode_t'),
+                ('grid_mode', 'ansible_mode_t'),
+                ('midi_mode', 'ansible_mode_t'),
+                ('none_mode', 'ansible_mode_t'),
+            ]),
+        )
+
+    def shared(self, nvram):
+        return self.array_2d_settings(nvram, ['scale'])
+    
     def cdef(self):
         return r'''
 typedef uint8_t u8;
@@ -253,41 +268,43 @@ typedef const struct {
 	uint8_t scale[16][8];
 } nvram_data_t;
 '''
-
+    
     def extract_kria_state(self, state):
         return self.combine(
-            {
-                'data': [
-                    self.combine(
-                        {
-                            'patterns': [
-                                {
-                                    'tracks': [
-                                        self.combine(
-                                            self.array_1d_settings(track, [
-                                                'tr',
-                                                'oct',
-                                                'note',
-                                                'dur',
-                                                'rpt',
-                                                'alt_note',
-                                                'glide',
-                                                'lstart',
-                                                'lend',
-                                                'llen',
-                                                'lswap',
-                                                'tmul',
-                                            ]),
-                                            self.array_2d_settings(track, ['p']),
-                                            self.scalar_settings(track, ['dur_mul']),
-                                        )
-                                    for track in pattern.t
-                                    ],
-                                    'scale': pattern.scale,
-                                }
-                            for pattern in preset.p
-                            ],
-                        },
+            self.array_settings(state, [
+                (
+                    'k',
+                    lambda preset: self.combine(
+                        self.array_settings(preset, [
+                            (
+                                'p',
+                                lambda pattern: self.combine(
+                                    self.array_settings(pattern, [
+                                        (
+                                            't',
+                                            lambda track: self.combine(
+                                                self.array_1d_settings(track, [
+                                                    'tr',
+                                                    'oct',
+                                                    'note',
+                                                    'dur',
+                                                    'rpt',
+                                                    'alt_note',
+                                                    'glide',
+                                                    'lstart',
+                                                    'lend',
+                                                    'llen',
+                                                    'lswap',
+                                                    'tmul',
+                                                ]),
+                                                self.array_2d_settings(track, ['p']),
+                                                self.scalar_settings(track, ['dur_mul']),
+                                            ),
+                                        ),
+                                    ]),
+                                ),
+                            ),
+                        ]),
                         self.array_1d_settings(preset, [
                             'meta_pat',
                             'meta_steps',
@@ -300,10 +317,9 @@ typedef const struct {
                             'meta_lswap',
                             'pattern',
                         ]),
-                    )
-                    for preset in state.k
-                ],
-            },
+                    ),
+                ),
+            ]),
             self.scalar_settings(state, [
                 'clock_period',
                 'preset',
@@ -314,6 +330,67 @@ typedef const struct {
                 'meta',
             ]),
         )
+                                   
+        
+        # return self.combine(
+        #     {
+        #         'data': [
+        #             self.combine(
+        #                 {
+        #                     'patterns': [
+        #                         {
+        #                             'tracks': [
+        #                                 self.combine(
+        #                                     self.array_1d_settings(track, [
+        #                                         'tr',
+        #                                         'oct',
+        #                                         'note',
+        #                                         'dur',
+        #                                         'rpt',
+        #                                         'alt_note',
+        #                                         'glide',
+        #                                         'lstart',
+        #                                         'lend',
+        #                                         'llen',
+        #                                         'lswap',
+        #                                         'tmul',
+        #                                     ]),
+        #                                     self.array_2d_settings(track, ['p']),
+        #                                     self.scalar_settings(track, ['dur_mul']),
+        #                                 )
+        #                             for track in pattern.t
+        #                             ],
+        #                             'scale': pattern.scale,
+        #                         }
+        #                     for pattern in preset.p
+        #                     ],
+        #                 },
+        #                 self.array_1d_settings(preset, [
+        #                     'meta_pat',
+        #                     'meta_steps',
+        #                     'glyph',
+        #                 ]),
+        #                 self.scalar_settings(preset, [
+        #                     'meta_start',
+        #                     'meta_end',
+        #                     'meta_len',
+        #                     'meta_lswap',
+        #                     'pattern',
+        #                 ]),
+        #             )
+        #             for preset in state.k
+        #         ],
+        #     },
+        #     self.scalar_settings(state, [
+        #         'clock_period',
+        #         'preset',
+        #         'note_sync',
+        #         'loop_sync',
+        #         'cue_div',
+        #         'cue_steps',
+        #         'meta',
+        #     ]),
+        # )
 
     def extract_mp_state(self, state):
         return {
