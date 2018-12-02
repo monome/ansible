@@ -2,13 +2,22 @@ import argparse
 import json
 
 from extractor import PresetExtractor
+from schemata.ansible.ansible_preset_schemata import ANSIBLE_PRESET_SCHEMATA
 
 
 def extract(args):
-    extractor = PresetExtractor(args.hexfile, args.version)
+    extractor = PresetExtractor(
+        ANSIBLE_PRESET_SCHEMATA,
+        args.hexfile,
+        args.version,
+        args.target_version,
+    )
     presets, image = extractor.extract()
     with open(args.out, 'w') as outf:
-        outf.write(json.dumps(presets, indent=4 if args.pretty else None))
+        outf.write(json.dumps(
+            presets,
+            indent=4 if args.pretty else None
+        ))
     print('{} preset written to {}'.format(extractor.target_version, args.out))
 
 def command(parser):
@@ -22,6 +31,11 @@ def command(parser):
         type=str,
         help='firmware version of the ansible which saved the preset',
         default='1.6.1'
+    )
+    parser.add_argument(
+        '--target_version',
+        type=str,
+        help='firmware version to target with the JSON output'
     )
     parser.add_argument(
         '--out',

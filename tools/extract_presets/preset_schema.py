@@ -9,6 +9,18 @@ class PresetSchema(ABC):
         self.ffi = ffi
 
     @abstractmethod
+    def firmware_name(self):
+        pass
+
+    @abstractmethod
+    def root_type(self):
+        pass
+
+    @abstractmethod
+    def address(self):
+        pass
+
+    @abstractmethod
     def app_list(self):
         pass
 

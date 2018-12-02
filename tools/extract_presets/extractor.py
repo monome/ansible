@@ -3,45 +3,38 @@ import faulthandler
 from cffi import FFI
 from intelhex import IntelHex
 
-from preset_schemata import PRESET_SCHEMATA
-
-
 class PresetExtractor:
-    target_version = '1.6.1-dev'
-
-    def __init__(self, hexfile, version):
+    def __init__(self, schemata, hexfile, version, target_version=None):
         self.ih = IntelHex()
         self.ih.fromfile(hexfile, format='hex')
         self.ffi = FFI()
         try:
-            self.schema = PRESET_SCHEMATA[version](self.ffi)
+            self.schema = schemata[version](self.ffi)
         except KeyError:
             raise NotImplementedError("don't know how to read version {}".format(version))
         else:
             self.ffi.cdef(self.schema.cdef())
+        self.target_version = target_version or self.schema.LATEST_VERSION
 
     def extract(self):
         # without this, the program will just silently exit if it
         # segfaults trying to read values from the CFFI object
         faulthandler.enable()
 
-        nvram_data = self.ffi.new('nvram_data_t *')
+        nvram_data = self.ffi.new('{} *'.format(self.schema.root_type()))
         nvram_buffer = self.ffi.buffer(nvram_data)
-
-        # address from the ansible.sym symbol table
         nvram_dump = self.ih.tobinarray(
-            0x80040000,
-            0x80040000 + len(nvram_buffer) - 1
+            self.schema.address(),
+            self.schema.address() + len(nvram_buffer) - 1
         )
         nvram_buffer[:] = nvram_dump
 
-        if nvram_data.fresh != 0x22:
-            print("this firmware image hasn't ever been run, no preset to extract")
+        if not self.schema.check(nvram_data):
             quit()
 
         preset = {
             'meta': {
-                'firmware': 'ansible',
+                'firmware': self.schema.firmware_name(),
                 'version': self.target_version,
                 **self.schema.meta(nvram_data),
             },
