@@ -7,10 +7,10 @@ from preset_schemata import PRESET_SCHEMATA
 
 class FirmwareTool:
     
-    def __init__(self, version, hexfile=None):
+    def __init__(self, firmware, version, hexfile=None):
         self.ffi = FFI()
         try:
-            self.schema = PRESET_SCHEMATA[version](self.ffi)
+            self.schema = PRESET_SCHEMATA[firmware][version](self.ffi)
         except KeyError:
             raise NotImplementedError("don't know how to read version {}".format(version))
         else:

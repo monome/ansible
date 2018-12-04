@@ -8,10 +8,6 @@ class PresetSchema(ABC):
         self.ffi = ffi
 
     @abstractmethod
-    def app_list(self):
-        pass
-
-    @abstractmethod
     def cdef(self):
         pass
 

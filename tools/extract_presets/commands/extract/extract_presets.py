@@ -5,7 +5,7 @@ from commands.extract.extractor import PresetExtractor
 
 
 def extract(args):
-    extractor = PresetExtractor(args.version, args.hexfile)
+    extractor = PresetExtractor(firmware, args.version, args.hexfile)
     presets, image = extractor.extract()
     with open(args.out, 'w') as outf:
         outf.write(json.dumps(

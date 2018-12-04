@@ -11,8 +11,8 @@ class DocdefWriter(FirmwareTool):
     FIRMWARE_NAME = 'ansible'
     ROOT_TYPE = 'nvram_data_t'
 
-    def __init__(self, version):
-        super().__init__(version)
+    def __init__(self, firmware, version):
+        super().__init__(firmware, version)
         self.indentation = 0
         self.obj_depth = -1
 

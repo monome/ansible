@@ -2,7 +2,7 @@ from commands.docdef.docdef_writer import DocdefWriter
 
 
 def write(args):
-    writer = DocdefWriter(args.version)
+    writer = DocdefWriter(args.firmware, args.version)
     with open(args.out, 'w') as outf:
         writer.write(outf)
     print('wrote document defintion data structure to {}'.format(args.out))

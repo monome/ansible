@@ -1,4 +1,4 @@
-from schemata.v161 import PresetSchema_v161
+from schemata.ansible.v161 import PresetSchema_v161
 
 
 class PresetSchema_v161_es(PresetSchema_v161):
