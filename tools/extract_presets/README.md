@@ -1,4 +1,45 @@
-# Extracting Ansible presets to a JSON file
+# flash_tools
+
+Gadgets for hacking on monome firmware images.
+
+# Setup
+
+Needs Python 3.5-ish.
+
+``` bash
+python -m virtualenv .
+source Scripts/activate
+pip install -r requirements.pip
+```
+
+# Tools
+
+## repl - firmware file inspection
+
+``` bash
+python main.py teletype repl --version 3.0.0 teletype-backup.hex
+```
+
+will drop you to a Python shell. Variables in scope are:
+
+* `ffi` - A [CFFI](https://cffi.readthedocs.io/en/latest/) instance
+  for working with C data structures, with the definitions in scope
+  for the flash data structure of firmware/version you specify.
+
+* `ih` - An
+  [IntelHex](https://python-intelhex.readthedocs.io/en/latest/)
+  instance with the specified hex file loaded.
+
+* `flash` - A `bytes` with the whole contents of flash.
+
+* `nvram_data` - The C structure from flash represented as a python
+  object (built by CFFI).
+
+* `hexdump` - A [function](https://pypi.org/project/hexdump/) for
+  formatting bytestrings as more readable hex dumps.
+
+
+## extract - convert presets from a hexdump to a JSON file
 
 Get into bootloader mode:
 
@@ -15,11 +56,7 @@ dfu-programmer at32uc3b0512 read > ansible-backup.hex
 
 Run the script:
 
-``` bash
-python -m virtualenv .
-source Scripts/activate
-pip install -r requirements.pip
-python extract_presets.py ansible-backup.hex --version 1.6.1 --out ansible-presets.json
+python main.py ansible extract --version 1.6.1 ansible-backup.hex --out ansible-presets.json
 ```
 
 The preset format from the module's flash is different depending on
@@ -30,21 +67,7 @@ straightforward to add, see e.g. schemata/v161.py.
 
 
 
-# This part doesn't work yet
+## docdef - generate data structures describing C structs as JSON
 
-Load ansible-presets.json on the root of a USB disk. The JSON format
-is human-readable-ish, you can fiddle with it first if you want.
-
-Plug the USB disk into (running, updated) Ansible.
-
-To load presets from the ansible-presets.json file to the module's flash:
-* Tap KEY 1. The LED turns white.
-* Tap KEY 1 again to confirm overwriting your presets in
-flash. The LED blinks white while reading the preset from the USB
-disk, then turns off when the preset is loaded.
-
-To save presets from the module's flash to ansible-presets.json:
-* Tap KEY 2. The LED turns orange.
-* Tap KEY 2 again to confirm overwriting the presets file on the USB disk. The LED blinks orange while writing the preset to the USB disk, then turns off when the preset is saved.
-
-Tap the MODE key to cancel/exit USB disk mode.
+This is the flakiest one and will require some manual editing of the
+result, docs and cleanup forthcoming.

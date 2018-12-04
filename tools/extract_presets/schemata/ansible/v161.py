@@ -1,7 +1,7 @@
-from preset_schema import PresetSchema
+from schemata.ansible.ansible_preset_schema import AnsiblePresetSchema
 
 
-class PresetSchema_v161(PresetSchema):
+class PresetSchema_v161(AnsiblePresetSchema):    
     def app_list(self):
         return [
             'kria',

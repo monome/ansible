@@ -9,6 +9,17 @@ class PresetSchema(ABC):
         self.ffi = ffi
 
     @abstractmethod
+    def check(self, nvram):
+        pass
+        
+    @abstractmethod
+    def firmware_name(self):
+        pass
+
+    def root_type(self):
+        return 'nvram_data_t'        
+        
+    @abstractmethod
     def app_list(self):
         pass
 

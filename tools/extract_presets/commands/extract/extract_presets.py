@@ -1,14 +1,17 @@
 import argparse
 import json
 
-from extractor import PresetExtractor
+from commands.extract.extractor import PresetExtractor
 
 
 def extract(args):
-    extractor = PresetExtractor(args.hexfile, args.version)
+    extractor = PresetExtractor(args.firmware, args.version, args.hexfile)
     presets, image = extractor.extract()
     with open(args.out, 'w') as outf:
-        outf.write(json.dumps(presets, indent=4 if args.pretty else None))
+        outf.write(json.dumps(
+            presets,
+            indent=4 if args.pretty else None,
+        ))
     print('{} preset written to {}'.format(extractor.target_version, args.out))
 
 def command(parser):
