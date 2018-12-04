@@ -56,6 +56,7 @@ dfu-programmer at32uc3b0512 read > ansible-backup.hex
 
 Run the script:
 
+``` bash
 python main.py ansible extract --version 1.6.1 ansible-backup.hex --out ansible-presets.json
 ```
 
