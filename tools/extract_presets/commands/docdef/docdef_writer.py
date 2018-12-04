@@ -3,26 +3,18 @@ from contextlib import contextmanager
 from cffi import FFI
 
 from preset_schemata import PRESET_SCHEMATA
+from commands.firmware_tool import FirmwareTool
 
 
-
-
-
-class DocdefWriter:
+class DocdefWriter(FirmwareTool):
     INDENT_STR = '\t'
     FIRMWARE_NAME = 'ansible'
     ROOT_TYPE = 'nvram_data_t'
 
     def __init__(self, version):
+        super().__init__(version)
         self.indentation = 0
         self.obj_depth = -1
-        self.ffi = FFI()
-        try:
-            self.schema = PRESET_SCHEMATA[version](self.ffi)
-        except KeyError:
-            raise NotImplementedError("don't know struct defs for version {}".format(version))
-        else:
-            self.ffi.cdef(self.schema.cdef())
 
     @contextmanager
     def indent(self, out, brackets=None):

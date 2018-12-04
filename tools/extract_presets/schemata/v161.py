@@ -2,6 +2,18 @@ from preset_schema import PresetSchema
 
 
 class PresetSchema_v161(PresetSchema):
+    def check(self, nvram_data):
+        if nvram_data.fresh != 0x22:
+            print("this firmware image hasn't ever been run, no preset to extract")
+            return False
+        return True
+    
+    def root_type(self):
+        return 'nvram_data_t'
+    
+    def address(self):
+        return 0x80040000
+    
     def app_list(self):
         return [
             'kria',

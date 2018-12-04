@@ -1,7 +1,8 @@
 import argparse
 
-import extract_presets
-import write_docdef
+from commands.extract import extract_presets
+from commands.docdef import write_docdef
+# from commands.repl import repl
 
 
 def main():
@@ -13,6 +14,9 @@ def main():
 
     docdef_parser = subparsers.add_parser('docdef')
     write_docdef.command(docdef_parser)
+
+    # repl_parser = subparsers.add_parser('repl')
+    # repl.command(repl_parser)
 
     args = parser.parse_args()
     args.func(args)
