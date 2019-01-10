@@ -31,7 +31,8 @@ typedef enum {
 	mGridMP,
 	mMidiStandard,
 	mMidiArp,
-	mTT
+	mTT,
+	mUsbDisk,
 } ansible_mode_t;
 
 typedef struct {
