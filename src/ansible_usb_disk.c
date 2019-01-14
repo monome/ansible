@@ -3,11 +3,13 @@
 #include "main.h"
 
 #include "ansible_usb_disk.h"
+#include "ansible_preset_docdef.h"
 
 #include "events.h"
 #include "fat.h"
 #include "file.h"
 #include "fs_com.h"
+#include "json/serdes.h"
 #include "navigation.h"
 
 #include "uhi_msc.h"
@@ -20,6 +22,9 @@ static bool usb_disk_backup_binary(void);
 static bool usb_disk_restore_backup(void);
 static bool usb_disk_load_flash(void);
 static bool usb_disk_save_flash(void);
+
+static uint8_t ansible_preset_textbuf[256];
+static jsmntok_t ansible_preset_tokbuf[8];
 
 static void handler_UsbDiskKey(int32_t data) {
 	switch (data) {
@@ -54,6 +59,7 @@ void set_mode_usb_disk(void) {
 }
 
 void usb_disk_exit() {
+	nav_filelist_reset();
 	nav_exit();
 }
 
@@ -79,23 +85,13 @@ static bool usb_disk_backup_binary(void) {
 	if (!file_open(FOPEN_MODE_W)) {
 		return false;
 	}
-
-	file_write_buf((uint8_t*)"////////", 6);
-
-	// file_write_buf accepts a uint16_t size
-	/* size_t flash_remaining = sizeof(nvram_data_t); */
-	/* while (flash_remaining > 0) { */
-	/* 	file_write_buf( */
-	/* 		(uint8_t*)&f + sizeof(nvram_data_t) - flash_remaining, */
-	/* 		min(flash_remaining, UINT16_MAX)); */
-	/* 	flash_remaining -= UINT16_MAX; */
-	/* } */
+	puts_4k_chunks((char*)&f, sizeof(nvram_data_t));
 	file_close();
 	return true;
 }
 
 static bool usb_disk_restore_backup(void) {
-	if (!nav_setcwd((FS_STRING)"ansible-backup.bin", true, true)) {
+	if (!nav_setcwd(ANSIBLE_BACKUP_FILE, true, true)) {
 		return false;
 	}
 	if (!file_open(FOPEN_MODE_R)) {
@@ -109,6 +105,28 @@ static bool usb_disk_load_flash(void) {
 	return false;
 }
 
+void puts_4k_chunks(const char* src, size_t len) {
+	size_t written = 0;
+	uint16_t chunk;
+	do {
+		chunk = min(len - written, 4096);
+		file_write_buf((uint8_t*)src + written, chunk);
+		written += chunk;
+	} while (written < len);
+}
+
 static bool usb_disk_save_flash(void) {
-	return false;
+	if (!nav_file_create(ANSIBLE_PRESET_FILE)) {
+		if (fs_g_status != FS_ERR_FILE_EXIST) {
+			return false;
+		}
+	}
+	if (!file_open(FOPEN_MODE_W)) {
+		return false;
+	}
+	json_write_result_t result = json_write(
+		puts_4k_chunks,
+		(void*)&f, &ansible_preset_docdef);
+	file_close();
+	return result == JSON_WRITE_OK;
 }

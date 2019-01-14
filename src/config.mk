@@ -70,6 +70,7 @@ CSRCS = \
        ../src/ansible_midi.c    \
        ../src/ansible_tt.c    \
        ../src/ansible_usb_disk.c    \
+       ../src/ansible_preset_docdef.c    \
        ../libavr32/src/adc.c     \
        ../libavr32/src/arp.c     \
        ../libavr32/src/dac.c     \
@@ -88,6 +89,8 @@ CSRCS = \
        ../libavr32/src/timers.c \
        ../libavr32/src/usb.c \
        ../libavr32/src/util.c \
+       ../libavr32/src/json/encoding.c \
+       ../libavr32/src/json/serdes.c \
        ../libavr32/src/usb/ftdi/ftdi.c \
        ../libavr32/src/usb/ftdi/uhi_ftdi.c \
        ../libavr32/src/usb/hid/hid.c \
@@ -136,6 +139,7 @@ INC_PATH = \
        ../src/usb/msc                                     \
        ../conf                                            \
        ../conf/trilogy                                    \
+       ../libavr32/src                                    \
        avr32/boards                                       \
        avr32/drivers/cpu/cycle_counter                    \
        avr32/drivers/flashc                               \
