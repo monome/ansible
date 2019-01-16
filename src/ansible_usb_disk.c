@@ -46,16 +46,20 @@ static void handler_UsbDiskKey(int32_t data) {
 		break;
 	}
 	usb_disk_exit();
+	usb_disk_enter();
 }
 
 void set_mode_usb_disk(void) {
+	usb_disk_enter();
+	app_event_handlers[kEventKey] = &handler_UsbDiskKey;
+}
+
+void usb_disk_enter() {
 	nav_reset();
 	nav_select(0);
 	if (!usb_disk_mount_drive()) {
 		usb_disk_exit();
 	}
-
-	app_event_handlers[kEventKey] = &handler_UsbDiskKey;
 }
 
 void usb_disk_exit() {
@@ -86,6 +90,7 @@ static bool usb_disk_backup_binary(void) {
 		return false;
 	}
 	puts_4k_chunks((char*)&f, sizeof(nvram_data_t));
+	file_flush();
 	file_close();
 	return true;
 }
@@ -127,6 +132,7 @@ static bool usb_disk_save_flash(void) {
 	json_write_result_t result = json_write(
 		puts_4k_chunks,
 		(void*)&f, &ansible_preset_docdef);
+	file_flush();
 	file_close();
 	return result == JSON_WRITE_OK;
 }

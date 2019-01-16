@@ -136,7 +136,6 @@ json_docdef_t ansible_shared_docdefs[] = {
 // apps
 
 json_docdef_t ansible_app_docdefs[] = {
-#if 0
 	{
 		.name = "kria",
 		.read = json_read_object,
@@ -147,11 +146,11 @@ json_docdef_t ansible_app_docdefs[] = {
 			.docdefs = ((json_docdef_t[]) {
 				{
 					.name = "clock_period",
-						.read = json_read_scalar,
-						.write = json_write_number,
-						.params = &((json_read_scalar_params_t) {
+					.read = json_read_scalar,
+					.write = json_write_number,
+					.params = &((json_read_scalar_params_t) {
 						.dst_size = sizeof_field(nvram_data_t, kria_state.clock_period),
-							.dst_offset = offsetof(nvram_data_t, kria_state.clock_period),
+						.dst_offset = offsetof(nvram_data_t, kria_state.clock_period),
 					}),
 				},
 				{
@@ -244,8 +243,8 @@ json_docdef_t ansible_app_docdefs[] = {
 															.write = json_write_array,
 															.state = &ansible_json_read_array_state[2],
 															.params = &((json_read_array_params_t) {
-																.array_len = 4,
-																.item_size = sizeof(kria_track),
+																.array_len = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t) / sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0]),
+																.item_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0]),
 																.item_docdef = &((json_docdef_t) {
 																	.read = json_read_object,
 																	.write = json_write_object,
@@ -329,7 +328,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																				.write = json_write_array,
 																				.state = &ansible_json_read_array_state[3],
 																				.params = &((json_read_array_params_t) {
-																					.array_len = KRIA_NUM_PARAMS,
+																					.array_len = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].p) / sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].p[0]),
 																					.item_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].p[0]),
 																					.item_docdef = &((json_docdef_t) {
 																						.read = json_read_buffer,
@@ -499,13 +498,10 @@ json_docdef_t ansible_app_docdefs[] = {
 							}),
 						}),
 					}),
-
-
 				},
 			}),
 		}),
 	},
-
 	{
 		.name = "mp",
 		.read = json_read_object,
@@ -703,7 +699,6 @@ json_docdef_t ansible_app_docdefs[] = {
 			}),
 		}),
 	},
-
 	{
 		.name = "levels",
 		.read = json_read_object,
@@ -1021,7 +1016,6 @@ json_docdef_t ansible_app_docdefs[] = {
 			}),
 		}),
 	},
-#endif
 	{
 		.name = "midi_standard",
 		.read = json_read_object,
