@@ -2,9 +2,14 @@
 
 #define ANSIBLE_BACKUP_FILE (FS_STRING)"ansible-backup.bin"
 #define ANSIBLE_PRESET_FILE (FS_STRING)"ansible-preset.json"
+#define ANSIBLE_USBDISK_TXTBUF_LEN 256
+#define ANSIBLE_USBDISK_TOKBUF_LEN 8
+#define ANSIBLE_USBDISK_BLOCKSIZE 4096
+#define ANSIBLE_FLASH_BLOCKSIZE 4096
 
 void set_mode_usb_disk(void);
 void usb_disk_enter(void);
 void usb_disk_exit(void);
 
-void puts_4k_chunks(const char* src, size_t len);
+size_t gets_chunks(char* dst, size_t len);
+void puts_chunks(const char* src, size_t len);

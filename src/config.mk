@@ -91,6 +91,7 @@ CSRCS = \
        ../libavr32/src/util.c \
        ../libavr32/src/json/encoding.c \
        ../libavr32/src/json/serdes.c \
+       ../libavr32/src/json/jsmn/jsmn.c \
        ../libavr32/src/usb/ftdi/ftdi.c \
        ../libavr32/src/usb/ftdi/uhi_ftdi.c \
        ../libavr32/src/usb/hid/hid.c \
