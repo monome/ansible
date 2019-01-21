@@ -480,11 +480,21 @@ void clock_set_tr(uint32_t n, uint8_t phase) {
 	timer_manual(&clockTimer);
 }
 
+void load_flash_state(void) {
+	init_levels();
+	init_cycles();
+	init_kria();
+	init_mp();
+	init_tt();
+
+	print_dbg("\r\ni2c addr: ");
+	print_dbg_hex(f.state.i2c_addr);
+	init_i2c_slave(f.state.i2c_addr);
+}
+
 static void ii_null(uint8_t *d, uint8_t l) {
 	print_dbg("\r\nii/null");
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -532,15 +542,7 @@ int main(void)
 	register_interrupts();
 	cpu_irq_enable();
 
-	init_levels();
-	init_cycles();
-	init_kria();
-	init_mp();
-	init_tt();
-
-	print_dbg("\r\ni2c addr: ");
-	print_dbg_hex(f.state.i2c_addr);
-	init_i2c_slave(f.state.i2c_addr);
+	load_flash_state();
 	process_ii = &ii_null;
 
 	clr_tr(TR1);

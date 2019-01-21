@@ -1,6 +1,7 @@
 #include "monome.h"
 #include "init_common.h"
 #include "main.h"
+#include "print_funcs.h"
 
 #include "ansible_usb_disk.h"
 #include "ansible_preset_docdef.h"
@@ -19,13 +20,31 @@
 static void handler_UsbDiskKey(int32_t data);
 
 static bool usb_disk_mount_drive(void);
-static bool usb_disk_backup_binary(void);
-static bool usb_disk_restore_backup(void);
-static bool usb_disk_load_flash(void);
-static bool usb_disk_save_flash(void);
+static bool usb_disk_backup_binary(FS_STRING fname);
+static bool usb_disk_restore_backup(FS_STRING fname);
+static bool usb_disk_load_flash(FS_STRING fname);
+static bool usb_disk_save_flash(FS_STRING fname);
 
 static char ansible_usb_disk_textbuf[ANSIBLE_USBDISK_TXTBUF_LEN] = {  0 };
 static jsmntok_t ansible_usb_disk_tokbuf[ANSIBLE_USBDISK_TOKBUF_LEN];
+
+static volatile bool usb_disk_locked = false;
+
+static bool usb_disk_lock(uint8_t leds) {
+	if (!usb_disk_locked) {
+		usb_disk_locked = true;
+		update_leds(leds);
+		return true;
+	}
+	return false;
+}
+
+static void usb_disk_unlock(void) {
+	usb_disk_locked = false;
+	usb_disk_exit();
+	usb_disk_enter();
+	update_leds(0);
+}
 
 static void handler_UsbDiskKey(int32_t data) {
 	switch (data) {
@@ -33,24 +52,31 @@ static void handler_UsbDiskKey(int32_t data) {
 		break;
 	case 1:
 		// key 1 - load
-		if (usb_disk_backup_binary()) {
-			if (!usb_disk_load_flash()) {
-				usb_disk_restore_backup();
+		if (usb_disk_lock(2)) {
+			if (usb_disk_backup_binary(ANSIBLE_BACKUP_FILE)) {
+				if (usb_disk_load_flash(ANSIBLE_PRESET_FILE)) {
+					load_flash_state();
+				} else {
+					usb_disk_restore_backup(ANSIBLE_BACKUP_FILE);
+				}
 			}
+			usb_disk_unlock();
 		}
 		break;
 	case 3:
 		// key 2 - save
-		usb_disk_save_flash();
+		if (usb_disk_lock(1)) {
+			usb_disk_save_flash(ANSIBLE_PRESET_FILE);
+			usb_disk_unlock();
+		}
 		break;
 	default:
 		break;
 	}
-	usb_disk_exit();
-	usb_disk_enter();
 }
 
 void set_mode_usb_disk(void) {
+	update_leds(0);
 	usb_disk_enter();
 	app_event_handlers[kEventKey] = &handler_UsbDiskKey;
 }
@@ -82,11 +108,23 @@ size_t gets_chunks(char* dst, size_t len) {
 static void copy_chunks(char* dst, const char* src, size_t len) {
 	size_t read = 0;
 	uint16_t chunk;
+
+	/* print_dbg("\r\n copy_chunks: "); */
+	/* print_dbg_hex(len); */
+	/* print_dbg("@"); */
+	/* print_dbg_hex(src); */
+	/* print_dbg(" -> "); */
+	/* print_dbg_hex(dst); */
+
 	do {
 		chunk = min(len - read, ANSIBLE_FLASH_BLOCKSIZE);
-		flashc_memcpy(dst + read, src + read, chunk, false);
+		/* print_dbg("\r\n   "); */
+		/* print_dbg_hex(chunk); */
+		flashc_memcpy(dst + read, src + read, chunk, true);
+		/* print_dbg(" ok"); */
 		read += chunk;
 	} while (read < len);
+	/* print_dbg("\r\n copy_chunks ok"); */
 }
 
 void puts_chunks(const char* src, size_t len) {
@@ -112,8 +150,8 @@ static bool usb_disk_mount_drive(void) {
 	return false;
 }
 
-static bool usb_disk_backup_binary(void) {
-	if (!nav_file_create((FS_STRING)"ansible-backup.bin")) {
+static bool usb_disk_backup_binary(FS_STRING fname) {
+	if (!nav_file_create(fname)) {
 		if (fs_g_status != FS_ERR_FILE_EXIST) {
 			return false;
 		}
@@ -127,8 +165,8 @@ static bool usb_disk_backup_binary(void) {
 	return true;
 }
 
-static bool usb_disk_restore_backup(void) {
-	if (!nav_setcwd(ANSIBLE_BACKUP_FILE, true, true)) {
+static bool usb_disk_restore_backup(FS_STRING fname) {
+	if (!nav_setcwd(fname, true, true)) {
 		return false;
 	}
 	if (!file_open(FOPEN_MODE_R)) {
@@ -146,8 +184,8 @@ static bool usb_disk_restore_backup(void) {
 	return true;
 }
 
-static bool usb_disk_load_flash(void) {
-	if (!nav_setcwd(ANSIBLE_BACKUP_FILE, true, true)) {
+static bool usb_disk_load_flash(FS_STRING fname) {
+	if (!nav_setcwd(fname, true, true)) {
 		return false;
 	}
 	if (!file_open(FOPEN_MODE_R)) {
@@ -157,14 +195,14 @@ static bool usb_disk_load_flash(void) {
 		gets_chunks,
 		copy_chunks,
 		(void*)&f, &ansible_preset_docdef,
-		ansible_usb_disk_textbuf, sizeof(ansible_usb_disk_textbuf),
-		ansible_usb_disk_tokbuf, sizeof(ansible_usb_disk_tokbuf));
+		ansible_usb_disk_textbuf, ANSIBLE_USBDISK_TXTBUF_LEN,
+		ansible_usb_disk_tokbuf, ANSIBLE_USBDISK_TOKBUF_LEN);
 	file_close();
 	return result == JSON_READ_OK;
 }
 
-static bool usb_disk_save_flash(void) {
-	if (!nav_file_create(ANSIBLE_PRESET_FILE)) {
+static bool usb_disk_save_flash(FS_STRING fname) {
+	if (!nav_file_create(fname)) {
 		if (fs_g_status != FS_ERR_FILE_EXIST) {
 			return false;
 		}

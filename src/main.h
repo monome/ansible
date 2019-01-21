@@ -77,3 +77,4 @@ void clr_tr(uint8_t n);
 uint8_t get_tr(uint8_t n);
 void clock_set(uint32_t n);
 void clock_set_tr(uint32_t n, uint8_t phase);
+void load_flash_state(void);
