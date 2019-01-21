@@ -1,8 +1,12 @@
 #pragma once
 
+#include "ansible_usb_disk.h"
+
+#include "fs_com.h"
+
 #define ANSIBLE_BACKUP_FILE (FS_STRING)"ansible-backup.bin"
 #define ANSIBLE_PRESET_FILE (FS_STRING)"ansible-preset.json"
-#define ANSIBLE_USBDISK_TXTBUF_LEN 256
+#define ANSIBLE_USBDISK_TXTBUF_LEN JSON_MAX_BUFFER_SIZE
 #define ANSIBLE_USBDISK_TOKBUF_LEN 8
 #define ANSIBLE_USBDISK_BLOCKSIZE 4096
 #define ANSIBLE_FLASH_BLOCKSIZE 4096

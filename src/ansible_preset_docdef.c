@@ -136,7 +136,6 @@ json_docdef_t ansible_shared_docdefs[] = {
 // apps
 
 json_docdef_t ansible_app_docdefs[] = {
-#if 0
 	{
 		.name = "kria",
 		.read = json_read_object,
@@ -503,14 +502,13 @@ json_docdef_t ansible_app_docdefs[] = {
 			}),
 		}),
 	},
-#endif
 	{
 		.name = "mp",
 		.read = json_read_object,
 		.write = json_write_object,
 		.state = &ansible_app_object_state[0],
 		.params = &((json_read_object_params_t) {
-			.docdef_ct = 3, // 4,
+			.docdef_ct = 4,
 			.docdefs = ((json_docdef_t[]) {
 				{
 					.name = "curr_preset",

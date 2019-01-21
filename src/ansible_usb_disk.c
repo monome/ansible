@@ -11,6 +11,7 @@
 #include "fat.h"
 #include "file.h"
 #include "fs_com.h"
+#include "json/encoding.h"
 #include "json/serdes.h"
 #include "navigation.h"
 
