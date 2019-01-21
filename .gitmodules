@@ -1,3 +1,4 @@
 [submodule "libavr32"]
 	path = libavr32
-	url = https://github.com/monome/libavr32.git
+	url = https://github.com/csboling/libavr32.git
+	branch = feature/json
