@@ -14,6 +14,7 @@ def extract(args):
         ))
     print('{} preset written to {}'.format(extractor.target_version, args.out))
 
+
 def command(parser):
     parser.add_argument(
         'hexfile',
@@ -30,7 +31,7 @@ def command(parser):
         '--out',
         type=str,
         help='JSON file to write the preset to',
-        default='ansible-presets.json'
+        default='ansible-preset.json'
     )
     parser.add_argument(
         '--pretty',

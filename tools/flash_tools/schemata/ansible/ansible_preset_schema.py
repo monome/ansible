@@ -6,7 +6,7 @@ class AnsiblePresetSchema(PresetSchema):
 
     def firmware_name(self):
         return 'ansible'
-    
+
     def address(self):
         # from the ansible.sym symbol table
         return 0x80040000

@@ -57,14 +57,17 @@ dfu-programmer at32uc3b0512 read > ansible-backup.hex
 Run the script:
 
 ``` bash
-python main.py ansible extract --version 1.6.1 ansible-backup.hex --out ansible-presets.json
+python main.py ansible extract --version 1.6.1 ansible-backup.hex --out ansible-preset.json
 ```
 
-The preset format from the module's flash is different depending on
-your firmware version, so you need to specify the firmware version the
-hexdump came from with the `--version` switch if different from the
-default (1.6.1). Support for a different firmware version is
-straightforward to add, see e.g. schemata/v161.py.
+Versions of the ansible firmware that support loading presets from a
+JSON file look for a file on the root of the drive named
+`ansible-preset.json`.  The preset format from the module's flash is
+different depending on your firmware version, so you need to specify
+the firmware version the hexdump came from with the `--version` switch
+if different from the default (1.6.1). Support for extracting a preset
+from a different firmware version is straightforward to add, see
+e.g. schemata/v161.py.
 
 
 
