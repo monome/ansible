@@ -278,7 +278,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																				.write = json_write_buffer,
 																				.state = &ansible_json_read_buffer_state,
 																				.params = &((json_read_buffer_params_t) {
-																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].note) / sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].note[0]),
+																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].note),
 																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].note),
 																				}),
 																			},
@@ -288,7 +288,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																				.write = json_write_buffer,
 																				.state = &ansible_json_read_buffer_state,
 																				.params = &((json_read_buffer_params_t) {
-																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].dur) / sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].dur[0]),
+																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].dur),
 																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].dur),
 																				}),
 																			},
@@ -298,7 +298,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																				.write = json_write_buffer,
 																				.state = &ansible_json_read_buffer_state,
 																				.params = &((json_read_buffer_params_t) {
-																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].rpt) / sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].rpt[0]),
+																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].rpt),
 																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].rpt),
 																				}),
 																			},
@@ -308,7 +308,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																				.write = json_write_buffer,
 																				.state = &ansible_json_read_buffer_state,
 																				.params = &((json_read_buffer_params_t) {
-																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].alt_note) / sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].alt_note[0]),
+																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].alt_note),
 																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].alt_note),
 																				}),
 																			},

@@ -64,9 +64,9 @@ class PresetSchema(ABC):
         # so by the time they're loaded the sign has been lost
         f = {
             'uint16_t': htons,
-            'int16_t': lambda x: htons(x) - 2**16,
+            'int16_t': lambda x: 0 if x == 0 else htons(x) - 2**16,
             'uint32_t': htonl,
-            'int32_t': lambda x: htonl(x) - 2**32,
+            'int32_t': lambda x: 0 if x == 0 else htonl(x) - 2**32,
         }.get(field.type.cname, lambda x: x)
         return f(val)
 

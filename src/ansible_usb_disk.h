@@ -9,7 +9,7 @@
 #define ANSIBLE_USBDISK_TXTBUF_LEN JSON_MAX_BUFFER_SIZE
 #define ANSIBLE_USBDISK_TOKBUF_LEN 8
 #define ANSIBLE_USBDISK_BLOCKSIZE 4096
-#define ANSIBLE_FLASH_BLOCKSIZE 4096
+#define ANSIBLE_FLASH_BLOCKSIZE (1 << 14)
 
 void set_mode_usb_disk(void);
 void usb_disk_enter(void);

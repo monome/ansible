@@ -110,22 +110,13 @@ static void copy_chunks(char* dst, const char* src, size_t len) {
 	size_t read = 0;
 	uint16_t chunk;
 
-	/* print_dbg("\r\n copy_chunks: "); */
-	/* print_dbg_hex(len); */
-	/* print_dbg("@"); */
-	/* print_dbg_hex(src); */
-	/* print_dbg(" -> "); */
-	/* print_dbg_hex(dst); */
-
 	do {
 		chunk = min(len - read, ANSIBLE_FLASH_BLOCKSIZE);
-		/* print_dbg("\r\n   "); */
-		/* print_dbg_hex(chunk); */
+
 		flashc_memcpy(dst + read, src + read, chunk, true);
-		/* print_dbg(" ok"); */
+
 		read += chunk;
 	} while (read < len);
-	/* print_dbg("\r\n copy_chunks ok"); */
 }
 
 void puts_chunks(const char* src, size_t len) {
