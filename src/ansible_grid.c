@@ -576,7 +576,9 @@ void clock_kria_track( uint8_t trackNum ) {
 			}
 
 			timer_remove( &auxTimer[trackNum]);
-			timer_add(&auxTimer[trackNum], ((u32)dur[trackNum]) / ((u32)rpt[trackNum]), &kria_off, trackIndex);
+            if (track->dur_mul != 16 || track->dur[pos[trackNum][mDur]] < 5) {
+                timer_add(&auxTimer[trackNum], ((u32)dur[trackNum]) / ((u32)rpt[trackNum]), &kria_off, trackIndex);
+            }
 			timer_remove( &blinkTimer[trackNum] );
 			timer_add( &blinkTimer[trackNum], max(dur[trackNum]/rpt[trackNum],31), &kria_blink_off, trackIndex );
 
