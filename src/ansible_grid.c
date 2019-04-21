@@ -1011,6 +1011,34 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				if ( kria_tt_clocked[d[1]-1] )
 					clock_kria_track( d[1]-1 );
 			}
+			break;
+		case II_GRID:
+			if ( !preset_mode
+			  && d[1] >= 0
+			  && d[1] < 16
+			  && d[2] >= 0
+			  && d[2] <  8
+			  && d[3] >= 0
+			  && d[3] < 16 ) {
+				event_t e;
+				u8* data = (u8*)(&(e.data));
+				e.type = kEventMonomeGridKey;
+				data[0] = d[1];
+				data[1] = d[2];
+				data[2] = d[3];
+				event_post(&e);
+			}
+			break;
+		case II_GRID + II_GET: ;
+			u8 led = 0;
+			if ( d[1] >= 0
+			  && d[1] < 16
+			  && d[2] >= 0
+			  && d[2] < 8 ) {
+				led = monomeLedBuffer[d[2] * 16 + d[1]];
+			}
+			ii_tx_queue(led);
+			break;
 		default:
 			break;
 		}
