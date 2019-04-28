@@ -266,11 +266,8 @@ void grid_keytimer(void) {
 static void ii_grid_simulate_key(uint8_t* d, uint8_t len) {
 	if ( !preset_mode
 	  && len >= 4
-	  && d[1] >= 0
 	  && d[1] < 16
-	  && d[2] >= 0
 	  && d[2] <  8
-	  && d[3] >= 0
 	  && d[3] < 16 ) {
 		event_t e;
 		u8* data = (u8*)(&(e.data));
@@ -286,9 +283,7 @@ static void ii_grid_simulate_key(uint8_t* d, uint8_t len) {
 static void ii_grid_read_led(uint8_t* d, uint8_t len) {
 	u8 led = 0;
 	if ( len >= 3
-	  && d[1] >= 0
 	  && d[1] < 16
-	  && d[2] >= 0
 	  && d[2] < 8 ) {
 		led = monomeLedBuffer[d[2] * 16 + d[1]];
 	}

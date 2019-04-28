@@ -24,7 +24,8 @@ static int16_t enc_count[4];
 
 void (*arc_refresh)(void);
 
-static void ii_arc_simulate_enc(uint8_t* data, uint8_t len);
+static void ii_arc_simulate_enc(uint8_t* d, uint8_t len);
+static void ii_arc_read_led(uint8_t* d, uint8_t len);
 
 ////////////////////////////////////////////////////////////////////////////////
 // LEVELS
@@ -308,6 +309,16 @@ static void ii_arc_simulate_enc(uint8_t* d, uint8_t len) {
 		e.type = kEventMonomeRingEnc;
 		event_post(&e);
 	}
+}
+
+static void ii_arc_read_led(uint8_t* d, uint8_t len) {
+	u8 led = 0;
+	if (len >= 2
+	  && d[0] < 4
+	  && d[1] < 64) {
+		led = monomeLedBuffer[d[0] * 64 + d[1]];
+	}
+	ii_tx_queue(led);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -644,6 +655,9 @@ void ii_levels(uint8_t *d, uint8_t len) {
 			break;
 		case II_ARC_ENC:
 			ii_arc_simulate_enc(d, len);
+			break;
+		case II_ARC_LED + II_GET:
+			ii_arc_read_led(d, len);
 			break;
 		default:
 			break;
@@ -1517,6 +1531,9 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 			break;
 		case II_ARC_ENC:
 			ii_arc_simulate_enc(d, len);
+			break;
+		case II_ARC_LED + II_GET:
+			ii_arc_read_led(d, len);
 			break;
 		default:
 			break;
