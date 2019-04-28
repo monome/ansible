@@ -24,7 +24,7 @@ static int16_t enc_count[4];
 
 void (*arc_refresh)(void);
 
-
+static void ii_arc_simulate_enc(uint8_t* data, uint8_t len);
 
 ////////////////////////////////////////////////////////////////////////////////
 // LEVELS
@@ -298,8 +298,17 @@ void refresh_arc_preset(void) {
 	}
 }
 
-
-
+static void ii_arc_simulate_enc(uint8_t* d, uint8_t len) {
+	if (len >= 2
+	 && d[0] < 4) {
+		event_t e;
+		u8* data = (u8*)(&(e.data));
+		data[0] = d[0];
+		data[1] = d[1];
+		e.type = kEventMonomeRingEnc;
+		event_post(&e);
+	}
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -632,6 +641,9 @@ void ii_levels(uint8_t *d, uint8_t len) {
 			}
 			ii_tx_queue(dac_get_value(d[1]) >> 8);
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			break;
+		case II_ARC_ENC:
+			ii_arc_simulate_enc(d, len);
 			break;
 		default:
 			break;
@@ -1502,6 +1514,9 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 			}
 			ii_tx_queue(dac_get_value(d[1]) >> 8);
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			break;
+		case II_ARC_ENC:
+			ii_arc_simulate_enc(d, len);
 			break;
 		default:
 			break;

@@ -58,6 +58,9 @@ void calc_scale(uint8_t s);
 
 void (*grid_refresh)(void);
 
+static void ii_grid_simulate_key(uint8_t* d, uint8_t len);
+static void ii_grid_read_led(uint8_t* d, uint8_t len);
+
 // KRIA
 kria_data_t k;
 
@@ -260,6 +263,37 @@ void grid_keytimer(void) {
 	}
 }
 
+static void ii_grid_simulate_key(uint8_t* d, uint8_t len) {
+	if ( !preset_mode
+	  && len >= 4
+	  && d[1] >= 0
+	  && d[1] < 16
+	  && d[2] >= 0
+	  && d[2] <  8
+	  && d[3] >= 0
+	  && d[3] < 16 ) {
+		event_t e;
+		u8* data = (u8*)(&(e.data));
+		e.type = kEventMonomeGridKey;
+		data[0] = d[1];
+		data[1] = d[2];
+		data[2] = d[3];
+		event_post(&e);
+	}
+
+}
+
+static void ii_grid_read_led(uint8_t* d, uint8_t len) {
+	u8 led = 0;
+	if ( len >= 3
+	  && d[1] >= 0
+	  && d[1] < 16
+	  && d[2] >= 0
+	  && d[2] < 8 ) {
+		led = monomeLedBuffer[d[2] * 16 + d[1]];
+	}
+	ii_tx_queue(led);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // KRIA
@@ -1012,32 +1046,11 @@ void ii_kria(uint8_t *d, uint8_t l) {
 					clock_kria_track( d[1]-1 );
 			}
 			break;
-		case II_GRID:
-			if ( !preset_mode
-			  && d[1] >= 0
-			  && d[1] < 16
-			  && d[2] >= 0
-			  && d[2] <  8
-			  && d[3] >= 0
-			  && d[3] < 16 ) {
-				event_t e;
-				u8* data = (u8*)(&(e.data));
-				e.type = kEventMonomeGridKey;
-				data[0] = d[1];
-				data[1] = d[2];
-				data[2] = d[3];
-				event_post(&e);
-			}
+		case II_GRID_KEY:
+			ii_grid_simulate_key(d, l);
 			break;
-		case II_GRID + II_GET: ;
-			u8 led = 0;
-			if ( d[1] >= 0
-			  && d[1] < 16
-			  && d[2] >= 0
-			  && d[2] < 8 ) {
-				led = monomeLedBuffer[d[2] * 16 + d[1]];
-			}
-			ii_tx_queue(led);
+		case II_GRID_LED + II_GET:
+			ii_grid_read_led(d, l);
 			break;
 		default:
 			break;
@@ -2932,6 +2945,12 @@ void ii_mp(uint8_t *d, uint8_t l) {
 			ii_tx_queue(dac_get_value(d[1]) >> 8);
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
+		case II_GRID_KEY:
+			ii_grid_simulate_key(d, l);
+			break;
+		case II_GRID_LED + II_GET:
+			ii_grid_read_led(d, l);
+			break;
 		default:
 			break;
 		}
@@ -2939,7 +2958,7 @@ void ii_mp(uint8_t *d, uint8_t l) {
 }
 
 void handler_MPGridKey(s32 data) {
- 	u8 x, y, z, index, i1, found;
+	u8 x, y, z, index, i1, found;
 	monome_grid_key_parse_event_data(data, &x, &y, &z);
 	// print_dbg("\r\n monome event; x: ");
 	// print_dbg_hex(x);
