@@ -18,6 +18,8 @@
 #include "uhi_msc.h"
 #include "uhi_msc_mem.h"
 
+#define DEBUG_ANSIBLE_USB_DISK 0
+
 static void handler_UsbDiskKey(int32_t data);
 
 static bool usb_disk_mount_drive(void);
@@ -35,6 +37,7 @@ static bool usb_disk_lock(uint8_t leds) {
 	if (!usb_disk_locked) {
 		usb_disk_locked = true;
 		update_leds(leds);
+		print_dbg("\r\n> usb disk locked");
 		return true;
 	}
 	return false;
@@ -45,6 +48,7 @@ static void usb_disk_unlock(void) {
 	usb_disk_exit();
 	usb_disk_enter();
 	update_leds(0);
+	print_dbg("\r\n> usb disk unlocked");
 }
 
 static void handler_UsbDiskKey(int32_t data) {
@@ -98,6 +102,14 @@ void usb_disk_exit() {
 size_t gets_chunks(char* dst, size_t len) {
 	size_t read = 0;
 	uint16_t count, chunk;
+
+#if DEBUG_ANSIBLE_USB_DISK
+	print_dbg("\r\n> usb read chunks: ");
+	print_dbg_hex(len);
+	print_dbg("->");
+	print_dbg_hex(dst);
+#endif
+
 	do {
 		chunk = min(len - read, ANSIBLE_USBDISK_BLOCKSIZE);
 		count = file_read_buf((uint8_t*)dst + read, chunk);
@@ -109,6 +121,15 @@ size_t gets_chunks(char* dst, size_t len) {
 static void copy_chunks(char* dst, const char* src, size_t len) {
 	size_t read = 0;
 	uint16_t chunk;
+
+#if DEBUG_ANSIBLE_USB_DISK
+	print_dbg("\r\n> copy chunks: ");
+	print_dbg_hex(len);
+	print_dbg("@");
+	print_dbg_hex(src);
+	print_dbg("->");
+	print_dbg_hex(dst);
+#endif
 
 	do {
 		chunk = min(len - read, ANSIBLE_FLASH_BLOCKSIZE);
@@ -143,6 +164,7 @@ static bool usb_disk_mount_drive(void) {
 }
 
 static bool usb_disk_backup_binary(FS_STRING fname) {
+	print_dbg("\r\n> making binary backup");
 	if (!nav_file_create(fname)) {
 		if (fs_g_status != FS_ERR_FILE_EXIST) {
 			return false;
@@ -154,10 +176,12 @@ static bool usb_disk_backup_binary(FS_STRING fname) {
 	puts_chunks((char*)&f, sizeof(nvram_data_t));
 	file_flush();
 	file_close();
+	print_dbg("\r\n> binary backup done");
 	return true;
 }
 
 static bool usb_disk_restore_backup(FS_STRING fname) {
+	print_dbg("\r\n> restoring binary backup");
 	if (!nav_setcwd(fname, true, true)) {
 		return false;
 	}
@@ -177,6 +201,7 @@ static bool usb_disk_restore_backup(FS_STRING fname) {
 }
 
 static bool usb_disk_load_flash(FS_STRING fname) {
+	print_dbg("\r\n> starting usb disk load");
 	if (!nav_setcwd(fname, true, true)) {
 		return false;
 	}
@@ -190,10 +215,12 @@ static bool usb_disk_load_flash(FS_STRING fname) {
 		ansible_usb_disk_textbuf, ANSIBLE_USBDISK_TXTBUF_LEN,
 		ansible_usb_disk_tokbuf, ANSIBLE_USBDISK_TOKBUF_LEN);
 	file_close();
+	print_dbg("\r\n> usb disk load done");
 	return result == JSON_READ_OK;
 }
 
 static bool usb_disk_save_flash(FS_STRING fname) {
+	print_dbg("\r\n> writing flash to disk");
 	if (!nav_file_create(fname)) {
 		if (fs_g_status != FS_ERR_FILE_EXIST) {
 			return false;
@@ -207,5 +234,6 @@ static bool usb_disk_save_flash(FS_STRING fname) {
 		(void*)&f, &ansible_preset_docdef);
 	file_flush();
 	file_close();
+	print_dbg("\r\n> flash write complete");
 	return result == JSON_WRITE_OK;
 }
