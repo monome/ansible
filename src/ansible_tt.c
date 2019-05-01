@@ -104,7 +104,7 @@ void ii_tt(uint8_t *d, uint8_t l) {
 	if(l) {
 		switch(d[0]) {
 		case II_ANSIBLE_TR:
-			if(d[2]) 
+			if(d[2])
 				set_tr(TR1 + d[1]);
 			else
 				clr_tr(TR1 + d[1]);
@@ -183,13 +183,15 @@ void ii_tt(uint8_t *d, uint8_t l) {
 		case II_ANSIBLE_INPUT + II_GET:
 			ii_tx_queue(input[d[1]]);
 			break;
-		default: break;
+		default:
+			ii_ansible(d, l);
+			break;
 		}
 	}
 }
 
 
-void handler_TTKey(s32 data) { 
+void handler_TTKey(s32 data) {
 	// print_dbg("\r\n> TT key");
 	// print_dbg_ulong(data);
 
@@ -212,7 +214,7 @@ void handler_TTKey(s32 data) {
 
 }
 
-void handler_TTTr(s32 data) { 
+void handler_TTTr(s32 data) {
 	// print_dbg("\r\n> TT tr");
 	// print_dbg_ulong(data);
 
@@ -234,7 +236,7 @@ void handler_TTTr(s32 data) {
 	}
 }
 
-void handler_TTTrNormal(s32 data) { 
+void handler_TTTrNormal(s32 data) {
 	// print_dbg("\r\n> TT tr normal ");
 	// print_dbg_ulong(data);
 }

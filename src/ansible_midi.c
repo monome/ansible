@@ -262,7 +262,7 @@ void set_mode_midi(void) {
 	default:
 		break;
 	}
-	
+
 	if(connected == conMIDI) {
 		app_event_handlers[kEventFrontShort] = &handler_MidiFrontShort;
 		app_event_handlers[kEventFrontLong] = &handler_MidiFrontLong;
@@ -577,14 +577,13 @@ void ii_midi_standard(uint8_t *d, uint8_t l) {
 			break;
 
 		default:
-			print_dbg("\r\nmid ii; unknown command: ");
-			print_dbg_ulong(d[0]);
+			ii_ansible(d, l);
 			break;
 		}
 	}
 }
 
-void handler_StandardKey(s32 data) { 
+void handler_StandardKey(s32 data) {
 	switch (data) {
 
 	case 0: // key 1 release
@@ -639,7 +638,7 @@ void handler_StandardKey(s32 data) {
 void handler_StandardTr(s32 data) {
 }
 
-void handler_StandardTrNormal(s32 data) { 
+void handler_StandardTrNormal(s32 data) {
 	key_state.normaled = data;
 }
 
@@ -746,7 +745,7 @@ static void mono_note_on(u8 ch, u8 num, u8 vel) {
 
 static void mono_note_off(u8 ch, u8 num, u8 vel) {
 	const held_note_t *prior;
-	
+
 	if (num > MIDI_NOTE_MAX)
 		return;
 
@@ -1107,7 +1106,7 @@ static void fixed_note_off(u8 ch, u8 num, u8 vel) {
 
 static void fixed_control_change(u8 ch, u8 num, u8 val) {
 	static bool initial_set = false;
-	
+
 	if (fixed_learn.learning) {
 		if (fixed_learn.cc_idx < 4) {
 			// initial state; first num always sets first channel
@@ -1247,7 +1246,7 @@ static void arp_clock_pulse(uint8_t phase) {
 	for (u8 i = 0; i < 4; i++) {
 		arp_player_pulse(&(player[i]), active_seq, &player_behavior, phase);
 	}
-	
+
 	// NB: forcing a dac update so that when there is no slewing cv
 	// changes ~30us after the tr goes high. without this cv change is
 	// delayed ~1ms or more based on the update timer freq. that said
@@ -1283,7 +1282,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			arp_state.style = p1;
 			arp_rebuild(&chord);
 			break;
-			
+
 		case II_ARP_HOLD:
 			// print_dbg("\r\narp ii hold: ");
 			// print_dbg_ulong(d[1]);
@@ -1295,7 +1294,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			v = uclip(d[1], 0, 4);
 			p1 = uclip(d[2], 0, 8);
 			s = sclip((int16_t)((d[3] << 8) + d[4]), -24, 24);
-			
+
 			// print_dbg("\r\narp ii rpt: ");
 			// print_dbg_ulong(v);
 			// print_dbg(" ");
@@ -1313,7 +1312,7 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 				arp_player_set_offset(&(player[v-1]), s);
 			}
 			break;
-			
+
 		case II_ARP_GATE:
 			v = uclip(d[1], 0, 4);
 			p1 = uclip(d[2], 0, 127);
@@ -1471,14 +1470,13 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 			break;
 
 		default:
-			print_dbg("\r\narp ii; unknown command: ");
-			print_dbg_ulong(d[0]);
+			ii_ansible(d, l);
 			break;
 		}
 	}
 }
 
-void handler_ArpKey(s32 data) { 
+void handler_ArpKey(s32 data) {
 	static bool tapped = false;
 	u32 now;
 
@@ -1562,7 +1560,7 @@ void handler_ArpTr(s32 data) {
 	}
 }
 
-void handler_ArpTrNormal(s32 data) { 
+void handler_ArpTrNormal(s32 data) {
 	print_dbg("\r\n> arp tr normal ");
 	print_dbg_ulong(data);
 
@@ -1598,7 +1596,7 @@ void restore_midi_arp(void) {
 	// ensure style matches stored config
 	arp_seq_build(active_seq, arp_state.style, &chord, &(notes[0]));
 	arp_seq_build(next_seq, arp_state.style, &chord, &(notes[0]));
-	
+
 	for (u8 i = 0; i < 4; i++) {
 		p = &(player[i]);
 		arp_player_init(p, i, arp_state.p[i].division);
@@ -1653,7 +1651,7 @@ static void arp_state_set_hold(bool hold) {
 
 static void arp_rebuild(chord_t *c) {
 	arp_seq_state current_state = arp_seq_get_state(next_seq);
-	
+
 	if (current_state == eSeqFree || current_state == eSeqWaiting) {
 		arp_seq_set_state(next_seq, eSeqBuilding); // TODO: check return
 		arp_seq_build(next_seq, arp_state.style, &chord, &(notes[0]));

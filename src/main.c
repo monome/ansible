@@ -95,8 +95,6 @@ static void handler_FrontLong(s32 data);
 static void handler_MidiConnect(s32 data);
 static void handler_MidiDisconnect(s32 data);
 
-static void ii_null(uint8_t *d, uint8_t l);
-
 u8 flash_is_fresh(void);
 void flash_unfresh(void);
 void flash_write(void);
@@ -104,7 +102,9 @@ void flash_read(void);
 void state_write(void);
 void state_read(void);
 
-
+void ii_ansible(uint8_t* d, uint8_t len);
+static ansible_mode_t ii_ansible_mode_for_cmd(uint8_t cmd);
+static uint8_t ii_ansible_cmd_for_mode(ansible_mode_t mode);
 ////////////////////////////////////////////////////////////////////////////////
 // timers
 
@@ -359,8 +359,6 @@ static void handler_KeyTimer(s32 data) {
 		arc_keytimer();
 }
 
-
-
 // assign default event handlers
 static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventFront ]	= &handler_Front;
@@ -465,11 +463,126 @@ void clock_set_tr(uint32_t n, uint8_t phase) {
 	timer_manual(&clockTimer);
 }
 
-static void ii_null(uint8_t *d, uint8_t l) {
-	print_dbg("\r\nii/null");
+///////
+// global ii handlers
+
+void ii_ansible(uint8_t* d, uint8_t len) {
+	// print_dbg("\r\nii/ansible (");
+	// print_dbg_ulong(len);
+	// print_dbg(") ");
+	// for(int i=0;i<len;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
+
+	if (len < 1) {
+		return;
+	}
+
+	switch (d[0]) {
+	case II_GRID_KEY:
+		if ( !preset_mode
+		  && len >= 4
+		  && d[1] < 16
+		  && d[2] <  8
+		  && d[3] < 16 ) {
+			event_t e;
+			uint8_t* data = (uint8_t*)(&(e.data));
+			e.type = kEventMonomeGridKey;
+			data[0] = d[1];
+			data[1] = d[2];
+			data[2] = d[3];
+			event_post(&e);
+		}
+		break;
+	case II_GRID_LED + II_GET: {
+		uint8_t led = 0;
+		if ( len >= 3
+		  && d[1] < 16
+		  && d[2] < 8 ) {
+			led = monomeLedBuffer[d[2] * 16 + d[1]];
+		}
+		ii_tx_queue(led);
+		break;
+	}
+	case II_ARC_ENC:
+		if (len >= 2
+		 && d[0] < 4) {
+			event_t e;
+			uint8_t* data = (uint8_t*)(&(e.data));
+			data[0] = d[0];
+			data[1] = d[1];
+			e.type = kEventMonomeRingEnc;
+			event_post(&e);
+		}
+		break;
+	case II_ARC_LED + II_GET: {
+		uint8_t led = 0;
+		if ( len >= 2
+		  && d[0] < 4
+		  && d[1] < 64) {
+			led = monomeLedBuffer[d[0] * 64 + d[1]];
+		}
+		ii_tx_queue(led);
+		break;
+	}
+	case II_ANSIBLE_APP:
+		if ( len >= 2 ) {
+			ansible_mode_t prev_mode = ansible_mode;
+			ansible_mode_t next_mode = ii_ansible_mode_for_cmd(d[1]);
+
+			// print_dbg("\r\n> prev app: ");
+			// print_dbg_ulong(prev_mode);
+			// print_dbg("\r\n> next app: ");
+			// print_dbg_ulong(next_mode);
+
+			if (next_mode < 0) {
+				break;
+			}
+			// send response before switching because
+			// initialization can take a while
+			uint8_t response = ii_ansible_cmd_for_mode(prev_mode);
+
+			// print_dbg("\r\n> response: ");
+			// print_dbg_ulong(response);
+
+			ii_tx_queue(response);
+			set_mode(next_mode);
+		}
+		break;
+	case II_ANSIBLE_APP + II_GET:
+		ii_tx_queue(ii_ansible_cmd_for_mode(ansible_mode));
+		break;
+	default:
+		break;
+	}
 }
 
+static ansible_mode_t ii_ansible_mode_for_cmd(uint8_t cmd) {
+	switch (cmd) {
+	case 0:  return mArcLevels;
+	case 1:  return mArcCycles;
+        case 2:  return mGridKria;
+	case 3:  return mGridMP;
+	case 4:  return mMidiStandard;
+	case 5:  return mMidiArp;
+	case 6:  return mTT;
+	default: return -1;
+	}
+}
 
+static uint8_t ii_ansible_cmd_for_mode(ansible_mode_t mode) {
+	switch (mode) {
+	case mArcLevels:    return 0;
+	case mArcCycles:    return 1;
+        case mGridKria:     return 2;
+	case mGridMP:       return 3;
+	case mMidiStandard: return 4;
+	case mMidiArp:      return 5;
+	case mTT:           return 6;
+	default:            return -1;
+	}
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -526,7 +639,7 @@ int main(void)
 	print_dbg("\r\ni2c addr: ");
 	print_dbg_hex(f.state.i2c_addr);
 	init_i2c_slave(f.state.i2c_addr);
-	process_ii = &ii_null;
+	process_ii = &ii_ansible;
 
 	clr_tr(TR1);
 	clr_tr(TR2);
@@ -540,7 +653,7 @@ int main(void)
 	timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
 
 	init_dacs();
-	
+
 	connected = conNONE;
 	set_mode(f.state.none_mode);
 

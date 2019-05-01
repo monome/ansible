@@ -58,9 +58,6 @@ void calc_scale(uint8_t s);
 
 void (*grid_refresh)(void);
 
-static void ii_grid_simulate_key(uint8_t* d, uint8_t len);
-static void ii_grid_read_led(uint8_t* d, uint8_t len);
-
 // KRIA
 kria_data_t k;
 
@@ -102,6 +99,9 @@ bool kria_tt_clocked[4];
 mp_data_t m;
 u8 sound;
 u8 voice_mode;
+
+static kria_modes_t ii_kr_mode_for_cmd(uint8_t cmd);
+static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode);
 
 
 void set_mode_grid() {
@@ -261,33 +261,6 @@ void grid_keytimer(void) {
 			// print_dbg_ulong(held_keys[i1]);
 		}
 	}
-}
-
-static void ii_grid_simulate_key(uint8_t* d, uint8_t len) {
-	if ( !preset_mode
-	  && len >= 4
-	  && d[1] < 16
-	  && d[2] <  8
-	  && d[3] < 16 ) {
-		event_t e;
-		u8* data = (u8*)(&(e.data));
-		e.type = kEventMonomeGridKey;
-		data[0] = d[1];
-		data[1] = d[2];
-		data[2] = d[3];
-		event_post(&e);
-	}
-
-}
-
-static void ii_grid_read_led(uint8_t* d, uint8_t len) {
-	u8 led = 0;
-	if ( len >= 3
-	  && d[1] < 16
-	  && d[2] < 8 ) {
-		led = monomeLedBuffer[d[2] * 16 + d[1]];
-	}
-	ii_tx_queue(led);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1041,15 +1014,58 @@ void ii_kria(uint8_t *d, uint8_t l) {
 					clock_kria_track( d[1]-1 );
 			}
 			break;
-		case II_GRID_KEY:
-			ii_grid_simulate_key(d, l);
+		case II_KR_PAGE:
+			if ( l >= 2 ) {
+				kria_modes_t prev_mode = k_mode;
+				kria_modes_t next_mode = ii_kr_mode_for_cmd(d[1]);
+				if (next_mode < 0) {
+					break;
+				}
+				k_mode = next_mode;
+				if (k_mode == mPattern) {
+					cue = true;
+				}
+				ii_tx_queue(ii_kr_cmd_for_mode(prev_mode));
+			}
 			break;
-		case II_GRID_LED + II_GET:
-			ii_grid_read_led(d, l);
+		case II_KR_PAGE + II_GET:
+			ii_tx_queue(ii_kr_cmd_for_mode(k_mode));
 			break;
 		default:
+			ii_ansible(d, l);
 			break;
 		}
+	}
+}
+
+static kria_modes_t ii_kr_mode_for_cmd(uint8_t d) {
+	switch (d) {
+	case 0:  return mTr;
+	case 1:  return mRpt;
+	case 2:  return mNote;
+	case 3:  return mAltNote;
+	case 4:  return mOct;
+	case 5:  return mGlide;
+	case 6:  return mDur;
+	case 7:  return -1;
+	case 8:  return mScale;
+	case 9:  return mPattern;
+	default: return -1;
+	}
+}
+
+static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode) {
+	switch (mode) {
+	case mTr:      return 0;
+	case mRpt:     return 1;
+	case mNote:    return 2;
+	case mAltNote: return 3;
+	case mOct:     return 4;
+	case mGlide:   return 5;
+	case mDur:     return 6;
+	case mScale:   return 8;
+	case mPattern: return 9;
+	default:       return -1;
 	}
 }
 
@@ -2940,13 +2956,8 @@ void ii_mp(uint8_t *d, uint8_t l) {
 			ii_tx_queue(dac_get_value(d[1]) >> 8);
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
-		case II_GRID_KEY:
-			ii_grid_simulate_key(d, l);
-			break;
-		case II_GRID_LED + II_GET:
-			ii_grid_read_led(d, l);
-			break;
 		default:
+			ii_ansible(d, l);
 			break;
 		}
 	}
