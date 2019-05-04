@@ -52,6 +52,7 @@ void arc_keytimer(void);
 void refresh_arc_preset(void);
 void handler_ArcPresetEnc(s32 data);
 void handler_ArcPresetKey(s32 data);
+void ii_arc(uint8_t* data, uint8_t len);
 
 void default_levels(void);
 void init_levels(void);

@@ -23,6 +23,7 @@ static uint8_t arc_preset_select;
 static int16_t enc_count[4];
 
 void (*arc_refresh)(void);
+void ii_arc(uint8_t* data, uint8_t len);
 
 ////////////////////////////////////////////////////////////////////////////////
 // LEVELS
@@ -164,6 +165,45 @@ void handler_ArcFrontLong(s32 data) {
 		set_mode(mArcLevels);
 }
 
+void ii_arc(uint8_t* d, uint8_t len) {
+	// print_dbg("\r\nii/arc (");
+	// print_dbg_ulong(len);
+	// print_dbg(") ");
+	// for(int i=0;i<len;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
+
+	if (len < 1) {
+		return;
+	}
+
+	switch (d[0]) {
+	case II_ARC_ENC:
+		if (len >= 2
+		 && d[0] < 4) {
+			event_t e;
+			uint8_t* data = (uint8_t*)(&(e.data));
+			data[0] = d[0];
+			data[1] = d[1];
+			e.type = kEventMonomeRingEnc;
+			event_post(&e);
+		}
+		break;
+	case II_ARC_LED + II_GET: {
+		uint8_t led = 0;
+		if ( len >= 2
+		  && d[0] < 4
+		  && d[1] < 64) {
+			led = monomeLedBuffer[d[0] * 64 + d[1]];
+		}
+		ii_tx_queue(led);
+		break;
+	}
+	default:
+		break;
+	}
+}
 
 
 static void key_long_levels(uint8_t key);
@@ -629,6 +669,7 @@ void ii_levels(uint8_t *d, uint8_t len) {
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
 		default:
+			ii_arc(d, len);
 			ii_ansible(d, len);
 			break;
 		}
@@ -1500,6 +1541,7 @@ void ii_cycles(uint8_t *d, uint8_t len) {
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
 		default:
+			ii_arc(d, len);
 			ii_ansible(d, len);
 			break;
 		}

@@ -480,57 +480,9 @@ void ii_ansible(uint8_t* d, uint8_t len) {
 	}
 
 	switch (d[0]) {
-	case II_GRID_KEY:
-		if ( !preset_mode
-		  && len >= 4
-		  && d[1] < 16
-		  && d[2] <  8
-		  && d[3] < 16 ) {
-			event_t e;
-			uint8_t* data = (uint8_t*)(&(e.data));
-			e.type = kEventMonomeGridKey;
-			data[0] = d[1];
-			data[1] = d[2];
-			data[2] = d[3];
-			event_post(&e);
-		}
-		break;
-	case II_GRID_LED + II_GET: {
-		uint8_t led = 0;
-		if ( len >= 3
-		  && d[1] < 16
-		  && d[2] < 8 ) {
-			led = monomeLedBuffer[d[2] * 16 + d[1]];
-		}
-		ii_tx_queue(led);
-		break;
-	}
-	case II_ARC_ENC:
-		if (len >= 2
-		 && d[0] < 4) {
-			event_t e;
-			uint8_t* data = (uint8_t*)(&(e.data));
-			data[0] = d[0];
-			data[1] = d[1];
-			e.type = kEventMonomeRingEnc;
-			event_post(&e);
-		}
-		break;
-	case II_ARC_LED + II_GET: {
-		uint8_t led = 0;
-		if ( len >= 2
-		  && d[0] < 4
-		  && d[1] < 64) {
-			led = monomeLedBuffer[d[0] * 64 + d[1]];
-		}
-		ii_tx_queue(led);
-		break;
-	}
 	case II_ANSIBLE_APP:
 		if ( len >= 2 ) {
-			ansible_mode_t prev_mode = ansible_mode;
 			ansible_mode_t next_mode = ii_ansible_mode_for_cmd(d[1]);
-
 			if (next_mode < 0) {
 				break;
 			}

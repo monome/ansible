@@ -107,6 +107,7 @@ void handler_GridFrontShort(s32 data);
 void handler_GridFrontLong(s32 data);
 void refresh_preset(void);
 void grid_keytimer(void);
+void ii_grid(uint8_t* data, uint8_t len);
 
 void default_kria(void);
 void init_kria(void);

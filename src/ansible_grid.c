@@ -57,6 +57,7 @@ u8 cur_scale[8];
 void calc_scale(uint8_t s);
 
 void (*grid_refresh)(void);
+void ii_grid(uint8_t* data, uint8_t len);
 
 // KRIA
 kria_data_t k;
@@ -260,6 +261,66 @@ void grid_keytimer(void) {
 			// print_dbg("\rlong press: ");
 			// print_dbg_ulong(held_keys[i1]);
 		}
+	}
+}
+
+void ii_grid(uint8_t* d, uint8_t len) {
+	// print_dbg("\r\nii/grid (");
+	// print_dbg_ulong(len);
+	// print_dbg(") ");
+	// for(int i=0;i<len;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
+
+	if (len < 1) {
+		return;
+	}
+
+	switch (d[0]) {
+	case II_GRID_KEY:
+		if ( !preset_mode
+		  && len >= 4
+		  && d[1] < 16
+		  && d[2] <  8
+		  && d[3] < 16 ) {
+			event_t e;
+			uint8_t* data = (uint8_t*)(&(e.data));
+			e.type = kEventMonomeGridKey;
+			data[0] = d[1];
+			data[1] = d[2];
+			data[2] = d[3];
+			event_post(&e);
+		}
+		break;
+	case II_GRID_KEY + II_GET: {
+		uint8_t z = 0;
+		if ( len >= 2
+		  && d[1] < 16
+		  && d[2] < 8 ) {
+			for (uint8_t i = 0; i < key_count; i++) {
+				if (held_keys[i] % 16 == d[1]
+				  && held_keys[i] / 16 == d[2]) {
+					z = 1;
+					break;
+				}
+			}
+		}
+		ii_tx_queue(z);
+		break;
+	}
+	case II_GRID_LED + II_GET: {
+		uint8_t led = 0;
+		if ( len >= 3
+		  && d[1] < 16
+		  && d[2] < 8 ) {
+			led = monomeLedBuffer[d[2] * 16 + d[1]];
+		}
+		ii_tx_queue(led);
+		break;
+	}
+	default:
+		break;
 	}
 }
 
@@ -1017,7 +1078,6 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			break;
 		case II_KR_PAGE:
 			if ( l >= 2 ) {
-				kria_modes_t prev_mode = k_mode;
 				kria_modes_t next_mode = ii_kr_mode_for_cmd(d[1]);
 				if (next_mode < 0) {
 					break;
@@ -1027,13 +1087,13 @@ void ii_kria(uint8_t *d, uint8_t l) {
 					cue = true;
 				}
 				kria_set_alt_blink_timer(k_mode);
-				ii_tx_queue(ii_kr_cmd_for_mode(prev_mode));
 			}
 			break;
 		case II_KR_PAGE + II_GET:
 			ii_tx_queue(ii_kr_cmd_for_mode(k_mode));
 			break;
 		default:
+			ii_grid(d, l);
 			ii_ansible(d, l);
 			break;
 		}
@@ -2962,6 +3022,7 @@ void ii_mp(uint8_t *d, uint8_t l) {
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
 		default:
+			ii_grid(d, l);
 			ii_ansible(d, l);
 			break;
 		}
