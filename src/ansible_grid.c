@@ -724,9 +724,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			break;
 		case II_KR_PATTERN:
 			if(d[1] > -1 && d[1] < 16) {
-				k.pattern = d[1];
-				pos_reset = true;
-				calc_scale(k.p[k.pattern].scale);
+				change_pattern(d[1]);
 			}
 			break;
 		case II_KR_PATTERN + II_GET:
@@ -1092,6 +1090,17 @@ void ii_kria(uint8_t *d, uint8_t l) {
 		case II_KR_PAGE + II_GET:
 			ii_tx_queue(ii_kr_cmd_for_mode(k_mode));
 			break;
+		case II_KR_CUE:
+			if (!meta
+			 && l >= 2) {
+				cue_pat_next = d[1] + 1;
+				cue = true;
+			}
+			break;
+		case II_KR_CUE + II_GET: {
+			ii_tx_queue(cue_pat_next - 1);
+			break;
+		}
 		default:
 			ii_grid(d, l);
 			ii_ansible(d, l);
