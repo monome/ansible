@@ -305,6 +305,7 @@ static void kria_off(void* o);
 static void kria_blink_off(void* o);
 static void kria_rpt_off(void* o);
 static void kria_alt_mode_blink(void* o);
+static void kria_set_alt_blink_timer(kria_modes_t mode);
 softTimer_t altBlinkTimer = { .next = NULL, .prev = NULL };
 bool kriaAltModeBlink; // flag gets flipped for the blinking
 bool k_mode_is_alt = false;
@@ -1025,6 +1026,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				if (k_mode == mPattern) {
 					cue = true;
 				}
+				kria_set_alt_blink_timer(k_mode);
 				ii_tx_queue(ii_kr_cmd_for_mode(prev_mode));
 			}
 			break;
@@ -1066,6 +1068,18 @@ static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode) {
 	case mScale:   return 8;
 	case mPattern: return 9;
 	default:       return -1;
+	}
+}
+
+static void kria_set_alt_blink_timer(kria_modes_t mode) {
+	if ( k_mode == mRpt || k_mode == mAltNote || k_mode == mGlide ) {
+		timer_remove( &altBlinkTimer );
+		timer_add( &altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
+		k_mode_is_alt = true;
+	}
+	else {
+		timer_remove( &altBlinkTimer );
+		k_mode_is_alt = false;
 	}
 }
 
@@ -1293,16 +1307,7 @@ void handler_KriaGridKey(s32 data) {
 					break;
 				default: break;
 				}
-				if ( k_mode == mRpt || k_mode == mAltNote || k_mode == mGlide ) {
-
-					timer_remove( &altBlinkTimer );
-					timer_add( &altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
-					k_mode_is_alt = true;
-				}
-				else {
-					timer_remove( &altBlinkTimer );
-					k_mode_is_alt = false;
-				}
+				kria_set_alt_blink_timer(k_mode);
 			}
 			else {
 				switch(x) {

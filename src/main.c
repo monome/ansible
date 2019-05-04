@@ -531,28 +531,17 @@ void ii_ansible(uint8_t* d, uint8_t len) {
 			ansible_mode_t prev_mode = ansible_mode;
 			ansible_mode_t next_mode = ii_ansible_mode_for_cmd(d[1]);
 
-			// print_dbg("\r\n> prev app: ");
-			// print_dbg_ulong(prev_mode);
-			// print_dbg("\r\n> next app: ");
-			// print_dbg_ulong(next_mode);
-
 			if (next_mode < 0) {
 				break;
 			}
-			// send response before switching because
-			// initialization can take a while
-			uint8_t response = ii_ansible_cmd_for_mode(prev_mode);
-
-			// print_dbg("\r\n> response: ");
-			// print_dbg_ulong(response);
-
-			ii_tx_queue(response);
 			set_mode(next_mode);
 		}
 		break;
-	case II_ANSIBLE_APP + II_GET:
-		ii_tx_queue(ii_ansible_cmd_for_mode(ansible_mode));
+	case II_ANSIBLE_APP + II_GET: {
+		uint8_t cmd = ii_ansible_cmd_for_mode(ansible_mode);
+		ii_tx_queue(cmd);
 		break;
+	}
 	default:
 		break;
 	}
