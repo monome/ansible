@@ -27,6 +27,7 @@ static bool usb_disk_backup_binary(FS_STRING fname);
 static bool usb_disk_restore_backup(FS_STRING fname);
 static bool usb_disk_load_flash(FS_STRING fname);
 static bool usb_disk_save_flash(FS_STRING fname);
+static void flush(void);
 
 static char ansible_usb_disk_textbuf[ANSIBLE_USBDISK_TXTBUF_LEN] = {  0 };
 static jsmntok_t ansible_usb_disk_tokbuf[ANSIBLE_USBDISK_TOKBUF_LEN];
@@ -37,7 +38,7 @@ static bool usb_disk_lock(uint8_t leds) {
 	if (!usb_disk_locked) {
 		usb_disk_locked = true;
 		update_leds(leds);
-		print_dbg("\r\n> usb disk locked");
+		print_dbg("\r\n\r\n\r\n> usb disk locked");
 		return true;
 	}
 	return false;
@@ -48,7 +49,7 @@ static void usb_disk_unlock(void) {
 	usb_disk_exit();
 	usb_disk_enter();
 	update_leds(0);
-	print_dbg("\r\n> usb disk unlocked");
+	print_dbg("\r\n> usb disk unlocked\r\n\r\n");
 }
 
 static void handler_UsbDiskKey(int32_t data) {
@@ -60,6 +61,7 @@ static void handler_UsbDiskKey(int32_t data) {
 		if (usb_disk_lock(2)) {
 			if (usb_disk_backup_binary(ANSIBLE_BACKUP_FILE)) {
 				if (usb_disk_load_flash(ANSIBLE_PRESET_FILE)) {
+				        flash_unfresh();
 					load_flash_state();
 				} else {
 					usb_disk_restore_backup(ANSIBLE_BACKUP_FILE);
@@ -103,13 +105,6 @@ size_t gets_chunks(char* dst, size_t len) {
 	size_t read = 0;
 	uint16_t count, chunk;
 
-#if DEBUG_ANSIBLE_USB_DISK
-	print_dbg("\r\n> usb read chunks: ");
-	print_dbg_hex(len);
-	print_dbg("->");
-	print_dbg_hex(dst);
-#endif
-
 	do {
 		chunk = min(len - read, ANSIBLE_USBDISK_BLOCKSIZE);
 		count = file_read_buf((uint8_t*)dst + read, chunk);
@@ -122,20 +117,19 @@ static void copy_chunks(char* dst, const char* src, size_t len) {
 	size_t read = 0;
 	uint16_t chunk;
 
-#if DEBUG_ANSIBLE_USB_DISK
-	print_dbg("\r\n> copy chunks: ");
-	print_dbg_hex(len);
-	print_dbg("@");
-	print_dbg_hex(src);
-	print_dbg("->");
-	print_dbg_hex(dst);
-#endif
-
 	do {
 		chunk = min(len - read, ANSIBLE_FLASH_BLOCKSIZE);
 
-		flashc_memcpy(dst + read, src + read, chunk, true);
+#if DEBUG_ANSIBLE_USB_DISK
+		print_dbg("\r\nsave ");
+		print_dbg_hex(chunk);
+		print_dbg(" at ");
+		print_dbg_hex(src + read);
+		print_dbg(" to flash @ ");
+		print_dbg_hex(dst + read);
+#endif
 
+		flashc_memcpy(dst + read, src + read, chunk, true);
 		read += chunk;
 	} while (read < len);
 }
@@ -148,6 +142,49 @@ void puts_chunks(const char* src, size_t len) {
 		file_write_buf((uint8_t*)src + written, chunk);
 		written += chunk;
 	} while (written < len);
+}
+
+static uint8_t usb_disk_buffer[ANSIBLE_USBDISK_BLOCKSIZE] = { 0 };
+static uint16_t buf_pos = 0;
+size_t total_written = 0;
+
+static void flush(void) {
+#if DEBUG_ANSIBLE_USB_DISK
+  print_dbg("\r\n\r\nflush ");
+  print_dbg_hex(buf_pos);
+  print_dbg(" bytes to disk = \r\n");
+    for (size_t i = 0; i < buf_pos; i++) {
+      print_dbg_char(usb_disk_buffer[i]);
+    }
+    print_dbg("\r\n");
+#endif
+
+  file_write_buf(usb_disk_buffer, buf_pos);
+  file_flush();
+  total_written += buf_pos;
+  buf_pos = 0;
+}
+
+void puts_buffered(const char* src, size_t len) {
+  uint16_t chunk;
+
+#if DEBUG_ANSIBLE_USB_DISK
+    print_dbg("\r\nask to write ");
+    print_dbg_hex(len);
+    print_dbg(" = ");
+    for (size_t i = 0; i < len; i++) {
+      print_dbg_char(src[i]);
+    }
+#endif
+
+  for (size_t written = 0; written < len; written += chunk) {
+    if (buf_pos >= sizeof(usb_disk_buffer)) {
+      flush();
+    }
+    chunk = min(len - written, sizeof(usb_disk_buffer) - buf_pos);
+    memcpy(usb_disk_buffer + buf_pos, src + written, chunk);
+    buf_pos += chunk;
+  }
 }
 
 static bool usb_disk_mount_drive(void) {
@@ -215,7 +252,20 @@ static bool usb_disk_load_flash(FS_STRING fname) {
 		ansible_usb_disk_textbuf, ANSIBLE_USBDISK_TXTBUF_LEN,
 		ansible_usb_disk_tokbuf, ANSIBLE_USBDISK_TOKBUF_LEN);
 	file_close();
+
+	switch (result) {
+	case JSON_READ_OK:
+	  print_dbg("\r\n> disk load successful");
+	  break;
+	case JSON_READ_MALFORMED:
+	  print_dbg("\r\n> disk backup malformed");
+	  break;
+	default:
+	  print_dbg("\r\n> reached invalid state");
+	  break;
+	}
 	print_dbg("\r\n> usb disk load done");
+
 	return result == JSON_READ_OK;
 }
 
@@ -223,17 +273,30 @@ static bool usb_disk_save_flash(FS_STRING fname) {
 	print_dbg("\r\n> writing flash to disk");
 	if (!nav_file_create(fname)) {
 		if (fs_g_status != FS_ERR_FILE_EXIST) {
+  print_dbg("\r\n!! could not create file");
 			return false;
 		}
 	}
 	if (!file_open(FOPEN_MODE_W)) {
+  print_dbg("\r\n!! could not open file");
 		return false;
 	}
+	total_written = 0;
 	json_write_result_t result = json_write(
-		puts_chunks,
+		/* puts_chunks, */
+		puts_buffered,
 		(void*)&f, &ansible_preset_docdef);
+	flush();
 	file_flush();
 	file_close();
-	print_dbg("\r\n> flash write complete");
+
+	print_dbg("\r\n> flash write complete: ");
+	print_dbg_hex(total_written);
+	print_dbg(" bytes total");
+
+	if (result != JSON_WRITE_OK) {
+		print_dbg("\r\n!! flash write error");
+	}
+
 	return result == JSON_WRITE_OK;
 }

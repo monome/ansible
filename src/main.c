@@ -99,7 +99,6 @@ static void handler_MidiDisconnect(s32 data);
 static void ii_null(uint8_t *d, uint8_t l);
 
 u8 flash_is_fresh(void);
-void flash_unfresh(void);
 void flash_write(void);
 void flash_read(void);
 void state_write(void);
@@ -271,10 +270,12 @@ static void handler_MidiDisconnect(s32 data) {
 }
 
 static void handler_MscConnect(s32 data) {
+	print_dbg("\r\n> usb disk connect");
 	set_mode(mUsbDisk);
 }
 
 static void handler_MscDisconnect(s32 data) {
+	print_dbg("\r\n> usb disk disconnect");
 	usb_disk_exit();
 	set_mode(mTT);
 }

@@ -1,8 +1,13 @@
+#include <stdlib.h>
+
 #include "monome.h"
 #include "init_common.h"
 #include "main.h"
+#include "print_funcs.h"
 
 #include "ansible_preset_docdef.h"
+
+#define ALLOC_DEBUG 1
 
 const char* connected_t_options[] = {
 	"conNONE",
@@ -26,6 +31,13 @@ json_read_object_state_t ansible_section_object_state;
 json_read_buffer_state_t ansible_json_read_buffer_state;
 json_read_object_state_t ansible_app_object_state[4];
 json_read_array_state_t ansible_json_read_array_state[4];
+
+static kria_pattern kria_pattern_cache;
+
+DECLARE_STATIC_ALLOC(kria_data_t, k)
+DECLARE_STATIC_ALLOC(mp_data_t, m)
+DECLARE_STATIC_ALLOC(cycles_data_t, l)
+DECLARE_STATIC_ALLOC(levels_data_t, l)
 
 json_docdef_t ansible_meta_docdefs[] = {
 	{
@@ -216,11 +228,16 @@ json_docdef_t ansible_app_docdefs[] = {
 						.array_len = sizeof_field(nvram_data_t, kria_state.k) / sizeof_field(nvram_data_t, kria_state.k[0]),
 						.item_size = sizeof_field(nvram_data_t, kria_state.k[0]),
 						.item_docdef = &((json_docdef_t) {
-							.read = json_read_object,
+							/* .read = json_read_object, */
+						    .read = json_read_object_cached,
 							.write = json_write_object,
 							.state = &ansible_app_object_state[1],
 							.params = &((json_read_object_params_t) {
 								.docdef_ct = 9,
+							      .dst_size = sizeof(kria_data_t),
+							      .dst_offset = offsetof(nvram_data_t, kria_state.k[0]),
+							      .alloc = STATIC_ALLOC(kria_data_t, k),
+							      .free = nop_free,
 								.docdefs = ((json_docdef_t[]) {
 									{
 										.name = "patterns",
@@ -231,11 +248,16 @@ json_docdef_t ansible_app_docdefs[] = {
 											.array_len = sizeof_field(nvram_data_t, kria_state.k[0].p) / sizeof_field(nvram_data_t, kria_state.k[0].p[0]),
 											.item_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0]),
 											.item_docdef = &((json_docdef_t) {
-												.read = json_read_object,
+											        /* .read = json_read_object_cached, */
+											        .read = json_read_object,
 												.write = json_write_object,
 												.state = &ansible_app_object_state[2],
 												.params = &((json_read_object_params_t) {
 													.docdef_ct = 2,
+											      /* .dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0]), */
+											      /* .dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0]), */
+											      /* .alloc = my_alloc, */
+											      /* .free = my_free, */
 													.docdefs = ((json_docdef_t[]) {
 														{
 															.name = "tracks",
@@ -246,11 +268,16 @@ json_docdef_t ansible_app_docdefs[] = {
 																.array_len = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t) / sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0]),
 																.item_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0]),
 																.item_docdef = &((json_docdef_t) {
+																	/* .read = json_read_object_cached, */
 																	.read = json_read_object,
 																	.write = json_write_object,
 																	.state = &ansible_app_object_state[3],
 																	.params = &((json_read_object_params_t) {
 																		.docdef_ct = 14,
+																	        /* .dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0]), */
+																	        /* .dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0]), */
+																	        /* .alloc = my_alloc, */
+																	        /* .free = my_free, */
 																		.docdefs = ((json_docdef_t[]) {
 																			{
 																				.name = "tr",
@@ -546,11 +573,15 @@ json_docdef_t ansible_app_docdefs[] = {
 						.array_len = sizeof_field(nvram_data_t, mp_state.m) / sizeof_field(nvram_data_t, mp_state.m[0]),
 						.item_size = sizeof_field(nvram_data_t, mp_state.m[0]),
 						.item_docdef = &((json_docdef_t) {
-							.read = json_read_object,
+							.read = json_read_object_cached,
 							.write = json_write_object,
 							.state = &ansible_app_object_state[1],
 							.params = &((json_read_object_params_t) {
 								.docdef_ct = 14,
+							      .dst_size = sizeof(mp_data_t),
+							      .dst_offset = offsetof(nvram_data_t, mp_state.m[0]),
+							      .alloc = STATIC_ALLOC(mp_data_t, m),
+							      .free = nop_free,
 								.docdefs = ((json_docdef_t[]) {
 									{
 										.name = "count",
@@ -725,11 +756,15 @@ json_docdef_t ansible_app_docdefs[] = {
 						.array_len = sizeof_field(nvram_data_t, levels_state.l) / sizeof_field(nvram_data_t, levels_state.l[0]),
 						.item_size = sizeof_field(nvram_data_t, levels_state.l[0]),
 						.item_docdef = &((json_docdef_t) {
-							.read = json_read_object,
+							.read = json_read_object_cached,
 							.write = json_write_object,
 							.state = &ansible_app_object_state[1],
 							.params = &((json_read_object_params_t) {
 								.docdef_ct = 13,
+							      .dst_size = sizeof(levels_data_t),
+							      .dst_offset = offsetof(nvram_data_t, levels_state.l[0]),
+							      .alloc = STATIC_ALLOC(levels_data_t, l),
+							      .free = nop_free,
 								.docdefs = ((json_docdef_t[]) {
 									{
 										.name = "pattern",
@@ -912,11 +947,15 @@ json_docdef_t ansible_app_docdefs[] = {
 						.array_len = sizeof_field(nvram_data_t, cycles_state.c) / sizeof_field(nvram_data_t, cycles_state.c[0]),
 						.item_size = sizeof_field(nvram_data_t, cycles_state.c[0]),
 						.item_docdef = &((json_docdef_t) {
-							.read = json_read_object,
+							.read = json_read_object_cached,
 							.write = json_write_object,
 							.state = &ansible_app_object_state[1],
 							.params = &((json_read_object_params_t) {
 								.docdef_ct = 9,
+							      .dst_size = sizeof(cycles_data_t),
+							      .dst_offset = offsetof(nvram_data_t, cycles_state.c[0]),
+							      .alloc = STATIC_ALLOC(cycles_data_t, c),
+							      .free = nop_free,
 								.docdefs = (json_docdef_t[]) {
 									{
 										.name = "pos",
