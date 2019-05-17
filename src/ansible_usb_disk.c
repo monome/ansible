@@ -34,6 +34,7 @@ static void blink_read(void* o);
 static void blink_write(void* o);
 
 static char ansible_usb_disk_textbuf[ANSIBLE_USBDISK_TXTBUF_LEN] = {  0 };
+static char usb_disk_buffer[ANSIBLE_USBDISK_BLOCKSIZE] = { 0 };
 static jsmntok_t ansible_usb_disk_tokbuf[ANSIBLE_USBDISK_TOKBUF_LEN];
 
 static volatile bool usb_disk_locked = false;
@@ -207,47 +208,46 @@ void puts_chunks(const char* src, size_t len) {
 	} while (written < len);
 }
 
-static uint8_t usb_disk_buffer[ANSIBLE_USBDISK_BLOCKSIZE] = { 0 };
 static uint16_t buf_pos = 0;
 size_t total_written = 0;
 
 static void flush(void) {
 #if DEBUG_ANSIBLE_USB_DISK
-  print_dbg("\r\n\r\nflush ");
-  print_dbg_hex(buf_pos);
-  print_dbg(" bytes to disk = \r\n");
-    for (size_t i = 0; i < buf_pos; i++) {
-      print_dbg_char(usb_disk_buffer[i]);
-    }
-    print_dbg("\r\n");
+	print_dbg("\r\n\r\nflush ");
+	print_dbg_hex(buf_pos);
+	print_dbg(" bytes to disk = \r\n");
+	for (size_t i = 0; i < buf_pos; i++) {
+		print_dbg_char(usb_disk_buffer[i]);
+	}
+	print_dbg("\r\n");
 #endif
 
-  file_write_buf(usb_disk_buffer, buf_pos);
-  file_flush();
-  total_written += buf_pos;
-  buf_pos = 0;
+	file_write_buf(usb_disk_buffer, buf_pos);
+	file_flush();
+	total_written += buf_pos;
+	buf_pos = 0;
 }
 
 void puts_buffered(const char* src, size_t len) {
-  uint16_t chunk;
+	uint16_t chunk;
 
 #if DEBUG_ANSIBLE_USB_DISK
-    print_dbg("\r\nask to write ");
-    print_dbg_hex(len);
-    print_dbg(" = ");
-    for (size_t i = 0; i < len; i++) {
-      print_dbg_char(src[i]);
-    }
+	print_dbg("\r\nask to write ");
+	print_dbg_hex(len);
+	print_dbg(" = ");
+	for (size_t i = 0; i < len; i++) {
+		print_dbg_char(src[i]);
+	}
 #endif
 
-  for (size_t written = 0; written < len; written += chunk) {
-    if (buf_pos >= sizeof(usb_disk_buffer)) {
-      flush();
-    }
-    chunk = min(len - written, sizeof(usb_disk_buffer) - buf_pos);
-    memcpy(usb_disk_buffer + buf_pos, src + written, chunk);
-    buf_pos += chunk;
-  }
+	for (size_t written = 0; written < len; written += chunk) {
+		if (buf_pos >= sizeof(usb_disk_buffer)) {
+			flush();
+		}
+		chunk = min(len - written, sizeof(usb_disk_buffer) - buf_pos);
+		memcpy(usb_disk_buffer + buf_pos, src + written, chunk);
+		buf_pos += chunk;
+	}
 }
 
 static bool usb_disk_mount_drive(void) {
