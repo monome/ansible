@@ -534,7 +534,7 @@ void clock_kria_track( uint8_t trackNum ) {
 	u8* trackIndex = &kria_track_indices[trackNum];
 
 	if(kria_next_step(trackNum, mDur)) {
-		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)384.0;
+		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)380.0;
 		f32 uncscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
 		dur[trackNum] = (u16)(uncscaled * clock_scale);
 	}

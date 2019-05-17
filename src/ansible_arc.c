@@ -1729,8 +1729,17 @@ void handler_CyclesKey(s32 data) {
 			arc_refresh = &refresh_cycles_config_div;
 			monomeFrameDirty++;
 		}
-		else
+		else if(mode == 3){
+			mode = 1;
+			enc_count[0] = 0;
+			enc_count[1] = 0;
+			enc_count[2] = 0;
+			enc_count[3] = 0;
+			arc_refresh = &refresh_cycles_config;
+			monomeFrameDirty++;
+		} else {
 			key_count_arc[0] = KEY_HOLD_TIME;
+		}
 		break;
 	// key 2 UP
 	case 2:
