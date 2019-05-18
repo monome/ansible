@@ -462,7 +462,7 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 				}
 				else {
 					pos[t][p]--;
-					if(pos[t][p] < 0) {
+					if(pos[t][p] > 15) {
 						pos[t][p] = 15;
 					}
 				}
@@ -488,6 +488,19 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 					goto reverse;
 				}
 				break;
+			case krDirRandom: {
+				uint8_t lstart = k.p[k.pattern].t[t].lstart[p];
+				uint8_t lend = k.p[k.pattern].t[t].lend[p];
+				uint8_t llen = k.p[k.pattern].t[t].llen[p];
+
+				if (lend >= lstart) {
+					pos[t][p] = lstart + rnd() % (lend - lstart);
+				}
+				else {
+					pos[t][p] = (lstart + rnd() % llen) % 16;
+				}
+				break;
+			}
 		}
 
 		switch(k.p[k.pattern].t[t].p[p][pos[t][p]]) {
@@ -1706,13 +1719,13 @@ void handler_KriaGridKey(s32 data) {
 				break;
 			case mScale:
 				if(z) {
-					if ( y < 4 && x < 5 ) {
+					if ( y < 4 && x < 6 ) {
 						// tt clocking stuff added here
 						if ( x == 0){
 							kria_tt_clocked[y] = !kria_tt_clocked[y];
 						}
 
-						if (x > 0 && x < 5) {
+						if (x > 0 && x < 6) {
 							k.p[k.pattern].t[y].direction = x - 1;
 						}
 				        }
@@ -2351,7 +2364,7 @@ void refresh_kria_scale(void) {
 	for ( uint8_t y=0; y<4; y++ ) {
 		// if teletype clocking is enabled, track is brighter
 		monomeLedBuffer[0+16*y] = kria_tt_clocked[y] ? L1 : L0;
-		for ( uint8_t x=1; x<5; x++ ) {
+		for ( uint8_t x=1; x<6; x++ ) {
 			monomeLedBuffer[x+16*y] = k.p[k.pattern].t[y].direction == x - 1 ? L1 : L0;
 		}
 	}
