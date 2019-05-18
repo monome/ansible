@@ -16,10 +16,11 @@
 #define KRIA_NUM_PATTERNS 16
 
 typedef enum {
-  krDirForward,
-  krDirReverse,
-  krDirTriangle,
-  krDirDrunk,
+  krDirForward = 0,
+  krDirReverse = 1,
+  krDirTriangle = 2,
+  krDirDrunk = 3,
+  krDirRandom = 4,
 } kria_direction;
 
 typedef struct {
