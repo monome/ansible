@@ -41,7 +41,7 @@ typedef struct {
 
 	u8 dur_mul;
 	kria_direction direction;
-	bool advancing;
+	u8 advancing[KRIA_NUM_PARAMS];
 
 	u8 lstart[KRIA_NUM_PARAMS];
 	u8 lend[KRIA_NUM_PARAMS];
