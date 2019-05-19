@@ -347,7 +347,7 @@ void default_kria() {
 	// memset(k.p[0].t[0].pdur, 3, 16);
 	k.p[0].t[0].dur_mul = 4;
 	k.p[0].t[0].direction = krDirForward;
-	k.p[0].t[0].advancing = true;
+	memset(k.p[0].t[0].advancing, 1, KRIA_NUM_PARAMS);
 	memset(k.p[0].t[0].lstart, 0, KRIA_NUM_PARAMS);
 	memset(k.p[0].t[0].lend, 5, KRIA_NUM_PARAMS);
 	memset(k.p[0].t[0].llen, 6, KRIA_NUM_PARAMS);
@@ -469,12 +469,12 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 				break;
 			case krDirTriangle:
 				if (pos[t][p] == k.p[k.pattern].t[t].lend[p]) {
-					k.p[k.pattern].t[t].advancing = false;
+					k.p[k.pattern].t[t].advancing[p] = false;
 				}
 				if (pos[t][p] == k.p[k.pattern].t[t].lstart[p]) {
-					k.p[k.pattern].t[t].advancing = true;
+					k.p[k.pattern].t[t].advancing[p] = true;
 				}
-				if (k.p[k.pattern].t[t].advancing) {
+				if (k.p[k.pattern].t[t].advancing[p]) {
 					goto forward;
 				}
 				else {
