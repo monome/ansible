@@ -48,6 +48,8 @@ typedef struct {
 	u8 llen[KRIA_NUM_PARAMS];
 	u8 lswap[KRIA_NUM_PARAMS];
 	u8 tmul[KRIA_NUM_PARAMS];
+
+	bool tt_clocked;
 } kria_track;
 
 typedef struct {
