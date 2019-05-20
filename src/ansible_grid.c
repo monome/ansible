@@ -340,7 +340,6 @@ void default_kria() {
 	memset(k.p[0].t[0].note, 0, 16);
 	memset(k.p[0].t[0].dur, 0, 16);
 	memset(k.p[0].t[0].rpt, 1, 16);
-	memset(k.p[0].t[0].rptBits, 1, 16);
 	memset(k.p[0].t[0].p, 3, 16 * KRIA_NUM_PARAMS);
 	// memset(k.p[0].t[0].ptr, 3, 16);
 	// memset(k.p[0].t[0].poct, 3, 16);
@@ -605,7 +604,7 @@ void clock_kria_track( uint8_t trackNum ) {
 	}
 
 	if(kria_next_step(trackNum, mRpt)) {
-		rpt[trackNum] = track->rpt[pos[trackNum][mRpt]];
+		rpt[trackNum] = track->rpt[pos[trackNum][mRpt]] & 0xF;
 	}
 	if(kria_next_step(trackNum, mAltNote)) {
 		alt_note[trackNum] = track->alt_note[pos[trackNum][mAltNote]];
@@ -631,7 +630,7 @@ void clock_kria_track( uint8_t trackNum ) {
 				timer_add( &repeatTimer[trackNum], rptTicks[trackNum], &kria_rpt_off, trackIndex );
 			}
 
-			if ( track->rptBits[pos[trackNum][mRpt]] & 1 ) {
+			if ( (track->rpt[pos[trackNum][mRpt]] >> 4) & 1 ) {
 				set_tr( TR1 + trackNum );
 
 				timer_remove( &auxTimer[trackNum]);
@@ -669,7 +668,7 @@ static void kria_rpt_off(void* o) {
 		timer_remove( &repeatTimer[index] );
 	}
 
-	if ( k.p[k.pattern].t[index].rptBits[pos[index][mRpt]] & ( 1 << bit ) ) {
+	if ( (k.p[k.pattern].t[index].rpt[pos[index][mRpt]] >> 4) & ( 1 << bit ) ) {
 		set_tr( TR1 + index );
 		tr[index] = 1;
 		kria_blinks[index] = 1;
@@ -1564,11 +1563,10 @@ void handler_KriaGridKey(s32 data) {
 				case modNone:
 					if (z) {
 						if ( y > 1 && y < 6 ) {
-					  		uint8_t rptBits = k.p[k.pattern].t[track].rptBits[x] ^ (1 << (5 - y));
+					  		uint8_t rptBits = (k.p[k.pattern].t[track].rpt[x] >> 4) ^ (1 << (5 - y));
 							uint8_t rpt = 1;
-							k.p[k.pattern].t[track].rptBits[x] = rptBits;
 							while (rptBits >>= 1) rpt++;
-							k.p[k.pattern].t[track].rpt[x] = rpt;
+							k.p[k.pattern].t[track].rpt[x] = rpt | (rptBits << 4);
 
 							monomeFrameDirty++;
 						}
@@ -2303,7 +2301,7 @@ void refresh_kria_rpt(void) {
 		break;
 	default:
 		for ( uint8_t i=0; i<16; i++ ) {
-			uint8_t rptBits = k.p[k.pattern].t[track].rptBits[i];
+			uint8_t rptBits = k.p[k.pattern].t[track].rpt[i] >> 4;
 			for ( uint8_t j=0; j<4; j++) {
 				uint8_t led = 16*(5-j) + i;
 				monomeLedBuffer[led] = 0;
