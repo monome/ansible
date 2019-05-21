@@ -34,7 +34,7 @@ static void blink_read(void* o);
 static void blink_write(void* o);
 
 static char ansible_usb_disk_textbuf[ANSIBLE_USBDISK_TXTBUF_LEN] = {  0 };
-static char usb_disk_buffer[ANSIBLE_USBDISK_BLOCKSIZE] = { 0 };
+static uint8_t usb_disk_buffer[ANSIBLE_USBDISK_BLOCKSIZE] = { 0 };
 static jsmntok_t ansible_usb_disk_tokbuf[ANSIBLE_USBDISK_TOKBUF_LEN];
 
 static volatile bool usb_disk_locked = false;
@@ -102,17 +102,17 @@ static void handler_UsbDiskKey(int32_t data) {
 		if (usb_disk_lock()) {
 			if (!armed) {
 				update_leds(2);
-		       		armed = true;
+				armed = true;
 				usb_disk_unlock();
-	       			return;
-       			}
+				return;
+			}
 			armed = false;
 			blink = false;
 			success = false;
 			timer_add(&auxTimer[0], DISK_BLINK_INTERVAL, &blink_write, NULL);
 
 			usb_disk_enter();
-		        success = usb_disk_save_flash(ANSIBLE_PRESET_FILE);
+			success = usb_disk_save_flash(ANSIBLE_PRESET_FILE);
 			usb_disk_exit();
 
 			usb_disk_unlock();
@@ -319,7 +319,7 @@ static bool usb_disk_load_flash(FS_STRING fname) {
 	switch (result) {
 	case JSON_READ_OK:
 		print_dbg("\r\n> disk load successful");
-	  	break;
+		break;
 	case JSON_READ_MALFORMED:
 		print_dbg("\r\n> disk backup malformed");
 		break;
