@@ -15,6 +15,14 @@
 #define KRIA_NUM_PARAMS 7
 #define KRIA_NUM_PATTERNS 16
 
+typedef enum {
+  krDirForward = 0,
+  krDirReverse = 1,
+  krDirTriangle = 2,
+  krDirDrunk = 3,
+  krDirRandom = 4,
+} kria_direction;
+
 typedef struct {
 	u8 tr[16];
 	u8 oct[16];
@@ -32,12 +40,16 @@ typedef struct {
 	// u8 pdur[16];
 
 	u8 dur_mul;
+	kria_direction direction;
+	u8 advancing[KRIA_NUM_PARAMS];
 
 	u8 lstart[KRIA_NUM_PARAMS];
 	u8 lend[KRIA_NUM_PARAMS];
 	u8 llen[KRIA_NUM_PARAMS];
 	u8 lswap[KRIA_NUM_PARAMS];
 	u8 tmul[KRIA_NUM_PARAMS];
+
+	bool tt_clocked;
 } kria_track;
 
 typedef struct {
