@@ -2458,17 +2458,6 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R5 + 13] = i;
 }
 
-static kria_track kria_track_cache;
-
-void* kria_track_alloc(size_t dst_size) {
-  if (dst_size > sizeof(kria_track)) {
-    print_dbg("\r\nfailed to allocate cache");
-    return NULL;
-  }
-  print_dbg("\r\ncache allocated");
-  return &kria_track_cache;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // MP

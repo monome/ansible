@@ -137,13 +137,13 @@ static void handler_UsbDiskFront(s32 data) {
 }
 
 static void blink_read(void* o) {
-  update_leds(1 * blink);
-  blink = !blink;
+	update_leds(1 * blink);
+	blink = !blink;
 }
 
 static void blink_write(void* o) {
-  update_leds(2 * blink);
-  blink = !blink;
+	update_leds(2 * blink);
+	blink = !blink;
 }
 
 void set_mode_usb_disk(void) {
@@ -196,16 +196,6 @@ static void copy_chunks(char* dst, const char* src, size_t len) {
 		flashc_memcpy(dst + read, src + read, chunk, true);
 		read += chunk;
 	} while (read < len);
-}
-
-void puts_chunks(const char* src, size_t len) {
-	size_t written = 0;
-	uint16_t chunk;
-	do {
-		chunk = min(len - written, ANSIBLE_USBDISK_BLOCKSIZE);
-		file_write_buf((uint8_t*)src + written, chunk);
-		written += chunk;
-	} while (written < len);
 }
 
 static uint16_t buf_pos = 0;
@@ -273,7 +263,8 @@ static bool usb_disk_backup_binary(FS_STRING fname) {
 	if (!file_open(FOPEN_MODE_W)) {
 		return false;
 	}
-	puts_chunks((char*)&f, sizeof(nvram_data_t));
+	puts_buffered((char*)&f, sizeof(nvram_data_t));
+	flush();
 	file_flush();
 	file_close();
 	print_dbg("\r\n> binary backup done");

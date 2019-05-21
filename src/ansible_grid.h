@@ -145,7 +145,6 @@ void refresh_kria_glide(void);
 void refresh_kria_scale(void);
 void refresh_kria_pattern(void);
 void refresh_kria_config(void);
-void* kria_track_alloc(size_t dst_size);
 
 void default_mp(void);
 void init_mp(void);

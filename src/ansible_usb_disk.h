@@ -16,5 +16,4 @@ void usb_disk_enter(void);
 void usb_disk_exit(void);
 
 size_t gets_chunks(char* dst, size_t len);
-void puts_chunks(const char* src, size_t len);
 void puts_buffered(const char* src, size_t len);
