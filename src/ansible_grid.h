@@ -29,6 +29,7 @@ typedef struct {
 	u8 note[16];
 	u8 dur[16];
 	u8 rpt[16];
+	u8 rptBits[16];
 	u8 alt_note[16];
 	u8 glide[16];
 
