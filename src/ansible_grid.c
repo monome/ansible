@@ -339,6 +339,7 @@ void default_kria() {
 	memset(k.p[0].t[0].rpt, 1, 16);
 	memset(k.p[0].t[0].rptBits, 1, 16);
 	memset(k.p[0].t[0].p, 3, 16 * KRIA_NUM_PARAMS);
+	k.p[0].t[0].octshift = 0;
 	k.p[0].t[0].dur_mul = 4;
 	k.p[0].t[0].direction = krDirForward;
 	k.p[0].t[0].tt_clocked = false;
@@ -591,7 +592,7 @@ void clock_kria_track( uint8_t trackNum ) {
 	}
 
 	if(kria_next_step(trackNum, mOct)) {
-		oct[trackNum] = track->oct[pos[trackNum][mOct]];
+		oct[trackNum] = track->octshift + track->oct[pos[trackNum][mOct]];
 	}
 
 	if(kria_next_step(trackNum, mNote)) {
@@ -1445,8 +1446,15 @@ void handler_KriaGridKey(s32 data) {
 				switch(k_mod_mode) {
 				case modNone:
 					if(z) {
-						if(y>2)
-							k.p[k.pattern].t[track].oct[x] = 6-y;
+						if(y==0) {
+							if (x <= 5) {
+								k.p[k.pattern].t[track].octshift = x;
+							}
+						}
+						else {
+							uint8_t abs_oct = 6 - y;
+							k.p[k.pattern].t[track].oct[x] = (int)abs_oct - (int)k.p[k.pattern].t[track].octshift;
+						}
 						monomeFrameDirty++;
 					}
 					break;
@@ -2220,25 +2228,37 @@ void refresh_kria_oct(void) {
 				monomeLedBuffer[(5 - k.p[k.pattern].t[track].p[mOct][i]) * 16 + i] = 6;
 		break;
 	default:
-		for(uint8_t i=0;i<16;i++) {
-				for(uint8_t j=0;j<=k.p[k.pattern].t[track].oct[i];j++)
-					monomeLedBuffer[R6-16*j+i] = L0;
+		memset(monomeLedBuffer, 2, 6);
+		monomeLedBuffer[R0+k.p[k.pattern].t[track].octshift] = L1;
 
-				if(i == pos[track][mOct])
-					monomeLedBuffer[R6 - k.p[k.pattern].t[track].oct[i]*16 + i] += 4;
+		for(uint8_t i=0;i<16;i++) {
+			const uint8_t octshift = k.p[k.pattern].t[track].octshift;
+			const int8_t octsum = min(max(0, k.p[k.pattern].t[track].oct[i] + (int)octshift), 5);
+
+			for(uint8_t j=0;j<=5;j++) {
+				if (octsum >= octshift) {
+					if (j < octshift || j > octsum) continue;
+				}
+				else {
+					if (j < octsum || j > octshift) continue;
+				}
+				monomeLedBuffer[R6-16*j+i] = L0;
+
+				if(k.p[k.pattern].t[track].lswap[mOct]) {
+					if((i < k.p[k.pattern].t[track].lstart[mOct]) && (i > k.p[k.pattern].t[track].lend[mOct])) {
+						monomeLedBuffer[R6-16*j+i] -= 2;
+					}
+				}
+				else {
+					if((i < k.p[k.pattern].t[track].lstart[mOct]) || (i > k.p[k.pattern].t[track].lend[mOct])) {
+						monomeLedBuffer[R6-16*j+i] -= 2;
+					}
+				}
 			}
 
-		if(k.p[k.pattern].t[track].lswap[mOct]) {
-			for(uint8_t i=0;i<16;i++)
-				if((i < k.p[k.pattern].t[track].lstart[mOct]) && (i > k.p[k.pattern].t[track].lend[mOct]))
-					for(uint8_t j=0;j<=k.p[k.pattern].t[track].oct[i];j++)
-						monomeLedBuffer[R6-16*j+i] -= 2;
-		}
-		else {
-			for(uint8_t i=0;i<16;i++)
-				if((i < k.p[k.pattern].t[track].lstart[mOct]) || (i > k.p[k.pattern].t[track].lend[mOct]))
-					for(uint8_t j=0;j<=k.p[k.pattern].t[track].oct[i];j++)
-						monomeLedBuffer[R6-16*j+i] -= 2;
+			if(i == pos[track][mOct]) {
+				monomeLedBuffer[R6 - octsum*16 + i] += 4;
+			}
 		}
 		break;
 	}
