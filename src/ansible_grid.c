@@ -576,6 +576,10 @@ void clock_kria(uint8_t phase) {
 	}
 }
 
+static inline int8_t sum_clip_octave(int8_t l, int8_t r) {
+	return min(5, max(0, l + r));
+}
+
 void clock_kria_track( uint8_t trackNum ) {
 	u64 current_tick = get_ticks();
 	clock_deltas[trackNum] = (u32)(current_tick-last_ticks[trackNum]);
@@ -591,7 +595,7 @@ void clock_kria_track( uint8_t trackNum ) {
 	}
 
 	if(kria_next_step(trackNum, mOct)) {
-		oct[trackNum] = track->octshift + track->oct[pos[trackNum][mOct]];
+		oct[trackNum] = sum_clip_octave(track->octshift, track->oct[pos[trackNum][mOct]]);
 	}
 
 	if(kria_next_step(trackNum, mNote)) {
@@ -2224,7 +2228,7 @@ void refresh_kria_oct(void) {
 
 		for(uint8_t i=0;i<16;i++) {
 			const uint8_t octshift = k.p[k.pattern].t[track].octshift;
-			const int8_t octsum = min(max(0, k.p[k.pattern].t[track].oct[i] + (int)octshift), 5);
+			const int8_t octsum = sum_clip_octave(k.p[k.pattern].t[track].oct[i], (int)octshift);
 
 			for(uint8_t j=0;j<=5;j++) {
 				if (octsum >= octshift) {
