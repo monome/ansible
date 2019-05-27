@@ -60,6 +60,8 @@ void (*grid_refresh)(void);
 
 // KRIA
 kria_data_t k;
+kria_sync_mode_t kria_sync_mode;
+uint8_t tmul[4][KRIA_NUM_PARAMS];
 
 typedef enum {
 	mTr, mNote, mOct, mDur, mRpt, mAltNote, mGlide, mScale, mPattern
@@ -238,6 +240,7 @@ void grid_keytimer(void) {
 					}
 
 					flashc_memset32((void*)&(f.kria_state.clock_period), clock_period, 4, true);
+					flashc_memset32((void*)&(f.kria_state.sync_mode), kria_sync_mode, sizeof(kria_sync_mode), true);
 
 				}
 			}
@@ -389,11 +392,15 @@ void init_kria() {
 	clock_mul = 1;
 
 	clock_period = f.kria_state.clock_period;
+	kria_sync_mode = f.kria_state.sync_mode;
 	time_rough = (clock_period - 20) / 16;
 	time_fine = (clock_period - 20) % 16;
 
 	for ( int i=0; i<4; i++ ) {
 		last_ticks[i] = get_ticks();
+		for (int j=0;j<KRIA_NUM_PARAMS;j++) {
+			tmul[i][j] = f.kria_state.k[preset].p[k.pattern].t[i].tmul[j];
+		}
 	}
 }
 
@@ -434,7 +441,37 @@ void resume_kria() {
 bool kria_next_step(uint8_t t, uint8_t p) {
 	pos_mul[t][p]++;
 
-	if(pos_mul[t][p] >= k.p[k.pattern].t[t].tmul[p]) {
+	switch (kria_sync_mode) {
+	default:
+	case krSyncNone:
+		tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+		break;
+	case krSyncTime: {
+		switch (k.p[k.pattern].t[t].direction) {
+		case krDirForward:
+			if (pos[t][p] == k.p[k.pattern].t[t].lstart[p]) {
+				tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+			}
+			break;
+		case krDirReverse:
+			if (pos[t][p] == k.p[k.pattern].t[t].lend[p]) {
+				tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+			}
+			break;
+		case krDirTriangle:
+			if (pos[t][p] == k.p[k.pattern].t[t].lstart[p] || pos[t][p] == k.p[k.pattern].t[t].lend[p]) {
+				tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+			}
+			break;
+		default:
+			tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+			break;
+		}
+		break;
+	}
+	}
+
+	if(pos_mul[t][p] >= tmul[t][p]) {
 		pos_mul[t][p] = 0;
 
 		switch (k.p[k.pattern].t[t].direction) {
@@ -3088,6 +3125,17 @@ void handler_MPGridKey(s32 data) {
 
 				monomeFrameDirty++;
 			}
+
+			if (y >= 5) {
+				if (x == 0) {
+					kria_sync_mode = krSyncNone;
+					monomeFrameDirty++;
+				}
+				if (x == 1) {
+					kria_sync_mode = krSyncTime;
+					monomeFrameDirty++;
+				}
+			}
 		}
 
 
@@ -3375,6 +3423,11 @@ void refresh_clock(void) {
 		monomeLedBuffer[R4+8] = 3;
 		monomeLedBuffer[R4+9] = 7;
 
+	}
+
+	if (ansible_mode == mGridKria) {
+		monomeLedBuffer[R5] = kria_sync_mode == krSyncNone ? 5 : 3;
+		monomeLedBuffer[R5 + 1] = monomeLedBuffer[R6 + 1] = kria_sync_mode == krSyncTime ? 5 : 3;
 	}
 }
 
