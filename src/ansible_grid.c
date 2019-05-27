@@ -2403,7 +2403,7 @@ void refresh_kria_rpt(void) {
 				}
 			}
 			if ( i == pos[track][mRpt]) {
-				uint8_t y = activeRpt[track] - repeats[track];
+				uint8_t y = max(1, activeRpt[track] - repeats[track]);
 				monomeLedBuffer[R6 - y*16 + i] += (rptBits & (1 << y)) ? 4 : 2;
 			}
 			monomeLedBuffer[i] = 1;
