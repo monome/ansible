@@ -325,6 +325,7 @@ void default_kria() {
 	uint8_t i1;
 
 	flashc_memset32((void*)&(f.kria_state.clock_period), 60, 4, true);
+	flashc_memset32((void*)&(f.kria_state.sync_mode), krSyncNone, sizeof(kria_sync_mode_t), true);
 	flashc_memset8((void*)&(f.kria_state.preset), 0, 1, true);
 	flashc_memset8((void*)&(f.kria_state.note_sync), true, 1, true);
 	flashc_memset8((void*)&(f.kria_state.loop_sync), 2, 1, true);
@@ -446,7 +447,7 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 	case krSyncNone:
 		tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
 		break;
-	case krSyncTime: {
+	case krSyncTimeDiv: {
 		switch (k.p[k.pattern].t[t].direction) {
 		case krDirForward:
 			if (pos[t][p] == k.p[k.pattern].t[t].lstart[p]) {
@@ -1247,7 +1248,7 @@ void handler_KriaGridKey(s32 data) {
 	}
 	else if(view_config) {
 		if(z) {
-			if(x<8) {
+			if(x<8 && y<7) {
 				note_sync ^= 1;
 				if(loop_sync == 0)
 					loop_sync = 1;
@@ -1273,6 +1274,12 @@ void handler_KriaGridKey(s32 data) {
 
 				flashc_memset8((void*)&(f.kria_state.note_sync), note_sync, 1, true);
 				flashc_memset8((void*)&(f.kria_state.loop_sync), loop_sync, 1, true);
+			}
+			else if (y == 7) {
+				if (x == 2) {
+					kria_sync_mode ^= 1 << (x - 2);
+					monomeFrameDirty++;
+				}
 			}
 			monomeFrameDirty++;
 		}
@@ -2493,6 +2500,8 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R5 + 11] = i;
 	monomeLedBuffer[R5 + 12] = i;
 	monomeLedBuffer[R5 + 13] = i;
+
+	monomeLedBuffer[R7 + 2] = kria_sync_mode == krSyncTimeDiv ? 7 : 3;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3125,17 +3134,6 @@ void handler_MPGridKey(s32 data) {
 
 				monomeFrameDirty++;
 			}
-
-			if (y >= 5) {
-				if (x == 0) {
-					kria_sync_mode = krSyncNone;
-					monomeFrameDirty++;
-				}
-				if (x == 1) {
-					kria_sync_mode = krSyncTime;
-					monomeFrameDirty++;
-				}
-			}
 		}
 
 
@@ -3423,11 +3421,6 @@ void refresh_clock(void) {
 		monomeLedBuffer[R4+8] = 3;
 		monomeLedBuffer[R4+9] = 7;
 
-	}
-
-	if (ansible_mode == mGridKria) {
-		monomeLedBuffer[R5] = kria_sync_mode == krSyncNone ? 5 : 3;
-		monomeLedBuffer[R5 + 1] = monomeLedBuffer[R6 + 1] = kria_sync_mode == krSyncTime ? 5 : 3;
 	}
 }
 

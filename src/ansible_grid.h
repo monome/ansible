@@ -70,8 +70,8 @@ typedef struct {
 } kria_data_t;
 
 typedef enum {
-	krSyncNone,
-	krSyncTime,
+	krSyncNone    = 0x00,
+	krSyncTimeDiv = 0x01,
 } kria_sync_mode_t;
 
 typedef struct {
