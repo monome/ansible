@@ -442,34 +442,40 @@ void resume_kria() {
 bool kria_next_step(uint8_t t, uint8_t p) {
 	pos_mul[t][p]++;
 
-	switch (kria_sync_mode) {
-	default:
-	case krSyncNone:
-		tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
-		break;
-	case krSyncTimeDiv: {
+	bool latch_input = false;
+        if (kria_sync_mode == krSyncNone) {
+		latch_input = true;
+	}
+	else {
 		switch (k.p[k.pattern].t[t].direction) {
 		case krDirForward:
 			if (pos[t][p] == k.p[k.pattern].t[t].lstart[p]) {
-				tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+				latch_input = true;
 			}
 			break;
 		case krDirReverse:
 			if (pos[t][p] == k.p[k.pattern].t[t].lend[p]) {
-				tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+				latch_input = true;
 			}
 			break;
 		case krDirTriangle:
 			if (pos[t][p] == k.p[k.pattern].t[t].lstart[p] || pos[t][p] == k.p[k.pattern].t[t].lend[p]) {
-				tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+				latch_input = true;
 			}
 			break;
 		default:
-			tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+			latch_input = true;
 			break;
 		}
-		break;
 	}
+
+	if (kria_sync_mode & krSyncTimeDiv) {
+		if (latch_input) {
+			tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+		}
+	}
+	else {
+		tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
 	}
 
 	if(pos_mul[t][p] >= tmul[t][p]) {
@@ -520,19 +526,14 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 					goto reverse;
 				}
 				break;
-			case krDirRandom: {
-				uint8_t lstart = k.p[k.pattern].t[t].lstart[p];
-				uint8_t lend = k.p[k.pattern].t[t].lend[p];
-				uint8_t llen = k.p[k.pattern].t[t].llen[p];
-
-				if (lend >= lstart) {
-					pos[t][p] = lstart + rnd() % (lend - lstart);
+			case krDirRandom:
+				if (k.p[k.pattern].t[t].lend[p] >= k.p[k.pattern].t[t].lstart[p]) {
+					pos[t][p] = k.p[k.pattern].t[t].lstart[p] + rnd() % (k.p[k.pattern].t[t].lend[p] - k.p[k.pattern].t[t].lstart[p]);
 				}
 				else {
-					pos[t][p] = (lstart + rnd() % llen) % 16;
+					pos[t][p] = (k.p[k.pattern].t[t].lstart[p] + rnd() % k.p[k.pattern].t[t].llen[p]) % 16;
 				}
 				break;
-			}
 		}
 
 		switch(k.p[k.pattern].t[t].p[p][pos[t][p]]) {
@@ -2501,7 +2502,7 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R5 + 12] = i;
 	monomeLedBuffer[R5 + 13] = i;
 
-	monomeLedBuffer[R7 + 2] = kria_sync_mode == krSyncTimeDiv ? 7 : 3;
+	monomeLedBuffer[R7 + 2] = kria_sync_mode & krSyncTimeDiv ? 7 : 3;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
