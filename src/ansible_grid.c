@@ -527,7 +527,7 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 				}
 				break;
 			case krDirRandom: {
-				int8_t lstart = k.p[k.pattern].t[t].lstart[p];
+				uint8_t lstart = k.p[k.pattern].t[t].lstart[p];
 				uint8_t lend = k.p[k.pattern].t[t].lend[p];
 				uint8_t llen = k.p[k.pattern].t[t].llen[p];
 
