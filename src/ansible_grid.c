@@ -520,20 +520,25 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 				}
 				break;
 			case krDirDrunk:
-				if ((rnd() & 0xff) > 128) {
+				if (rnd() % 2) {
 					goto forward;
 				} else {
 					goto reverse;
 				}
 				break;
-			case krDirRandom:
-				if (k.p[k.pattern].t[t].lend[p] >= k.p[k.pattern].t[t].lstart[p]) {
-					pos[t][p] = k.p[k.pattern].t[t].lstart[p] + rnd() % (k.p[k.pattern].t[t].lend[p] - k.p[k.pattern].t[t].lstart[p]);
+			case krDirRandom: {
+				int8_t lstart = k.p[k.pattern].t[t].lstart[p];
+				uint8_t lend = k.p[k.pattern].t[t].lend[p];
+				uint8_t llen = k.p[k.pattern].t[t].llen[p];
+
+				if (lend >= lstart) {
+					pos[t][p] = lstart + rnd() % (lend - lstart);
 				}
 				else {
-					pos[t][p] = (k.p[k.pattern].t[t].lstart[p] + rnd() % k.p[k.pattern].t[t].llen[p]) % 16;
+					pos[t][p] = (lstart + rnd() % llen) % 16;
 				}
 				break;
+			}
 		}
 
 		switch(k.p[k.pattern].t[t].p[p][pos[t][p]]) {
