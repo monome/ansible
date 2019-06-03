@@ -2534,6 +2534,7 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R7 + 2] = kria_sync_mode & krSyncTimeDiv ? 7 : 3;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////
 // MP
 
