@@ -79,8 +79,6 @@ ansible_mode_t ansible_mode;
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
 
-void clock_null(u8 phase);
-
 // start/stop monome polling/refresh timers
 extern void timers_set_monome(void);
 extern void timers_unset_monome(void);
@@ -95,8 +93,6 @@ static void handler_FrontShort(s32 data);
 static void handler_FrontLong(s32 data);
 static void handler_MidiConnect(s32 data);
 static void handler_MidiDisconnect(s32 data);
-
-static void ii_null(uint8_t *d, uint8_t l);
 
 u8 flash_is_fresh(void);
 void flash_write(void);
@@ -184,6 +180,7 @@ void set_mode(ansible_mode_t m) {
 	switch (m) {
 	case mGridKria:
 	case mGridMP:
+	case mGridES:
 		set_mode_grid();
 		break;
 	case mArcLevels:
@@ -494,7 +491,7 @@ void load_flash_state(void) {
 	init_i2c_slave(f.state.i2c_addr);
 }
 
-static void ii_null(uint8_t *d, uint8_t l) {
+void ii_null(uint8_t *d, uint8_t l) {
 	print_dbg("\r\nii/null");
 }
 
@@ -524,6 +521,7 @@ int main(void)
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		default_kria();
 		default_mp();
+		default_es();
 		default_levels();
 		default_cycles();
 		default_midi_standard();
