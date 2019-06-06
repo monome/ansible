@@ -1,7 +1,7 @@
-from schemata.ansible.v161 import PresetSchema_v161
+from schemata.ansible.ansible_preset_schema import AnsiblePresetSchema
 
 
-class PresetSchema_v161_es(PresetSchema_v161):
+class AnsiblePresetSchema_v161_es(AnsiblePresetSchema):
     def app_list(self):
         return [
             *super().app_list(),
@@ -253,7 +253,7 @@ typedef enum {
 	eVoiceMono,
 	eVoiceMulti,
 	eVoiceFixed,
-
+	
 	eVoiceMAX
 } voicing_mode;
 

@@ -185,6 +185,8 @@ typedef struct {
 	u8 glyph[8];
 } es_data_t;
 
+extern es_data_t e;
+
 typedef struct {
 	u8 preset;
 	es_data_t e[GRID_PRESETS];

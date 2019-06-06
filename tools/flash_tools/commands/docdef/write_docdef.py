@@ -2,12 +2,18 @@ from commands.docdef.docdef_writer import DocdefWriter
 
 
 def write(args):
-    writer = DocdefWriter(args.firmware, args.version)
+    writer = DocdefWriter(args.name, args.firmware, args.version)
     with open(args.out, 'w') as outf:
         writer.write(outf)
     print('wrote document defintion data structure to {}'.format(args.out))
 
+
 def command(parser):
+    parser.add_argument(
+        'name',
+        type=str,
+        help='name of the variable to declare',
+    )
     parser.add_argument(
         '--version',
         type=str,
