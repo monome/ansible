@@ -484,6 +484,7 @@ void load_flash_state(void) {
 	init_cycles();
 	init_kria();
 	init_mp();
+	init_es();
 	init_tt();
 
 	print_dbg("\r\ni2c addr: ");
