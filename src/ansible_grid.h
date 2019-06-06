@@ -146,42 +146,42 @@ typedef enum {
 
 typedef struct {
 	u8 active;
-    s8 x;
-    s8 y;
-    u32 start;
-    u8 from_pattern;
+	s8 x;
+	s8 y;
+	u32 start;
+	u8 from_pattern;
 } es_note_t;
 
 typedef struct {
 	u8 on;
-    u8 index;
-    u16 interval;
+	u8 index;
+	u16 interval;
 } es_event_t;
 
 typedef struct {
 	es_event_t e[ES_EVENTS_PER_PATTERN];
-    u16 interval_ind;
+	u16 interval_ind;
 	u16 length;
 	u8 loop;
-    u8 root_x;
-    u8 root_y;
-    u8 edge;
-    u16 edge_time;
-    u8 voices;
-    u8 dir;
-    u8 linearize;
-    u8 start;
-    u8 end;
+	u8 root_x;
+	u8 root_y;
+	u8 edge;
+	u16 edge_time;
+	u8 voices;
+	u8 dir;
+	u8 linearize;
+	u8 start;
+	u8 end;
 } es_pattern_t;
 
 typedef struct {
 	u8 arp;
-    u8 p_select;
-    u8 voices;
-    u8 octave;
-    u8 scale;
-    u16 keymap[128];
-    es_pattern_t p[16];
+	u8 p_select;
+	u8 voices;
+	u8 octave;
+	u8 scale;
+	u16 keymap[128];
+	es_pattern_t p[16];
 	u8 glyph[8];
 } es_data_t;
 
