@@ -448,17 +448,17 @@ void grid_keytimer_kria(uint8_t held_key) {
 		break;
 	case mRpt:
 		if(held_key < 16) {
-			k.p[k.pattern].t[track].rpt[held_key] = 5;
-		}
-		if(held_key >= R6 && held_key < R7) {
-			uint8_t x = held_key - R6;
 			uint8_t rpt = 0;
-			uint8_t rptBits = k.p[k.pattern].t[track].rptBits[x];
+			uint8_t rptBits = k.p[k.pattern].t[track].rptBits[held_key];
 			while (rptBits) {
 				rptBits >>= 1;
 				rpt++;
 			}
-			k.p[k.pattern].t[track].rpt[x] = rpt;
+			k.p[k.pattern].t[track].rpt[held_key] = rpt;
+		}
+		else if(held_key >= R6 && held_key < R7) {
+			k.p[k.pattern].t[track].rpt[held_key - R6] = 1;
+			k.p[k.pattern].t[track].rptBits[held_key - R6] = 1;
 		}
 		break;
 	default:
