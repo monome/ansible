@@ -52,7 +52,7 @@ typedef struct {
 	u8 tmul[KRIA_NUM_PARAMS];
 
 	bool tt_clocked;
-	bool trigger_steps;
+	bool trigger_clocked;
 } kria_track;
 
 typedef struct {

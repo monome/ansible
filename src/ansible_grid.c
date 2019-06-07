@@ -344,7 +344,7 @@ void default_kria() {
 	k.p[0].t[0].dur_mul = 4;
 	k.p[0].t[0].direction = krDirForward;
 	k.p[0].t[0].tt_clocked = false;
-	k.p[0].t[0].trigger_steps = false;
+	k.p[0].t[0].trigger_clocked = false;
 	memset(k.p[0].t[0].advancing, 1, KRIA_NUM_PARAMS);
 	memset(k.p[0].t[0].lstart, 0, KRIA_NUM_PARAMS);
 	memset(k.p[0].t[0].lend, 5, KRIA_NUM_PARAMS);
@@ -696,7 +696,7 @@ void clock_kria_track( uint8_t trackNum ) {
 
 	// if the track isn't in trigger_step mode, or if there is a trigger
 	// THEN we clock the other parameters
-	if (!k.p[k.pattern].t[trackNum].trigger_steps) {
+	if (!k.p[k.pattern].t[trackNum].trigger_clocked) {
 		clock_kria_note(track, trackNum);
 	}
 	if(kria_next_step(trackNum, mRpt)) {
@@ -719,7 +719,7 @@ void clock_kria_track( uint8_t trackNum ) {
 			}
 
 			if ( rptBits[trackNum] & 1 ) {
-				if (k.p[k.pattern].t[trackNum].trigger_steps) {
+				if (k.p[k.pattern].t[trackNum].trigger_clocked) {
 					clock_kria_note(track, trackNum);
 				}
 				kria_set_note(trackNum);
@@ -762,7 +762,7 @@ static void kria_rpt_off(void* o) {
 	}
 
 	if ( track->rptBits[pos[index][mRpt]] & (1 << bit) ) {
-		if (track->trigger_steps) {
+		if (track->trigger_clocked) {
 			clock_kria_note(track, index);
 		}
 		kria_set_note(index);
@@ -1339,7 +1339,8 @@ void handler_KriaGridKey(s32 data) {
 			else if (y == 7) {
 				if (x == 2) {
 					kria_sync_mode ^= 1 << (x - 2);
-					monomeFrameDirty++;
+
+					flashc_memset8((void*)&(f.kria_state.sync_mode), kria_sync_mode, sizeof(kria_sync_mode), true);
 				}
 			}
 			monomeFrameDirty++;
@@ -1866,12 +1867,12 @@ void handler_KriaGridKey(s32 data) {
 						        k.p[k.pattern].t[y].tt_clocked = !k.p[k.pattern].t[y].tt_clocked;
 						}
 						if (x == 1) {
-							k.p[k.pattern].t[y].trigger_steps = !k.p[k.pattern].t[y].trigger_steps;
+							k.p[k.pattern].t[y].trigger_clocked = !k.p[k.pattern].t[y].trigger_clocked;
 						}
 						if (x >= 3 && x <= 7) {
 							k.p[k.pattern].t[y].direction = x - 3;
 						}
-				        }
+					}
 					else if(x < 8) {
 						if(y > 4)
 							k.p[k.pattern].scale = (y - 5) * 8 + x;
@@ -2545,7 +2546,7 @@ void refresh_kria_scale(void) {
 	for ( uint8_t y=0; y<4; y++ ) {
 		// highlight TT clock enables and trigger steps
 		monomeLedBuffer[0+16*y] = k.p[k.pattern].t[y].tt_clocked ? L1 : L0;
-		monomeLedBuffer[1+16*y] = k.p[k.pattern].t[y].trigger_steps ? L1 : L0;
+		monomeLedBuffer[1+16*y] = k.p[k.pattern].t[y].trigger_clocked ? L1 : L0;
 
 		// show selected direction
 		for ( uint8_t x=3; x<=7; x++ ) {

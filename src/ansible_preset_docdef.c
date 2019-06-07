@@ -264,7 +264,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																	.write = json_write_object,
 																	.state = &ansible_app_object_state[3],
 																	.params = &((json_read_object_params_t) {
-																		.docdef_ct = 18,
+																		.docdef_ct = 19,
 																		.docdefs = ((json_docdef_t[]) {
 																			{
 																				.name = "tr",
@@ -443,12 +443,12 @@ json_docdef_t ansible_app_docdefs[] = {
 																				}),
 																			},
 																			{
-																				.name = "trigger_steps",
+																				.name = "trigger_clocked",
 																				.read = json_read_scalar,
 																				.write = json_write_bool,
 																				.params = &((json_read_scalar_params_t) {
-																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].trigger_steps),
-																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].trigger_steps),
+																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].trigger_clocked),
+																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].trigger_clocked),
 																				}),
 																			},
 																		}),
