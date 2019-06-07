@@ -20,12 +20,13 @@ typedef struct {
 	uint16_t slew[4];
 } levels_data_t;
 
+extern levels_data_t l;
+
 typedef struct {
 	// uint32_t clock_period;
 	uint8_t preset;
 	levels_data_t l[ARC_NUM_PRESETS];
 } levels_state_t;
-
 
 typedef struct {
 	uint16_t pos[4];
@@ -38,6 +39,8 @@ typedef struct {
 	uint16_t force;
 	uint8_t div[4];
 } cycles_data_t;
+
+extern cycles_data_t c;
 
 typedef struct {
 	// uint32_t clock_period;

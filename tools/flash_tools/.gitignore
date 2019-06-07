@@ -1,0 +1,9 @@
+__pycache__/
+Include/
+Lib/
+Scripts/
+tcl/
+pip-selfcheck.json
+ansible-presets.json
+*~
+*.inc

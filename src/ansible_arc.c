@@ -42,8 +42,8 @@ static void levels_timer_note1(void* o);
 static void levels_timer_note2(void* o);
 static void levels_timer_note3(void* o);
 
-static levels_data_t l;
-static cycles_data_t c;
+levels_data_t l;
+cycles_data_t c;
 
 static uint8_t mode;
 static uint8_t mode_config;
