@@ -71,8 +71,16 @@ typedef struct {
 	uint8_t glyph[8];
 } kria_data_t;
 
+extern kria_data_t k;
+
+typedef enum {
+	krSyncNone    = 0x00,
+	krSyncTimeDiv = 0x01,
+} kria_sync_mode_t;
+
 typedef struct {
 	uint32_t clock_period;
+	kria_sync_mode_t sync_mode;
 	uint8_t preset;
 	bool note_sync;
 	uint8_t loop_sync;
@@ -106,6 +114,8 @@ typedef struct {
 	u8 scale;
 	u8 glyph[8];
 } mp_data_t;
+
+extern mp_data_t m;
 
 typedef struct {
 	uint8_t preset;

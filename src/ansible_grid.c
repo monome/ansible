@@ -60,6 +60,8 @@ void (*grid_refresh)(void);
 
 // KRIA
 kria_data_t k;
+kria_sync_mode_t kria_sync_mode;
+uint8_t tmul[4][KRIA_NUM_PARAMS];
 
 typedef enum {
 	mTr, mNote, mOct, mDur, mRpt, mAltNote, mGlide, mScale, mPattern
@@ -239,6 +241,7 @@ void grid_keytimer(void) {
 					}
 
 					flashc_memset32((void*)&(f.kria_state.clock_period), clock_period, 4, true);
+					flashc_memset32((void*)&(f.kria_state.sync_mode), kria_sync_mode, sizeof(kria_sync_mode), true);
 
 				}
 			}
@@ -318,6 +321,7 @@ void default_kria() {
 	uint8_t i1;
 
 	flashc_memset32((void*)&(f.kria_state.clock_period), 60, 4, true);
+	flashc_memset32((void*)&(f.kria_state.sync_mode), krSyncNone, sizeof(kria_sync_mode_t), true);
 	flashc_memset8((void*)&(f.kria_state.preset), 0, 1, true);
 	flashc_memset8((void*)&(f.kria_state.note_sync), true, 1, true);
 	flashc_memset8((void*)&(f.kria_state.loop_sync), 2, 1, true);
@@ -387,11 +391,15 @@ void init_kria() {
 	clock_mul = 1;
 
 	clock_period = f.kria_state.clock_period;
+	kria_sync_mode = f.kria_state.sync_mode;
 	time_rough = (clock_period - 20) / 16;
 	time_fine = (clock_period - 20) % 16;
 
 	for ( int i=0; i<4; i++ ) {
 		last_ticks[i] = get_ticks();
+		for (int j=0;j<KRIA_NUM_PARAMS;j++) {
+			tmul[i][j] = f.kria_state.k[preset].p[k.pattern].t[i].tmul[j];
+		}
 	}
 }
 
@@ -461,7 +469,43 @@ void grid_keytimer_kria(uint8_t held_key) {
 bool kria_next_step(uint8_t t, uint8_t p) {
 	pos_mul[t][p]++;
 
-	if(pos_mul[t][p] >= k.p[k.pattern].t[t].tmul[p]) {
+	bool latch_input = false;
+        if (kria_sync_mode == krSyncNone) {
+		latch_input = true;
+	}
+	else {
+		switch (k.p[k.pattern].t[t].direction) {
+		case krDirForward:
+			if (pos[t][p] == k.p[k.pattern].t[t].lstart[p]) {
+				latch_input = true;
+			}
+			break;
+		case krDirReverse:
+			if (pos[t][p] == k.p[k.pattern].t[t].lend[p]) {
+				latch_input = true;
+			}
+			break;
+		case krDirTriangle:
+			if (pos[t][p] == k.p[k.pattern].t[t].lstart[p] || pos[t][p] == k.p[k.pattern].t[t].lend[p]) {
+				latch_input = true;
+			}
+			break;
+		default:
+			latch_input = true;
+			break;
+		}
+	}
+
+	if (kria_sync_mode & krSyncTimeDiv) {
+		if (latch_input) {
+			tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+		}
+	}
+	else {
+		tmul[t][p] = k.p[k.pattern].t[t].tmul[p];
+	}
+
+	if(pos_mul[t][p] >= tmul[t][p]) {
 		pos_mul[t][p] = 0;
 
 		switch (k.p[k.pattern].t[t].direction) {
@@ -602,6 +646,10 @@ void clock_kria(uint8_t phase) {
 	}
 }
 
+static inline int8_t sum_clip_octave(int8_t l, int8_t r) {
+	return min(5, max(0, l + r));
+}
+
 void clock_kria_track( uint8_t trackNum ) {
 	u64 current_tick = get_ticks();
 	clock_deltas[trackNum] = (u32)(current_tick-last_ticks[trackNum]);
@@ -617,7 +665,7 @@ void clock_kria_track( uint8_t trackNum ) {
 	}
 
 	if(kria_next_step(trackNum, mOct)) {
-		oct[trackNum] = track->octshift + track->oct[pos[trackNum][mOct]];
+		oct[trackNum] = sum_clip_octave(track->octshift, track->oct[pos[trackNum][mOct]]);
 	}
 
 	if(kria_next_step(trackNum, mNote)) {
@@ -1244,7 +1292,7 @@ void handler_KriaGridKey(s32 data) {
 	}
 	else if(view_config) {
 		if(z) {
-			if(x<8) {
+			if(x<8 && y<7) {
 				note_sync ^= 1;
 				if(loop_sync == 0)
 					loop_sync = 1;
@@ -1270,6 +1318,12 @@ void handler_KriaGridKey(s32 data) {
 
 				flashc_memset8((void*)&(f.kria_state.note_sync), note_sync, 1, true);
 				flashc_memset8((void*)&(f.kria_state.loop_sync), loop_sync, 1, true);
+			}
+			else if (y == 7) {
+				if (x == 2) {
+					kria_sync_mode ^= 1 << (x - 2);
+					monomeFrameDirty++;
+				}
 			}
 			monomeFrameDirty++;
 		}
@@ -2280,7 +2334,7 @@ void refresh_kria_oct(void) {
 
 		for(uint8_t i=0;i<16;i++) {
 			const uint8_t octshift = k.p[k.pattern].t[track].octshift;
-			const int8_t octsum = min(max(0, k.p[k.pattern].t[track].oct[i] + (int)octshift), 5);
+			const int8_t octsum = sum_clip_octave(k.p[k.pattern].t[track].oct[i], (int)octshift);
 
 			for(uint8_t j=0;j<=5;j++) {
 				if (octsum >= octshift) {
@@ -2558,7 +2612,10 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R5 + 11] = i;
 	monomeLedBuffer[R5 + 12] = i;
 	monomeLedBuffer[R5 + 13] = i;
+
+	monomeLedBuffer[R7 + 2] = kria_sync_mode & krSyncTimeDiv ? 7 : 3;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // MP

@@ -62,6 +62,7 @@ usb flash
 #include "ansible_arc.h"
 #include "ansible_midi.h"
 #include "ansible_tt.h"
+#include "ansible_usb_disk.h"
 
 
 #define FIRSTRUN_KEY 0x22
@@ -98,7 +99,6 @@ static void handler_MidiDisconnect(s32 data);
 static void ii_null(uint8_t *d, uint8_t l);
 
 u8 flash_is_fresh(void);
-void flash_unfresh(void);
 void flash_write(void);
 void flash_read(void);
 void state_write(void);
@@ -197,6 +197,9 @@ void set_mode(ansible_mode_t m) {
 	case mTT:
 		set_mode_tt();
 		break;
+	case mUsbDisk:
+		set_mode_usb_disk();
+		break;
 	default:
 		break;
 	}
@@ -266,6 +269,18 @@ static void handler_MidiDisconnect(s32 data) {
 	set_mode(mTT);
 }
 
+static void handler_MscConnect(s32 data) {
+	print_dbg("\r\n> usb disk connect");
+	set_mode(mUsbDisk);
+}
+
+static void handler_MscDisconnect(s32 data) {
+	print_dbg("\r\n> usb disk disconnect");
+	usb_disk_exit();
+	app_event_handlers[kEventFront]	= &handler_Front;
+	set_mode(f.state.none_mode);
+}
+
 static void handler_Front(s32 data) {
 	// print_dbg("\r\n+ front ");
 	// print_dbg_ulong(data);
@@ -277,7 +292,7 @@ static void handler_Front(s32 data) {
 		if(front_timer) {
 			static event_t e;
 			e.type = kEventFrontShort;
-	    	e.data = 0;
+			e.data = 0;
 			event_post(&e);
 		}
 		front_timer = 0;
@@ -293,12 +308,12 @@ static void handler_FrontShort(s32 data) {
 
 static void handler_FrontLong(s32 data) {
 	print_dbg("\r\n+ front long");
- 	uint8_t addr = 0xA0 + (!gpio_get_pin_value(B07) * 2) + (!gpio_get_pin_value(B06) * 4);
- 	flashc_memset8((void*)&(f.state.i2c_addr), addr, 1, true);
- 	print_dbg("\r\n+ i2c address: ");
- 	print_dbg_hex(f.state.i2c_addr);
- 	// TEST
- 	init_i2c_slave(f.state.i2c_addr);
+	uint8_t addr = 0xA0 + (!gpio_get_pin_value(B07) * 2) + (!gpio_get_pin_value(B06) * 4);
+	flashc_memset8((void*)&(f.state.i2c_addr), addr, 1, true);
+	print_dbg("\r\n+ i2c address: ");
+	print_dbg_hex(f.state.i2c_addr);
+	// TEST
+	init_i2c_slave(f.state.i2c_addr);
 }
 
 static void handler_SaveFlash(s32 data) {
@@ -319,7 +334,7 @@ static void handler_KeyTimer(s32 data) {
 		event_post(&e);
 	}
 
- 	if(key1_state != !gpio_get_pin_value(B06)) {
+	if(key1_state != !gpio_get_pin_value(B06)) {
 		key1_state = !gpio_get_pin_value(B06);
 		static event_t e;
 		e.type = kEventKey;
@@ -370,6 +385,8 @@ static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventSaveFlash ] = &handler_SaveFlash;
 	app_event_handlers[ kEventFtdiConnect ]	= &handler_FtdiConnect ;
 	app_event_handlers[ kEventFtdiDisconnect ]	= &handler_FtdiDisconnect ;
+	app_event_handlers[ kEventMscConnect ]	= &handler_MscConnect ;
+	app_event_handlers[ kEventMscDisconnect ]	= &handler_MscDisconnect ;
 	app_event_handlers[ kEventMonomeConnect ]	= &handler_MonomeConnect ;
 	app_event_handlers[ kEventMonomeDisconnect ]	= &handler_None ;
 	app_event_handlers[ kEventMonomePoll ]	= &handler_MonomePoll ;
@@ -398,11 +415,11 @@ void check_events(void) {
 // flash
 
 u8 flash_is_fresh(void) {
-  return (f.fresh != FIRSTRUN_KEY);
+	return (f.fresh != FIRSTRUN_KEY);
 }
 
 void flash_unfresh(void) {
-  flashc_memset8((void*)&(f.fresh), FIRSTRUN_KEY, 1, true);
+	flashc_memset8((void*)&(f.fresh), FIRSTRUN_KEY, 1, true);
 }
 
 void flash_write(void) {
@@ -465,11 +482,21 @@ void clock_set_tr(uint32_t n, uint8_t phase) {
 	timer_manual(&clockTimer);
 }
 
+void load_flash_state(void) {
+	init_levels();
+	init_cycles();
+	init_kria();
+	init_mp();
+	init_tt();
+
+	print_dbg("\r\ni2c addr: ");
+	print_dbg_hex(f.state.i2c_addr);
+	init_i2c_slave(f.state.i2c_addr);
+}
+
 static void ii_null(uint8_t *d, uint8_t l) {
 	print_dbg("\r\nii/null");
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -517,15 +544,7 @@ int main(void)
 	register_interrupts();
 	cpu_irq_enable();
 
-	init_levels();
-	init_cycles();
-	init_kria();
-	init_mp();
-	init_tt();
-
-	print_dbg("\r\ni2c addr: ");
-	print_dbg_hex(f.state.i2c_addr);
-	init_i2c_slave(f.state.i2c_addr);
+	load_flash_state();
 	process_ii = &ii_null;
 
 	clr_tr(TR1);
@@ -540,7 +559,7 @@ int main(void)
 	timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
 
 	init_dacs();
-	
+
 	connected = conNONE;
 	set_mode(f.state.none_mode);
 
