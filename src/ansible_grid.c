@@ -94,6 +94,7 @@ softTimer_t repeatTimer[4] = {
 };
 
 static void grid_keytimer_kria(uint8_t held_key);
+static void kria_set_note(uint8_t trackNum);
 // MP
 
 mp_data_t m;
@@ -650,34 +651,17 @@ static inline int8_t sum_clip_octave(int8_t l, int8_t r) {
 	return min(5, max(0, l + r));
 }
 
-void clock_kria_track( uint8_t trackNum ) {
-	u64 current_tick = get_ticks();
-	clock_deltas[trackNum] = (u32)(current_tick-last_ticks[trackNum]);
-	last_ticks[trackNum] = current_tick;
-
-	kria_track * track = &k.p[k.pattern].t[trackNum];
-	u8* trackIndex = &kria_track_indices[trackNum];
-
+void clock_kria_note(kria_track* track, uint8_t trackNum) {
 	if(kria_next_step(trackNum, mDur)) {
-		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)380.0;
-		f32 uncscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
-		dur[trackNum] = (u16)(uncscaled * clock_scale);
+		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)384.0;
+		f32 unscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
+		dur[trackNum] = (u16)(unscaled * clock_scale);
 	}
-
 	if(kria_next_step(trackNum, mOct)) {
 		oct[trackNum] = sum_clip_octave(track->octshift, track->oct[pos[trackNum][mOct]]);
 	}
-
 	if(kria_next_step(trackNum, mNote)) {
 		note[trackNum] = track->note[pos[trackNum][mNote]];
-	}
-
-	if(kria_next_step(trackNum, mRpt)) {
-		rpt[trackNum] = track->rpt[pos[trackNum][mRpt]];
-		if (rpt[trackNum] == 0) {
-
-		}
-		/* rptBits[trackNum] = track->rptBits[pos[trackNum][mRpt]]; */
 	}
 	if(kria_next_step(trackNum, mAltNote)) {
 		alt_note[trackNum] = track->alt_note[pos[trackNum][mAltNote]];
@@ -685,16 +669,46 @@ void clock_kria_track( uint8_t trackNum ) {
 	if(kria_next_step(trackNum, mGlide)) {
 		glide[trackNum] = track->glide[pos[trackNum][mGlide]];
 	}
+}
 
-	if(kria_next_step(trackNum, mTr)) {
-		if( !kria_mutes[trackNum] && track->tr[pos[trackNum][mTr]]) {
+static void kria_set_note(uint8_t trackNum) {
+	u8 noteInScale = (note[trackNum] + alt_note[trackNum]) % 7; // combine both note params
+	u8 octaveBump = (note[trackNum] + alt_note[trackNum]) / 7; // if it wrapped around the octave, bump it
+	dac_set_value(trackNum, ET[cur_scale[noteInScale] + ((oct[trackNum]+octaveBump) * 12)] << 2);
+}
+
+void clock_kria_track( uint8_t trackNum ) {
+	u64 current_tick = get_ticks();
+	clock_deltas[trackNum] = (u32)(current_tick-last_ticks[trackNum]);
+	last_ticks[trackNum] = current_tick;
+
+	kria_track* track = &k.p[k.pattern].t[trackNum];
+	u8* trackIndex = &kria_track_indices[trackNum];
+
+	bool trNextStep = kria_next_step(trackNum, mTr);
+	bool isTrigger = track->tr[pos[trackNum][mTr]];
+	if(trNextStep) {
+		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)380.0;
+		f32 uncscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
+		dur[trackNum] = (u16)(uncscaled * clock_scale);
+	}
+
+	// if the track isn't in trigger_step mode, or if there is a trigger
+	// THEN we clock the other parameters
+	if (!k.p[k.pattern].t[trackNum].trigger_steps) {
+		clock_kria_note(track, trackNum);
+	}
+	if(kria_next_step(trackNum, mRpt)) {
+		rpt[trackNum] = track->rpt[pos[trackNum][mRpt]];
+		rptBits[trackNum] = track->rptBits[pos[trackNum][mRpt]];
+	}
+
+	if(trNextStep && isTrigger) {
+		if( !kria_mutes[trackNum] ) {
 
 			dac_set_slew( trackNum, glide[trackNum] * 20 );
 
 			activeRpt[trackNum] = rpt[trackNum];
-			u8 noteInScale = (note[trackNum] + alt_note[trackNum]) % 7; // combine both note params
-			u8 octaveBump = (note[trackNum] + alt_note[trackNum]) / 7; // if it wrapped around the octave, bump it
-			dac_set_value(trackNum, ET[cur_scale[noteInScale] + ((oct[trackNum]+octaveBump) * 12)] << 2);
 
 			repeats[trackNum] = rpt[trackNum] - 1;
 			timer_remove( &repeatTimer[trackNum] );
@@ -703,7 +717,11 @@ void clock_kria_track( uint8_t trackNum ) {
 				timer_add( &repeatTimer[trackNum], rptTicks[trackNum], &kria_rpt_off, trackIndex );
 			}
 
-			if ( track->rptBits[pos[trackNum][mRpt]] & 1 ) {
+			if ( rptBits[trackNum] & 1 ) {
+				if (k.p[k.pattern].t[trackNum].trigger_steps) {
+					clock_kria_note(track, trackNum);
+				}
+				kria_set_note(trackNum);
 				set_tr( TR1 + trackNum );
 
 				timer_remove( &auxTimer[trackNum]);
@@ -735,13 +753,18 @@ static void kria_blink_off(void* o) {
 static void kria_rpt_off(void* o) {
 	int index = *(u8*)o;
 	uint8_t bit = activeRpt[index] - repeats[index];
+	kria_track* track = &k.p[k.pattern].t[index];
 
 	repeats[index]--;
 	if ( repeats[index] <= 0 ) {
 		timer_remove( &repeatTimer[index] );
 	}
 
-	if ( k.p[k.pattern].t[index].rptBits[pos[index][mRpt]] & ( 1 << bit ) ) {
+	if ( track->rptBits[pos[index][mRpt]] & (1 << bit) ) {
+		if (track->trigger_steps) {
+			clock_kria_note(track, index);
+		}
+		kria_set_note(index);
 		set_tr( TR1 + index );
 		tr[index] = 1;
 		kria_blinks[index] = 1;
@@ -1832,13 +1855,14 @@ void handler_KriaGridKey(s32 data) {
 			case mScale:
 				if(z) {
 					if ( y < 4 && x < 6 ) {
-						// tt clocking stuff added here
-						if ( x == 0){
+						if (x == 0){
 						        k.p[k.pattern].t[y].tt_clocked = !k.p[k.pattern].t[y].tt_clocked;
 						}
-
-						if (x > 0 && x < 6) {
-							k.p[k.pattern].t[y].direction = x - 1;
+						if (x == 1) {
+							k.p[k.pattern].t[y].trigger_steps = !k.p[k.pattern].t[y].trigger_steps;
+						}
+						if (x >= 3 && x <= 7) {
+							k.p[k.pattern].t[y].direction = x - 3;
 						}
 				        }
 					else if(x < 8) {
@@ -2512,10 +2536,13 @@ void refresh_kria_glide(void) {
 
 void refresh_kria_scale(void) {
 	for ( uint8_t y=0; y<4; y++ ) {
-		// if teletype clocking is enabled, track is brighter
+		// highlight TT clock enables and trigger steps
 		monomeLedBuffer[0+16*y] = k.p[k.pattern].t[y].tt_clocked ? L1 : L0;
-		for ( uint8_t x=1; x<6; x++ ) {
-			monomeLedBuffer[x+16*y] = k.p[k.pattern].t[y].direction == x - 1 ? L1 : L0;
+		monomeLedBuffer[1+16*y] = k.p[k.pattern].t[y].trigger_steps ? L1 : L0;
+
+		// show selected direction
+		for ( uint8_t x=3; x<=7; x++ ) {
+			monomeLedBuffer[x+16*y] = k.p[k.pattern].t[y].direction == x - 3 ? 5 : 3;
 		}
 	}
 
