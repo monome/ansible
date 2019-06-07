@@ -1854,7 +1854,7 @@ void handler_KriaGridKey(s32 data) {
 				break;
 			case mScale:
 				if(z) {
-					if ( y < 4 && x < 6 ) {
+					if ( y < 4 && x <= 7 ) {
 						if (x == 0){
 						        k.p[k.pattern].t[y].tt_clocked = !k.p[k.pattern].t[y].tt_clocked;
 						}
@@ -2542,7 +2542,7 @@ void refresh_kria_scale(void) {
 
 		// show selected direction
 		for ( uint8_t x=3; x<=7; x++ ) {
-			monomeLedBuffer[x+16*y] = k.p[k.pattern].t[y].direction == x - 3 ? 5 : 3;
+			monomeLedBuffer[x+16*y] = (k.p[k.pattern].t[y].direction == (x - 3)) ? 4 : 2;
 		}
 	}
 
