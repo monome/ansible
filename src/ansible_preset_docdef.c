@@ -264,7 +264,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																	.write = json_write_object,
 																	.state = &ansible_app_object_state[3],
 																	.params = &((json_read_object_params_t) {
-																		.docdef_ct = 19,
+																		.docdef_ct = 20,
 																		.docdefs = ((json_docdef_t[]) {
 																			{
 																				.name = "tr",
@@ -314,6 +314,16 @@ json_docdef_t ansible_app_docdefs[] = {
 																				.params = &((json_read_buffer_params_t) {
 																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].rpt),
 																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].rpt),
+																				}),
+																			},
+																			{
+																				.name = "rptBits",
+																				.read = json_read_buffer,
+																				.write = json_write_buffer,
+																				.state = &ansible_json_read_buffer_state,
+																				.params = &((json_read_buffer_params_t) {
+																					.dst_size = sizeof_field(nvram_data_t, kria_state.k[0].p[0].t[0].rptBits),
+																					.dst_offset = offsetof(nvram_data_t, kria_state.k[0].p[0].t[0].rptBits),
 																				}),
 																			},
 																			{
