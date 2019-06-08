@@ -34,7 +34,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # \asf_license_stop
-
+SHELL=/bin/bash
 
 # project name
 THIS = ansible
@@ -71,6 +71,7 @@ CSRCS = \
        ../src/ansible_tt.c    \
        ../src/ansible_usb_disk.c    \
        ../src/ansible_preset_docdef.c    \
+       ../src/gitversion.c    \
        ../libavr32/src/adc.c     \
        ../libavr32/src/arp.c     \
        ../libavr32/src/dac.c     \
@@ -215,5 +216,5 @@ LDFLAGS = \
         -Wl,-e,_trampoline
 
 # Pre- and post-build commands
-PREBUILD_CMD =
+PREBUILD_CMD = echo 'const char git_version[] = "$(shell git describe --tags | cut -f1 -d'-')-$(shell git describe --always --dirty)";' > gitversion.c
 POSTBUILD_CMD =

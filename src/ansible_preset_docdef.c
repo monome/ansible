@@ -6,6 +6,7 @@
 #include "print_funcs.h"
 
 #include "ansible_preset_docdef.h"
+#include "gitversion.h"
 
 #define ALLOC_DEBUG 1
 
@@ -51,7 +52,8 @@ json_docdef_t ansible_meta_docdefs[] = {
 		.read = json_match_string,
 		.write = json_write_constant_string,
 		.params = &((json_match_string_params_t) {
-			.to_match = ANSIBLE_VERSION,
+			.to_match = git_version,
+			.skip = true,
 		}),
 	},
 	{
