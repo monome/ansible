@@ -34,7 +34,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 # \asf_license_stop
-SHELL=/bin/bash
+
 
 # project name
 THIS = ansible
