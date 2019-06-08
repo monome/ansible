@@ -216,5 +216,10 @@ LDFLAGS = \
         -Wl,-e,_trampoline
 
 # Pre- and post-build commands
-PREBUILD_CMD = echo 'const char git_version[] = "$(shell git describe --tags | cut -f1 -d'-')-$(shell git describe --always --dirty)";' > gitversion.c
+PREBUILD_CMD = # echo 'const char git_version[] = "$(shell git describe --tags | cut -f1 -d'-')-$(shell git describe --always --dirty)";' > gitversion.c
 POSTBUILD_CMD =
+
+ansible: all
+
+../src/gitversion.c:
+	echo 'const char git_version[] = "$(shell git describe --tags | cut -f1 -d'-')-$(shell git describe --always --dirty)";' > $@
