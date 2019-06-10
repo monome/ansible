@@ -165,6 +165,70 @@ void usb_disk_exit() {
 	nav_exit();
 }
 
+void usb_disk_skip_apps(bool skip) {
+	json_docdef_t* apps = json_docdef_find_key(&ansible_preset_docdef, "apps");
+	if (apps == NULL) return;
+	json_read_object_params_t* params = (json_read_object_params_t*)apps->params;
+	for (int i = 0; i < params->docdef_ct; i++) {
+		params->docdefs[i].skip = skip;
+	}
+}
+
+void usb_disk_select_app(ansible_mode_t mode) {
+	json_docdef_t* app;
+	json_docdef_t* apps = json_docdef_find_key(&ansible_preset_docdef, "apps");
+	if (apps == NULL) return;
+	switch (mode) {
+	case mArcLevels:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "levels");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mArcCycles:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "cycles");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mGridKria:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "kria");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mGridMP:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "mp");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	// case mGridES:
+	case mMidiStandard:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "midi_standard");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mMidiArp:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "midi_arp");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mTT:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "tt");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	default: {
+		usb_disk_skip_apps(false);
+		break;
+	}
+	}
+}
+
 size_t gets_chunks(char* dst, size_t len) {
 	size_t read = 0;
 	uint16_t count, chunk;
