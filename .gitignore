@@ -1,5 +1,6 @@
 .DS_Store
 *.zip
+src/gitversion.c
 
 # Object files
 *.o

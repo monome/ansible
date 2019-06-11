@@ -266,8 +266,13 @@ static void handler_MidiDisconnect(s32 data) {
 	set_mode(mTT);
 }
 
+static volatile bool front_held = false;
+
 static void handler_MscConnect(s32 data) {
 	print_dbg("\r\n> usb disk connect");
+	if (front_held) {
+		usb_disk_select_app(ansible_mode);
+	}
 	set_mode(mUsbDisk);
 }
 
@@ -275,7 +280,7 @@ static void handler_MscDisconnect(s32 data) {
 	print_dbg("\r\n> usb disk disconnect");
 	usb_disk_exit();
 	app_event_handlers[kEventFront]	= &handler_Front;
-	set_mode(f.state.none_mode);
+	usb_disk_skip_apps(false);
 }
 
 static void handler_Front(s32 data) {
@@ -284,8 +289,10 @@ static void handler_Front(s32 data) {
 
 	if(data == 1) {
 		front_timer = KEY_HOLD_TIME;
+		front_held = true;
 	}
 	else {
+		front_held = false;
 		if(front_timer) {
 			static event_t e;
 			e.type = kEventFrontShort;
