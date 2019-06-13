@@ -36,6 +36,7 @@ json_read_array_state_t ansible_json_read_array_state[4];
 
 DECLARE_STATIC_ALLOC(kria_data_t, k)
 DECLARE_STATIC_ALLOC(mp_data_t, m)
+DECLARE_STATIC_ALLOC(es_data_t, e)
 DECLARE_STATIC_ALLOC(cycles_data_t, l)
 DECLARE_STATIC_ALLOC(levels_data_t, l)
 
@@ -615,10 +616,10 @@ json_docdef_t ansible_app_docdefs[] = {
 							.state = &ansible_app_object_state[1],
 							.params = &((json_read_object_params_t) {
 								.docdef_ct = 14,
-							      .dst_size = sizeof(mp_data_t),
-							      .dst_offset = offsetof(nvram_data_t, mp_state.m[0]),
-							      .alloc = STATIC_ALLOC(mp_data_t, m),
-							      .free = nop_free,
+								.dst_size = sizeof(mp_data_t),
+								.dst_offset = offsetof(nvram_data_t, mp_state.m[0]),
+								.alloc = STATIC_ALLOC(mp_data_t, m),
+								.free = nop_free,
 								.docdefs = ((json_docdef_t[]) {
 									{
 										.name = "count",
@@ -757,6 +758,297 @@ json_docdef_t ansible_app_docdefs[] = {
 										.params = &((json_read_buffer_params_t) {
 											.dst_offset = offsetof(nvram_data_t, mp_state.m[0].glyph),
 											.dst_size = sizeof_field(nvram_data_t, mp_state.m[0].glyph),
+										}),
+									},
+								}),
+							}),
+						}),
+					}),
+				},
+			}),
+		}),
+	},
+	{
+		.name = "es",
+		.read = json_read_object,
+		.write = json_write_object,
+		.fresh = true,
+		.state = &ansible_app_object_state[0],
+		.params = &((json_read_object_params_t) {
+			.docdef_ct = 2,
+			.docdefs = ((json_docdef_t[]) {
+				{
+					.name = "curr_preset",
+					.read = json_read_scalar,
+					.write = json_write_number,
+					.params = &((json_read_scalar_params_t) {
+						.dst_offset = offsetof(nvram_data_t, es_state.preset),
+						.dst_size = sizeof_field(nvram_data_t, es_state.preset),
+					}),
+				},
+				{
+					.name = "presets",
+					.read = json_read_array,
+					.write = json_write_array,
+					.fresh = true,
+					.state = &ansible_json_read_array_state[0],
+					.params = &((json_read_array_params_t) {
+						.array_len = sizeof_field(nvram_data_t, es_state.e) / sizeof_field(nvram_data_t, es_state.e[0]),
+						.item_size = sizeof_field(nvram_data_t, es_state.e[0]),
+						.item_docdef = &((json_docdef_t) {
+							.read = json_read_object_cached,
+							.write = json_write_object,
+							.fresh = true,
+							.state = &ansible_app_object_state[1],
+							.params = &((json_read_object_params_t) {
+								.docdef_ct = 8,
+								.dst_size = sizeof(es_data_t),
+								.dst_offset = offsetof(nvram_data_t, es_state.e[0]),
+								.alloc = STATIC_ALLOC(es_data_t, e),
+								.free = nop_free,
+								.docdefs = ((json_docdef_t[]) {
+									{
+										.name = "arp",
+										.read = json_read_scalar,
+										.write = json_write_number,
+										.params = &((json_read_scalar_params_t) {
+											.dst_offset = offsetof(nvram_data_t, es_state.e[0].arp),
+											.dst_size = sizeof_field(nvram_data_t, es_state.e[0].arp),
+										}),
+									},
+									{
+										.name = "p_select",
+										.read = json_read_scalar,
+										.write = json_write_number,
+										.params = &((json_read_scalar_params_t) {
+											.dst_offset = offsetof(nvram_data_t, es_state.e[0].p_select),
+											.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p_select),
+										}),
+									},
+									{
+										.name = "voices",
+										.read = json_read_scalar,
+										.write = json_write_number,
+										.params = &((json_read_scalar_params_t) {
+											.dst_offset = offsetof(nvram_data_t, es_state.e[0].voices),
+											.dst_size = sizeof_field(nvram_data_t, es_state.e[0].voices),
+										}),
+									},
+									{
+										.name = "octave",
+										.read = json_read_scalar,
+										.write = json_write_number,
+										.params = &((json_read_scalar_params_t) {
+											.dst_offset = offsetof(nvram_data_t, es_state.e[0].octave),
+											.dst_size = sizeof_field(nvram_data_t, es_state.e[0].octave),
+										}),
+									},
+									{
+										.name = "scale",
+										.read = json_read_scalar,
+										.write = json_write_number,
+										.params = &((json_read_scalar_params_t) {
+											.dst_offset = offsetof(nvram_data_t, es_state.e[0].scale),
+											.dst_size = sizeof_field(nvram_data_t, es_state.e[0].scale),
+										}),
+									},
+									{
+										.name = "keymap",
+										.read = json_read_buffer,
+										.write = json_write_buffer,
+										.fresh = true,
+										.state = &ansible_json_read_buffer_state,
+										.params = &((json_read_buffer_params_t) {
+											.dst_offset = offsetof(nvram_data_t, es_state.e[0].keymap),
+										}),
+									},
+									{
+										.name = "patterns",
+										.read = json_read_array,
+										.write = json_write_array,
+										.fresh = true,
+										.state = &ansible_json_read_array_state[1],
+										.params = &((json_read_array_params_t) {
+											.array_len = sizeof_field(nvram_data_t, es_state.e[0].p) / sizeof_field(nvram_data_t, es_state.e[0].p[0]),
+											.item_size = sizeof_field(nvram_data_t, es_state.e[0].p[0]),
+											.item_docdef = &((json_docdef_t) {
+												.read = json_read_object,
+												.write = json_write_object,
+												.fresh = true,
+												.state = &ansible_app_object_state[2],
+												.params = &((json_read_object_params_t) {
+													.docdef_ct = 13,
+													.docdefs = ((json_docdef_t[]) {
+														{
+															.name = "events",
+															.read = json_read_array,
+															.write = json_write_array,
+															.fresh = true,
+															.state = &ansible_json_read_array_state[2],
+															.params = &((json_read_array_params_t) {
+																.array_len = sizeof_field(nvram_data_t, es_state.e[0].p[0].e) / sizeof_field(nvram_data_t, es_state.e[0].p[0].e[0]),
+																.item_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].e[0]),
+																.item_docdef = &((json_docdef_t) {
+																	.read = json_read_object,
+																	.write = json_write_object,
+																	.fresh = true,
+																	.state = &ansible_app_object_state[3],
+																	.params = &((json_read_object_params_t) {
+																		.docdef_ct = 3,
+																		.docdefs = ((json_docdef_t[]) {
+																			{
+																				.name = "on",
+																				.read = json_read_scalar,
+																				.write = json_write_number,
+																				.params = &((json_read_scalar_params_t) {
+																					.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].e[0].on),
+																					.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].e[0].on),
+																				}),
+																			},
+																			{
+																				.name = "index",
+																				.read = json_read_scalar,
+																				.write = json_write_number,
+																				.params = &((json_read_scalar_params_t) {
+																					.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].e[0].index),
+																					.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].e[0].index),
+																				}),
+																			},
+																			{
+																				.name = "interval",
+																				.read = json_read_scalar,
+																				.write = json_write_number,
+																				.params = &((json_read_scalar_params_t) {
+																					.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].e[0].interval),
+																					.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].e[0].interval),
+																				}),
+																			},
+																		}),
+																	}),
+																}),
+															}),
+														},
+														{
+															.name = "interval_ind",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].interval_ind),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].interval_ind),
+															}),
+														},
+														{
+															.name = "length",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].length),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].length),
+															}),
+														},
+														{
+															.name = "loop",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].loop),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].loop),
+															}),
+														},
+														{
+															.name = "root_x",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].root_x),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].root_x),
+															}),
+														},
+														{
+															.name = "root_y",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].root_y),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].root_y),
+															}),
+														},
+														{
+															.name = "edge",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].edge),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].edge),
+															}),
+														},
+														{
+															.name = "edge_time",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].edge_time),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].edge_time),
+															}),
+														},
+														{
+															.name = "voices",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].voices),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].voices),
+															}),
+														},
+														{
+															.name = "dir",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].dir),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].dir),
+															}),
+														},
+														{
+															.name = "linearize",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].linearize),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].linearize),
+															}),
+														},
+														{
+															.name = "start",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].start),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].start),
+															}),
+														},
+														{
+															.name = "end",
+															.read = json_read_scalar,
+															.write = json_write_number,
+															.params = &((json_read_scalar_params_t) {
+																.dst_offset = offsetof(nvram_data_t, es_state.e[0].p[0].end),
+																.dst_size = sizeof_field(nvram_data_t, es_state.e[0].p[0].end),
+															}),
+														},
+													}),
+												}),
+											}),
+										}),
+									},
+									{
+										.name = "glyph",
+										.read = json_read_buffer,
+										.write = json_write_buffer,
+										.fresh = true,
+										.state = &ansible_json_read_buffer_state,
+										.params = &((json_read_buffer_params_t) {
+											.dst_offset = offsetof(nvram_data_t, es_state.e[0].glyph),
 										}),
 									},
 								}),

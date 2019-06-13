@@ -1,11 +1,17 @@
 from schemata.ansible.v161 import PresetSchema_v161
 
 
-class PresetSchema_v161_es(PresetSchema_v161):
+class PresetSchema_vnext(PresetSchema_v161):
     def app_list(self):
         return [
-            *super().app_list(),
+            'levels',
+            'cycles',
+            'kria',
+            'mp',
             'es',
+            'midi_standard',
+            'midi_arp',
+            'tt',
         ]
 
     def cdef(self):
@@ -34,17 +40,17 @@ typedef enum {
 	mGridES,
 	mMidiStandard,
 	mMidiArp,
-	mTT
+	mTT,
 } ansible_mode_t;
 
-typedef struct {
-	connected_t connected;
-	ansible_mode_t arc_mode;
-	ansible_mode_t grid_mode;
-	ansible_mode_t midi_mode;
-	ansible_mode_t none_mode;
-	uint8_t i2c_addr;
-} ansible_state_t;
+typedef enum {
+  krDirForward = 0,
+  krDirReverse = 1,
+  krDirTriangle = 2,
+  krDirDrunk = 3,
+  krDirRandom = 4,
+} kria_direction;
+
 
 #define GRID_PRESETS 8
 
@@ -57,12 +63,14 @@ typedef struct {
 #define ES_EDGE_FIXED 1
 #define ES_EDGE_DRONE 2
 
+
 typedef struct {
 	u8 tr[16];
 	u8 oct[16];
 	u8 note[16];
 	u8 dur[16];
 	u8 rpt[16];
+	u8 rptBits[16];
 	u8 alt_note[16];
 	u8 glide[16];
 
@@ -74,12 +82,17 @@ typedef struct {
 	// u8 pdur[16];
 
 	u8 dur_mul;
+	kria_direction direction;
+	u8 advancing[KRIA_NUM_PARAMS];
+	u8 octshift;
 
 	u8 lstart[KRIA_NUM_PARAMS];
 	u8 lend[KRIA_NUM_PARAMS];
 	u8 llen[KRIA_NUM_PARAMS];
 	u8 lswap[KRIA_NUM_PARAMS];
 	u8 tmul[KRIA_NUM_PARAMS];
+
+	bool tt_clocked;
 } kria_track;
 
 typedef struct {
@@ -109,8 +122,6 @@ typedef struct {
 	uint8_t meta;
 	kria_data_t k[GRID_PRESETS];
 } kria_state_t;
-
-
 
 
 typedef struct {
@@ -143,8 +154,6 @@ typedef struct {
 } mp_state_t;
 
 
-
-
 typedef enum {
 	es_stopped,
 	es_armed,
@@ -160,42 +169,42 @@ typedef enum {
 
 typedef struct {
 	u8 active;
-    s8 x;
-    s8 y;
-    u32 start;
-    u8 from_pattern;
+	s8 x;
+	s8 y;
+	u32 start;
+	u8 from_pattern;
 } es_note_t;
 
 typedef struct {
 	u8 on;
-    u8 index;
-    u16 interval;
+	u8 index;
+	u16 interval;
 } es_event_t;
 
 typedef struct {
 	es_event_t e[ES_EVENTS_PER_PATTERN];
-    u16 interval_ind;
+	u16 interval_ind;
 	u16 length;
 	u8 loop;
-    u8 root_x;
-    u8 root_y;
-    u8 edge;
-    u16 edge_time;
-    u8 voices;
-    u8 dir;
-    u8 linearize;
-    u8 start;
-    u8 end;
+	u8 root_x;
+	u8 root_y;
+	u8 edge;
+	u16 edge_time;
+	u8 voices;
+	u8 dir;
+	u8 linearize;
+	u8 start;
+	u8 end;
 } es_pattern_t;
 
 typedef struct {
 	u8 arp;
-    u8 p_select;
-    u8 voices;
-    u8 octave;
-    u8 scale;
-    u16 keymap[128];
-    es_pattern_t p[16];
+	u8 p_select;
+	u8 voices;
+	u8 octave;
+	u8 scale;
+	u16 keymap[128];
+	es_pattern_t p[16];
 	u8 glyph[8];
 } es_data_t;
 
@@ -205,7 +214,7 @@ typedef struct {
 } es_state_t;
 
 
-#define ARC_NUM_PRESETS 8
+# define ARC_NUM_PRESETS 8
 
 typedef struct {
 	uint16_t pattern[4][16];
@@ -300,6 +309,16 @@ typedef struct {
 } tt_state_t;
 
 
+typedef struct {
+	connected_t connected;
+	ansible_mode_t arc_mode;
+	ansible_mode_t grid_mode;
+	ansible_mode_t midi_mode;
+	ansible_mode_t none_mode;
+	uint8_t i2c_addr;
+} ansible_state_t;
+
+
 // NVRAM data structure located in the flash array.
 typedef const struct {
 	uint8_t fresh;
@@ -315,6 +334,90 @@ typedef const struct {
 	uint8_t scale[16][8];
 } nvram_data_t;
 '''
+
+    def extract_kria_state(self, state):
+        return self.combine(
+            self.scalar_settings(state, [
+                'clock_period',
+                'preset:curr_preset',
+                'note_sync',
+                'loop_sync',
+                'cue_div',
+                'cue_steps',
+                'meta',
+            ]),
+            self.array_settings(state, [
+                (
+                    'k:presets',
+                    lambda preset: self.combine(
+                        self.array_settings(preset, [
+                            (
+                                'p:patterns',
+                                lambda pattern: self.combine(
+                                    self.array_settings(pattern, [
+                                        (
+                                            't:tracks',
+                                            lambda track: self.combine(
+                                                self.array_1d_settings(track, [
+                                                    'tr',
+                                                    'oct',
+                                                    'note',
+                                                    'dur',
+                                                    'rpt',
+                                                    # 'rptBits',
+                                                    'alt_note',
+                                                    'glide',
+                                                ]),
+                                                self.array_2d_settings(track, [
+                                                    'p'
+                                                ]),
+                                                self.scalar_settings(track, [
+                                                    'dur_mul',
+                                                    'direction',
+                                                ]),
+                                                self.array_1d_settings(track, [
+                                                    'advancing',
+                                                ]),
+                                                self.scalar_settings(track, [
+                                                    'octshift',
+                                                ]),
+                                                self.array_1d_settings(track, [
+                                                    'lstart',
+                                                    'lend',
+                                                    'llen',
+                                                    'lswap',
+                                                    'tmul',
+                                                ]),
+                                                self.scalar_settings(track, [
+                                                    'tt_clocked',
+                                                ]),
+                                            ),
+                                        ),
+                                    ]),
+                                    self.scalar_settings(pattern, ['scale']),
+                                ),
+                            ),
+                        ]),
+                        self.scalar_settings(preset, [
+                            'pattern:curr_pattern',
+                        ]),
+                        self.array_1d_settings(preset, [
+                            'meta_pat',
+                            'meta_steps',
+                        ]),
+                        self.scalar_settings(preset, [
+                            'meta_start',
+                            'meta_end',
+                            'meta_len',
+                            'meta_lswap',
+                        ]),
+                        self.array_1d_settings(preset, [
+                            'glyph',
+                        ]),
+                    ),
+                ),
+            ]),
+        )
 
     def extract_es_state(self, state):
         return {
