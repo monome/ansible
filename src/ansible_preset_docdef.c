@@ -58,6 +58,15 @@ json_docdef_t ansible_meta_docdefs[] = {
 		}),
 	},
 	{
+		.name = "grid_varibrightness",
+		.read = json_read_scalar,
+		.write = json_write_number,
+		.params = &((json_read_scalar_params_t) {
+			.dst_offset = offsetof(nvram_data_t, state.grid_varibrightness),
+			.dst_size = sizeof_field(nvram_data_t, state.grid_varibrightness),
+		}),
+	},
+	{
 		.name = "i2c_addr",
 		.read = json_read_scalar,
 		.write = json_write_number,

@@ -529,6 +529,7 @@ int main(void)
 		flashc_memset32((void*)&(f.state.arc_mode), mArcLevels, 4, true);
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
+		flashc_memset8((void*)&(f.state.grid_varibrightness), 16, 1, true);
 		default_kria();
 		default_mp();
 		default_levels();

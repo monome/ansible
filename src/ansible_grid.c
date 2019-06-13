@@ -101,8 +101,14 @@ mp_data_t m;
 u8 sound;
 u8 voice_mode;
 
+u8 grid_varibrightness;
 
 void set_mode_grid() {
+	grid_varibrightness = (f.state.grid_varibrightness == 1) ? 1 :
+			      (f.state.grid_varibrightness == 4) ? 4 :
+			      16;
+
+
 	switch(ansible_mode) {
 	case mGridKria:
 		// print_dbg("\r\n> mode grid kria");
@@ -2375,7 +2381,7 @@ void refresh_kria_oct(void) {
 				else {
 					if (j < octsum || j > octshift) continue;
 				}
-				monomeLedBuffer[R6-16*j+i] = 3;
+				monomeLedBuffer[R6-16*j+i] = grid_varibrightness < 16 ? L0 : 3;
 
 				if(k.p[k.pattern].t[track].lswap[mOct]) {
 					if((i < k.p[k.pattern].t[track].lstart[mOct]) && (i > k.p[k.pattern].t[track].lend[mOct])) {
@@ -2420,7 +2426,7 @@ void refresh_kria_dur(void) {
 
 		for(uint8_t i=0;i<16;i++) {
 			for(uint8_t j=0;j<=k.p[k.pattern].t[track].dur[i];j++) {
-				monomeLedBuffer[R1+16*j+i] = 3;
+				monomeLedBuffer[R1+16*j+i] = grid_varibrightness < 16 ? L0 : 3;
 				if(k.p[k.pattern].t[track].lswap[mDur]) {
 					if((i < k.p[k.pattern].t[track].lstart[mDur]) && (i > k.p[k.pattern].t[track].lend[mDur])) {
 						monomeLedBuffer[R1+16*j+i] -= 2;
@@ -2468,7 +2474,7 @@ void refresh_kria_rpt(void) {
 					monomeLedBuffer[led] = L0;
 				}
 				if (j < k.p[k.pattern].t[track].rpt[i]) {
-					monomeLedBuffer[led] += 2;
+					monomeLedBuffer[led] += grid_varibrightness < 16 ? 4 : 2;
 
 					if ( k.p[k.pattern].t[track].lswap[mRpt] ) {
 						if ( (i < k.p[k.pattern].t[track].lstart[mRpt]) && (i > k.p[k.pattern].t[track].lend[mRpt]) ) {
