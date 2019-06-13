@@ -29,6 +29,7 @@ typedef struct {
 	u8 note[16];
 	u8 dur[16];
 	u8 rpt[16];
+	u8 rptBits[16];
 	u8 alt_note[16];
 	u8 glide[16];
 
@@ -51,6 +52,7 @@ typedef struct {
 	u8 tmul[KRIA_NUM_PARAMS];
 
 	bool tt_clocked;
+	bool trigger_clocked;
 } kria_track;
 
 typedef struct {
@@ -136,6 +138,7 @@ void init_kria(void);
 void resume_kria(void);
 void clock_kria(uint8_t phase);
 void clock_kria_track( uint8_t trackNum );
+void clock_kria_note(kria_track* track, uint8_t trackNum);
 void ii_kria(uint8_t *d, uint8_t l);
 void handler_KriaGridKey(s32 data);
 void handler_KriaRefresh(s32 data);
