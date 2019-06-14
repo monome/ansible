@@ -43,6 +43,7 @@ typedef struct {
 	ansible_mode_t midi_mode;
 	ansible_mode_t none_mode;
 	uint8_t i2c_addr;
+	uint8_t grid_varibrightness;
 } ansible_state_t;
 
 
