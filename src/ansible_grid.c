@@ -296,7 +296,7 @@ void grid_keytimer(void) {
 					case mGridES:
 						flashc_memset8((void*)&(f.es_state.preset), preset, 1, true);
 						flashc_memcpy((void *)&f.es_state.e[preset], &e, sizeof(e), true);
-                        flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
+						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
 
 						preset_mode = false;
 						grid_refresh = &refresh_es;
@@ -598,7 +598,7 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 	pos_mul[t][p]++;
 
 	bool latch_input = false;
-        if (kria_sync_mode == krSyncNone) {
+	if (kria_sync_mode == krSyncNone) {
 		latch_input = true;
 	}
 	else {
@@ -5052,5 +5052,9 @@ void ii_es(uint8_t *data, uint8_t l) {
             }
             monomeFrameDirty++;
             break;
+
+        default:
+	    ii_grid(data, l);
+	    ii_ansible(data, l);
     }
 }
