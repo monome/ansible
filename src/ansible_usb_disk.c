@@ -53,7 +53,7 @@ static void usb_disk_unlock(void) {
 	print_dbg("\r\n> usb disk unlocked\r\n");
 }
 
-static volatile bool armed = false;
+static volatile bool load_armed = false, save_armed = false;
 static bool blink = false;
 
 static void handler_UsbDiskKey(int32_t data) {
@@ -65,13 +65,14 @@ static void handler_UsbDiskKey(int32_t data) {
 	case 1:
 		// key 1 - load
 		if (usb_disk_lock()) {
-			if (!armed) {
+			save_armed = false;
+			if (!load_armed) {
 				update_leds(1);
-				armed = true;
+				load_armed = true;
 				usb_disk_unlock();
 				return;
 			}
-			armed = false;
+			load_armed = false;
 			blink = false;
 			success = false;
 			timer_add(&auxTimer[0], DISK_BLINK_INTERVAL, &blink_read, NULL);
@@ -100,13 +101,14 @@ static void handler_UsbDiskKey(int32_t data) {
 	case 3:
 		// key 2 - save
 		if (usb_disk_lock()) {
-			if (!armed) {
+			load_armed = false;
+			if (!save_armed) {
 				update_leds(2);
-				armed = true;
+				save_armed = true;
 				usb_disk_unlock();
 				return;
 			}
-			armed = false;
+			save_armed = false;
 			blink = false;
 			success = false;
 			timer_add(&auxTimer[0], DISK_BLINK_INTERVAL, &blink_write, NULL);
@@ -130,7 +132,8 @@ static void handler_UsbDiskKey(int32_t data) {
 
 static void handler_UsbDiskFront(s32 data) {
 	if (usb_disk_lock()) {
-		armed = false;
+		load_armed = false;
+		save_armed = false;
 		update_leds(0);
 		usb_disk_unlock();
 	}
