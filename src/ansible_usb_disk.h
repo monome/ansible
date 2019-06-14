@@ -14,6 +14,8 @@
 void set_mode_usb_disk(void);
 void usb_disk_enter(void);
 void usb_disk_exit(void);
+void usb_disk_skip_apps(bool skip);
+void usb_disk_select_app(ansible_mode_t mode);
 
 size_t gets_chunks(char* dst, size_t len);
 void puts_buffered(const char* src, size_t len);

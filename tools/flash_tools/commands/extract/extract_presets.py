@@ -28,6 +28,11 @@ def command(parser):
         default='1.6.1'
     )
     parser.add_argument(
+        '--target_version',
+        type=str,
+        help='firmware version to target with the JSON output'
+    )
+    parser.add_argument(
         '--out',
         type=str,
         help='JSON file to write the preset to',

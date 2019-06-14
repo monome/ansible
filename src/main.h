@@ -29,6 +29,7 @@ typedef enum {
 	mArcCycles,
 	mGridKria,
 	mGridMP,
+	mGridES,
 	mMidiStandard,
 	mMidiArp,
 	mTT,
@@ -51,6 +52,7 @@ typedef const struct {
 	ansible_state_t state;
 	kria_state_t kria_state;
 	mp_state_t mp_state;
+	es_state_t es_state;
 	levels_state_t levels_state;
 	cycles_state_t cycles_state;
 	midi_standard_state_t midi_standard_state;
@@ -69,6 +71,7 @@ void (*clock)(u8 phase);
 
 extern void handler_None(s32 data);
 extern void clock_null(u8 phase);
+extern void ii_null(uint8_t *d, uint8_t l);
 
 void set_mode(ansible_mode_t m);
 void update_leds(uint8_t m);

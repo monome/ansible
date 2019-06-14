@@ -23,12 +23,18 @@ typedef enum {
   krDirRandom = 4,
 } kria_direction;
 
+#define ES_EVENTS_PER_PATTERN 128
+#define ES_EDGE_PATTERN 0
+#define ES_EDGE_FIXED 1
+#define ES_EDGE_DRONE 2
+
 typedef struct {
 	u8 tr[16];
 	s8 oct[16];
 	u8 note[16];
 	u8 dur[16];
 	u8 rpt[16];
+	u8 rptBits[16];
 	u8 alt_note[16];
 	u8 glide[16];
 
@@ -51,6 +57,7 @@ typedef struct {
 	u8 tmul[KRIA_NUM_PARAMS];
 
 	bool tt_clocked;
+	bool trigger_clocked;
 } kria_track;
 
 typedef struct {
@@ -124,6 +131,70 @@ typedef struct {
 } mp_state_t;
 
 
+
+
+typedef enum {
+	es_stopped,
+	es_armed,
+	es_recording,
+	es_playing
+} es_mode_t;
+
+typedef enum {
+	es_main,
+	es_patterns_held,
+	es_patterns
+} es_view_t;
+
+typedef struct {
+	u8 active;
+	s8 x;
+	s8 y;
+	u32 start;
+	u8 from_pattern;
+} es_note_t;
+
+typedef struct {
+	u8 on;
+	u8 index;
+	u16 interval;
+} es_event_t;
+
+typedef struct {
+	es_event_t e[ES_EVENTS_PER_PATTERN];
+	u16 interval_ind;
+	u16 length;
+	u8 loop;
+	u8 root_x;
+	u8 root_y;
+	u8 edge;
+	u16 edge_time;
+	u8 voices;
+	u8 dir;
+	u8 linearize;
+	u8 start;
+	u8 end;
+} es_pattern_t;
+
+typedef struct {
+	u8 arp;
+	u8 p_select;
+	u8 voices;
+	u8 octave;
+	u8 scale;
+	u16 keymap[128];
+	es_pattern_t p[16];
+	u8 glyph[8];
+} es_data_t;
+
+extern es_data_t e;
+
+typedef struct {
+	u8 preset;
+	es_data_t e[GRID_PRESETS];
+} es_state_t;
+
+
 void set_mode_grid(void);
 
 void handler_GridFrontShort(s32 data);
@@ -137,6 +208,7 @@ void init_kria(void);
 void resume_kria(void);
 void clock_kria(uint8_t phase);
 void clock_kria_track( uint8_t trackNum );
+void clock_kria_note(kria_track* track, uint8_t trackNum);
 void ii_kria(uint8_t *d, uint8_t l);
 void handler_KriaGridKey(s32 data);
 void handler_KriaRefresh(s32 data);
@@ -167,3 +239,14 @@ void handler_MPTrNormal(s32 data);
 void refresh_mp(void);
 void refresh_mp_config(void);
 void refresh_clock(void);
+
+void default_es(void);
+void init_es(void);
+void resume_es(void);
+void handler_ESGridKey(s32 data);
+void handler_ESRefresh(s32 data);
+void handler_ESKey(s32 data);
+void handler_ESTr(s32 data);
+void handler_ESTrNormal(s32 data);
+void refresh_es(void);
+void ii_es(uint8_t *d, uint8_t l);

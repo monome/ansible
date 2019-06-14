@@ -53,7 +53,7 @@ static void usb_disk_unlock(void) {
 	print_dbg("\r\n> usb disk unlocked\r\n");
 }
 
-static volatile bool armed = false;
+static volatile bool load_armed = false, save_armed = false;
 static bool blink = false;
 
 static void handler_UsbDiskKey(int32_t data) {
@@ -65,13 +65,14 @@ static void handler_UsbDiskKey(int32_t data) {
 	case 1:
 		// key 1 - load
 		if (usb_disk_lock()) {
-			if (!armed) {
+			save_armed = false;
+			if (!load_armed) {
 				update_leds(1);
-				armed = true;
+				load_armed = true;
 				usb_disk_unlock();
 				return;
 			}
-			armed = false;
+			load_armed = false;
 			blink = false;
 			success = false;
 			timer_add(&auxTimer[0], DISK_BLINK_INTERVAL, &blink_read, NULL);
@@ -100,13 +101,14 @@ static void handler_UsbDiskKey(int32_t data) {
 	case 3:
 		// key 2 - save
 		if (usb_disk_lock()) {
-			if (!armed) {
+			load_armed = false;
+			if (!save_armed) {
 				update_leds(2);
-				armed = true;
+				save_armed = true;
 				usb_disk_unlock();
 				return;
 			}
-			armed = false;
+			save_armed = false;
 			blink = false;
 			success = false;
 			timer_add(&auxTimer[0], DISK_BLINK_INTERVAL, &blink_write, NULL);
@@ -130,7 +132,8 @@ static void handler_UsbDiskKey(int32_t data) {
 
 static void handler_UsbDiskFront(s32 data) {
 	if (usb_disk_lock()) {
-		armed = false;
+		load_armed = false;
+		save_armed = false;
 		update_leds(0);
 		usb_disk_unlock();
 	}
@@ -163,6 +166,70 @@ void usb_disk_enter() {
 void usb_disk_exit() {
 	nav_filelist_reset();
 	nav_exit();
+}
+
+void usb_disk_skip_apps(bool skip) {
+	json_docdef_t* apps = json_docdef_find_key(&ansible_preset_docdef, "apps");
+	if (apps == NULL) return;
+	json_read_object_params_t* params = (json_read_object_params_t*)apps->params;
+	for (int i = 0; i < params->docdef_ct; i++) {
+		params->docdefs[i].skip = skip;
+	}
+}
+
+void usb_disk_select_app(ansible_mode_t mode) {
+	json_docdef_t* app;
+	json_docdef_t* apps = json_docdef_find_key(&ansible_preset_docdef, "apps");
+	if (apps == NULL) return;
+	switch (mode) {
+	case mArcLevels:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "levels");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mArcCycles:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "cycles");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mGridKria:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "kria");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mGridMP:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "mp");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	// case mGridES:
+	case mMidiStandard:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "midi_standard");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mMidiArp:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "midi_arp");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	case mTT:
+		usb_disk_skip_apps(true);
+		app = json_docdef_find_key(apps, "tt");
+		if (app == NULL) return;
+		app->skip = false;
+		break;
+	default: {
+		usb_disk_skip_apps(false);
+		break;
+	}
+	}
 }
 
 size_t gets_chunks(char* dst, size_t len) {
