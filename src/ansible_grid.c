@@ -60,6 +60,7 @@ u8 cur_scale[8];
 void calc_scale(uint8_t s);
 
 void (*grid_refresh)(void);
+void ii_grid(uint8_t* data, uint8_t len);
 
 // KRIA
 kria_data_t k;
@@ -98,6 +99,9 @@ softTimer_t repeatTimer[4] = {
 
 static void grid_keytimer_kria(uint8_t held_key);
 static void kria_set_note(uint8_t trackNum);
+static kria_modes_t ii_kr_mode_for_cmd(uint8_t cmd);
+static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode);
+
 // MP
 
 mp_data_t m;
@@ -292,7 +296,7 @@ void grid_keytimer(void) {
 					case mGridES:
 						flashc_memset8((void*)&(f.es_state.preset), preset, 1, true);
 						flashc_memcpy((void *)&f.es_state.e[preset], &e, sizeof(e), true);
-                        flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
+						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
 
 						preset_mode = false;
 						grid_refresh = &refresh_es;
@@ -318,6 +322,65 @@ void grid_keytimer(void) {
 	}
 }
 
+void ii_grid(uint8_t* d, uint8_t len) {
+	// print_dbg("\r\nii/grid (");
+	// print_dbg_ulong(len);
+	// print_dbg(") ");
+	// for(int i=0;i<len;i++) {
+	// 	print_dbg_ulong(d[i]);
+	// 	print_dbg(" ");
+	// }
+
+	if (len < 1) {
+		return;
+	}
+
+	switch (d[0]) {
+	case II_GRID_KEY:
+		if ( !preset_mode
+		  && len >= 4
+		  && d[1] < 16
+		  && d[2] <  8
+		  && d[3] < 16 ) {
+			event_t e;
+			uint8_t* data = (uint8_t*)(&(e.data));
+			e.type = kEventMonomeGridKey;
+			data[0] = d[1];
+			data[1] = d[2];
+			data[2] = d[3];
+			event_post(&e);
+		}
+		break;
+	case II_GRID_KEY + II_GET: {
+		uint8_t z = 0;
+		if ( len >= 2
+		  && d[1] < 16
+		  && d[2] < 8 ) {
+			for (uint8_t i = 0; i < key_count; i++) {
+				if (held_keys[i] % 16 == d[1]
+				  && held_keys[i] / 16 == d[2]) {
+					z = 1;
+					break;
+				}
+			}
+		}
+		ii_tx_queue(z);
+		break;
+	}
+	case II_GRID_LED + II_GET: {
+		uint8_t led = 0;
+		if ( len >= 3
+		  && d[1] < 16
+		  && d[2] < 8 ) {
+			led = monomeLedBuffer[d[2] * 16 + d[1]];
+		}
+		ii_tx_queue(led);
+		break;
+	}
+	default:
+		break;
+	}
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // KRIA
@@ -362,6 +425,7 @@ static void kria_off(void* o);
 static void kria_blink_off(void* o);
 static void kria_rpt_off(void* o);
 static void kria_alt_mode_blink(void* o);
+static void kria_set_alt_blink_timer(kria_modes_t mode);
 softTimer_t altBlinkTimer = { .next = NULL, .prev = NULL };
 bool kriaAltModeBlink; // flag gets flipped for the blinking
 bool k_mode_is_alt = false;
@@ -534,7 +598,7 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 	pos_mul[t][p]++;
 
 	bool latch_input = false;
-        if (kria_sync_mode == krSyncNone) {
+	if (kria_sync_mode == krSyncNone) {
 		latch_input = true;
 	}
 	else {
@@ -878,9 +942,7 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			break;
 		case II_KR_PATTERN:
 			if(d[1] > -1 && d[1] < 16) {
-				k.pattern = d[1];
-				pos_reset = true;
-				calc_scale(k.p[k.pattern].scale);
+				change_pattern(d[1]);
 			}
 			break;
 		case II_KR_PATTERN + II_GET:
@@ -1229,9 +1291,91 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				if ( k.p[k.pattern].t[d[1]-1].tt_clocked )
 					clock_kria_track( d[1]-1 );
 			}
-		default:
+			break;
+		case II_KR_PAGE:
+			if ( l >= 2 ) {
+				kria_modes_t next_mode = ii_kr_mode_for_cmd(d[1]);
+				if (next_mode < 0) {
+					break;
+				}
+				k_mode = next_mode;
+				if (k_mode == mPattern) {
+					cue = true;
+				}
+				kria_set_alt_blink_timer(k_mode);
+			}
+			break;
+		case II_KR_PAGE + II_GET:
+			ii_tx_queue(ii_kr_cmd_for_mode(k_mode));
+			break;
+		case II_KR_CUE:
+			if (!meta && l >= 2) {
+				cue_pat_next = d[1] + 1;
+				cue = true;
+			}
+			break;
+		case II_KR_CUE + II_GET: {
+			ii_tx_queue(cue_pat_next - 1);
 			break;
 		}
+		case II_KR_DIR:
+			if (l >= 3 && d[2] <= krDirRandom) {
+				k.p[k.pattern].t[d[1]-1].direction = d[2];
+			}
+			break;
+		case II_KR_DIR + II_GET:
+			if (l >= 2) {
+				ii_tx_queue(k.p[k.pattern].t[d[1] - 1].direction);
+			}
+			break;
+		default:
+			ii_grid(d, l);
+			ii_ansible(d, l);
+			break;
+		}
+	}
+}
+
+static kria_modes_t ii_kr_mode_for_cmd(uint8_t d) {
+	switch (d) {
+	case 0:  return mTr;
+	case 1:  return mRpt;
+	case 2:  return mNote;
+	case 3:  return mAltNote;
+	case 4:  return mOct;
+	case 5:  return mGlide;
+	case 6:  return mDur;
+	case 7:  return -1;
+	case 8:  return mScale;
+	case 9:  return mPattern;
+	default: return -1;
+	}
+}
+
+static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode) {
+	switch (mode) {
+	case mTr:      return 0;
+	case mRpt:     return 1;
+	case mNote:    return 2;
+	case mAltNote: return 3;
+	case mOct:     return 4;
+	case mGlide:   return 5;
+	case mDur:     return 6;
+	case mScale:   return 8;
+	case mPattern: return 9;
+	default:       return -1;
+	}
+}
+
+static void kria_set_alt_blink_timer(kria_modes_t mode) {
+	if ( k_mode == mRpt || k_mode == mAltNote || k_mode == mGlide ) {
+		timer_remove( &altBlinkTimer );
+		timer_add( &altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
+		k_mode_is_alt = true;
+	}
+	else {
+		timer_remove( &altBlinkTimer );
+		k_mode_is_alt = false;
 	}
 }
 
@@ -1459,16 +1603,7 @@ void handler_KriaGridKey(s32 data) {
 					break;
 				default: break;
 				}
-				if ( k_mode == mRpt || k_mode == mAltNote || k_mode == mGlide ) {
-
-					timer_remove( &altBlinkTimer );
-					timer_add( &altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
-					k_mode_is_alt = true;
-				}
-				else {
-					timer_remove( &altBlinkTimer );
-					k_mode_is_alt = false;
-				}
+				kria_set_alt_blink_timer(k_mode);
 			}
 			else {
 				switch(x) {
@@ -3217,13 +3352,15 @@ void ii_mp(uint8_t *d, uint8_t l) {
 			ii_tx_queue(dac_get_value(d[1]) & 0xff);
 			break;
 		default:
+			ii_grid(d, l);
+			ii_ansible(d, l);
 			break;
 		}
 	}
 }
 
 void handler_MPGridKey(s32 data) {
- 	u8 x, y, z, index, i1, found;
+	u8 x, y, z, index, i1, found;
 	monome_grid_key_parse_event_data(data, &x, &y, &z);
 	// print_dbg("\r\n monome event; x: ");
 	// print_dbg_hex(x);
@@ -4915,5 +5052,9 @@ void ii_es(uint8_t *data, uint8_t l) {
             }
             monomeFrameDirty++;
             break;
+
+        default:
+	    ii_grid(data, l);
+	    ii_ansible(data, l);
     }
 }
