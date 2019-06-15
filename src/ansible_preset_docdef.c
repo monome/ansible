@@ -186,6 +186,15 @@ json_docdef_t ansible_app_docdefs[] = {
 					}),
 				},
 				{
+					.name = "sync_mode",
+					.read = json_read_scalar,
+					.write = json_write_number,
+					.params = &((json_read_scalar_params_t) {
+						.dst_size = sizeof_field(nvram_data_t, kria_state.sync_mode),
+						.dst_offset = offsetof(nvram_data_t, kria_state.sync_mode),
+					}),
+				},
+				{
 					.name = "note_sync",
 					.read = json_read_scalar,
 					.write = json_write_bool,
@@ -201,6 +210,24 @@ json_docdef_t ansible_app_docdefs[] = {
 					.params = &((json_read_scalar_params_t) {
 						.dst_size = sizeof_field(nvram_data_t, kria_state.loop_sync),
 						.dst_offset = offsetof(nvram_data_t, kria_state.loop_sync),
+					}),
+				},
+				{
+					.name = "note_div_sync",
+					.read = json_read_scalar,
+					.write = json_write_number,
+					.params = &((json_read_scalar_params_t) {
+						.dst_size = sizeof_field(nvram_data_t, kria_state.note_div_sync),
+						.dst_offset = offsetof(nvram_data_t, kria_state.note_div_sync),
+					}),
+				},
+				{
+					.name = "div_sync",
+					.read = json_read_scalar,
+					.write = json_write_number,
+					.params = &((json_read_scalar_params_t) {
+						.dst_size = sizeof_field(nvram_data_t, kria_state.div_sync),
+						.dst_offset = offsetof(nvram_data_t, kria_state.div_sync),
 					}),
 				},
 				{
