@@ -90,6 +90,8 @@ typedef struct {
 	uint8_t preset;
 	bool note_sync;
 	uint8_t loop_sync;
+	bool note_div_sync;
+	uint8_t div_sync;
 	uint8_t cue_div;
 	uint8_t cue_steps;
 	uint8_t meta;
