@@ -1394,19 +1394,49 @@ static void kria_set_alt_blink_timer(kria_modes_t mode) {
 static void kria_set_tmul(uint8_t track, kria_modes_t mode, uint8_t new_tmul) {
 	switch (div_sync) {
 	case 1:
-		for (uint8_t i = 0; i < KRIA_NUM_PARAMS; i++) {
-			k.p[k.pattern].t[track].tmul[i] = new_tmul;
+		if (note_div_sync) {
+			if (mode == mTr || mode == mRpt) {
+				k.p[k.pattern].t[track].tmul[mTr] = new_tmul;
+				k.p[k.pattern].t[track].tmul[mNote] = new_tmul;
+			} else {
+				k.p[k.pattern].t[track].tmul[mRpt] = new_tmul;
+				k.p[k.pattern].t[track].tmul[mAltNote] = new_tmul;
+				k.p[k.pattern].t[track].tmul[mOct] = new_tmul;
+				k.p[k.pattern].t[track].tmul[mGlide] = new_tmul;
+				k.p[k.pattern].t[track].tmul[mDur] = new_tmul;
+			}
+		} else {
+			k.p[k.pattern].t[track].tmul[mTr] = new_tmul;
+			k.p[k.pattern].t[track].tmul[mNote] = new_tmul;
+			k.p[k.pattern].t[track].tmul[mRpt] = new_tmul;
+			k.p[k.pattern].t[track].tmul[mAltNote] = new_tmul;
+			k.p[k.pattern].t[track].tmul[mOct] = new_tmul;
+			k.p[k.pattern].t[track].tmul[mGlide] = new_tmul;
+			k.p[k.pattern].t[track].tmul[mDur] = new_tmul;
 		}
 		break;
 	case 2:
 		for (uint8_t i = 0; i < 4; i++) {
-			k.p[k.pattern].t[i].tmul[mTr] = new_tmul;
-			k.p[k.pattern].t[i].tmul[mRpt] = new_tmul;
-			k.p[k.pattern].t[i].tmul[mNote] = new_tmul;
-			k.p[k.pattern].t[i].tmul[mAltNote] = new_tmul;
-			k.p[k.pattern].t[i].tmul[mOct] = new_tmul;
-			k.p[k.pattern].t[i].tmul[mGlide] = new_tmul;
-			k.p[k.pattern].t[i].tmul[mDur] = new_tmul;
+			if (note_div_sync) {
+				if (mode == mTr || mode == mRpt) {
+					k.p[k.pattern].t[i].tmul[mTr] = new_tmul;
+					k.p[k.pattern].t[i].tmul[mNote] = new_tmul;
+				} else {
+					k.p[k.pattern].t[i].tmul[mRpt] = new_tmul;
+					k.p[k.pattern].t[i].tmul[mAltNote] = new_tmul;
+					k.p[k.pattern].t[i].tmul[mOct] = new_tmul;
+					k.p[k.pattern].t[i].tmul[mGlide] = new_tmul;
+					k.p[k.pattern].t[i].tmul[mDur] = new_tmul;
+				}
+			} else {
+				k.p[k.pattern].t[i].tmul[mTr] = new_tmul;
+				k.p[k.pattern].t[i].tmul[mNote] = new_tmul;
+				k.p[k.pattern].t[i].tmul[mRpt] = new_tmul;
+				k.p[k.pattern].t[i].tmul[mAltNote] = new_tmul;
+				k.p[k.pattern].t[i].tmul[mOct] = new_tmul;
+				k.p[k.pattern].t[i].tmul[mGlide] = new_tmul;
+				k.p[k.pattern].t[i].tmul[mDur] = new_tmul;
+			}
 		}
 		break;
 	default:
