@@ -1753,11 +1753,17 @@ void handler_KriaGridKey(s32 data) {
 
 						if(loop_count == 0) {
 							if(loop_last == -1) {
-								update_loop_start(loop_edit, loop_first, mTr);
 								if(loop_first == k.p[k.pattern].t[loop_edit].lstart[mTr]) {
+									update_loop_start(loop_edit, loop_first, mTr);
 									update_loop_end(loop_edit, loop_first, mTr);
 									if (note_sync) {
+										update_loop_start(loop_edit, loop_first, mNote);
 										update_loop_end(loop_edit, loop_first, mNote);
+									}
+								} else {
+									update_loop_start(loop_edit, loop_first, mTr);
+									if (note_sync) {
+										update_loop_start(loop_edit, loop_first, mTr);
 									}
 								}
 							}
@@ -1821,14 +1827,17 @@ void handler_KriaGridKey(s32 data) {
 
 						if(loop_count == 0) {
 							if(loop_last == -1) {
-								update_loop_start(track, loop_first, mNote);
-								if (note_sync) {
-									update_loop_start(track, loop_first, mTr);
-								}
 								if(loop_first == k.p[k.pattern].t[track].lstart[mNote]) {
+									update_loop_start(track, loop_first, mNote);
 									update_loop_end(track, loop_first, mNote);
 									if (note_sync) {
+										update_loop_start(track, loop_first, mTr);
 										update_loop_end(track, loop_first, mTr);
+									}
+								} else {
+									update_loop_start(track, loop_first, mNote);
+									if (note_sync) {
+										update_loop_start(track, loop_first, mTr);
 									}
 								}
 							}
