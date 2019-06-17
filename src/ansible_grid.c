@@ -3323,7 +3323,7 @@ void mp_note_on(uint8_t n) {
 		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
-			dac_set_value(0, ET[cur_scale[7-n]] << 2);
+			dac_set_value(0, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
 			set_tr(TR1);
 		}
 		break;
@@ -3332,7 +3332,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(2);
 			note_now[w] = n;
-			dac_set_value(w, ET[cur_scale[7-n]] << 2);
+			dac_set_value(w, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3341,7 +3341,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(4);
 			note_now[w] = n;
-			dac_set_value(w, ET[cur_scale[7-n]] << 2);
+			dac_set_value(w, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
 			set_tr(TR1 + w);
 		}
 		break;
