@@ -2167,12 +2167,8 @@ void handler_KriaGridKey(s32 data) {
 						}
 					}
 					else if(x < 8) {
-						if(y > 4) {
+						if(y > 4)
 							k.p[k.pattern].scale = (y - 5) * 8 + x;
-							for (uint8_t i = 0; i < 8; i++) {
-								scale_adj[i] = 0;
-							}
-						}
 					}
 					else {
 						uint8_t i;
@@ -2705,7 +2701,7 @@ void refresh_kria_oct(void) {
 			if(i == pos[track][mOct]) {
 				monomeLedBuffer[R6 - octsum*16 + i] += 4;
 			}
-		}
+		}
 		break;
 	}
 }
