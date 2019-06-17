@@ -58,6 +58,7 @@ uint8_t meta;
 uint8_t scale_data[16][8];
 
 u8 cur_scale[8];
+int8_t scale_adj[8];
 void calc_scale(uint8_t s);
 
 void (*grid_refresh)(void);
@@ -813,7 +814,7 @@ void clock_kria_note(kria_track* track, uint8_t trackNum) {
 static void kria_set_note(uint8_t trackNum) {
 	u8 noteInScale = (note[trackNum] + alt_note[trackNum]) % 7; // combine both note params
 	u8 octaveBump = (note[trackNum] + alt_note[trackNum]) / 7; // if it wrapped around the octave, bump it
-	dac_set_value(trackNum, ET[cur_scale[noteInScale] + ((oct[trackNum]+octaveBump) * 12)] << 2);
+	dac_set_value(trackNum, ET[(int)cur_scale[noteInScale] + scale_adj[noteInScale] + (int)((oct[trackNum]+octaveBump) * 12)] << 2);
 }
 
 void clock_kria_track( uint8_t trackNum ) {
@@ -2166,11 +2167,25 @@ void handler_KriaGridKey(s32 data) {
 						}
 					}
 					else if(x < 8) {
-						if(y > 4)
+						if(y > 4) {
 							k.p[k.pattern].scale = (y - 5) * 8 + x;
+							for (uint8_t i = 0; i < 8; i++) {
+								scale_adj[i] = 0;
+							}
+						}
 					}
 					else {
-						scale_data[k.p[k.pattern].scale][6-y] = x-8;
+						uint8_t i;
+						for (i = 0; i < key_count; i++) {
+							if (held_keys[i] == 16*y + scale_data[k.p[k.pattern].scale][6 - y] + 8) {
+								scale_adj[6 - y] = x - 8 - scale_data[k.p[k.pattern].scale][6 - y];
+								break;
+							}
+						}
+						if (i == key_count) {
+							scale_data[k.p[k.pattern].scale][6-y] = x-8;
+							scale_adj[6 - y] = 0;
+						}
 					}
 
 					calc_scale(k.p[k.pattern].scale);
@@ -2858,13 +2873,16 @@ void refresh_kria_scale(void) {
 	monomeLedBuffer[R5 + (k.p[k.pattern].scale >> 3) * 16 + (k.p[k.pattern].scale & 0x7)] = L1;
 
 	// the intervals of the selected scale
-	for(uint8_t i=0;i<7;i++)
-		monomeLedBuffer[scale_data[k.p[k.pattern].scale][i] + 8 + (6-i)*16] = L1;
+	for(uint8_t i=0;i<7;i++) {
+		uint8_t scale_pos = scale_data[k.p[k.pattern].scale][i] + 8 + (6-i)*16;
+		monomeLedBuffer[(int)scale_pos + scale_adj[i]] = L0;
+		monomeLedBuffer[scale_pos] = L1;
+	}
 
 	// if an active step of a track is playing a note, it brightness is incremented by one
 	for(uint8_t i=0;i<4;i++) {
 		if(k.p[k.pattern].t[i].tr[pos[i][mTr]])
-			monomeLedBuffer[scale_data[k.p[k.pattern].scale][note[i]] + 8 + (6-note[i])*16]++;
+			monomeLedBuffer[scale_data[k.p[k.pattern].scale][note[i]] + 8 + scale_adj[note[i]] + (6-note[i])*16]++;
 	}
 }
 
@@ -3305,7 +3323,7 @@ void mp_note_on(uint8_t n) {
 		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
-			dac_set_value(0, ET[cur_scale[7-n]] << 2);
+			dac_set_value(0, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
 			set_tr(TR1);
 		}
 		break;
@@ -3314,7 +3332,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(2);
 			note_now[w] = n;
-			dac_set_value(w, ET[cur_scale[7-n]] << 2);
+			dac_set_value(w, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3323,7 +3341,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(4);
 			note_now[w] = n;
-			dac_set_value(w, ET[cur_scale[7-n]] << 2);
+			dac_set_value(w, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
 			set_tr(TR1 + w);
 		}
 		break;
