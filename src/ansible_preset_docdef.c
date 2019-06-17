@@ -165,7 +165,7 @@ json_docdef_t ansible_app_docdefs[] = {
 		.write = json_write_object,
 		.state = &ansible_app_object_state[0],
 		.params = &((json_read_object_params_t) {
-			.docdef_ct = 8,
+			.docdef_ct = 11,
 			.docdefs = ((json_docdef_t[]) {
 				{
 					.name = "clock_period",
@@ -304,7 +304,7 @@ json_docdef_t ansible_app_docdefs[] = {
 																	.write = json_write_object,
 																	.state = &ansible_app_object_state[3],
 																	.params = &((json_read_object_params_t) {
-																		.docdef_ct = 20,
+																		.docdef_ct = 19,
 																		.docdefs = ((json_docdef_t[]) {
 																			{
 																				.name = "tr",
