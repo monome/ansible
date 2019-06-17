@@ -1396,7 +1396,7 @@ static void kria_set_tmul(uint8_t track, kria_modes_t mode, uint8_t new_tmul) {
 	switch (div_sync) {
 	case 1:
 		if (note_div_sync) {
-			if (mode == mTr || mode == mRpt) {
+			if (mode == mTr || mode == mNote) {
 				k.p[k.pattern].t[track].tmul[mTr] = new_tmul;
 				k.p[k.pattern].t[track].tmul[mNote] = new_tmul;
 			} else {
@@ -1419,7 +1419,7 @@ static void kria_set_tmul(uint8_t track, kria_modes_t mode, uint8_t new_tmul) {
 	case 2:
 		for (uint8_t i = 0; i < 4; i++) {
 			if (note_div_sync) {
-				if (mode == mTr || mode == mRpt) {
+				if (mode == mTr || mode == mNote) {
 					k.p[k.pattern].t[i].tmul[mTr] = new_tmul;
 					k.p[k.pattern].t[i].tmul[mNote] = new_tmul;
 				} else {
@@ -1580,32 +1580,6 @@ void handler_KriaGridKey(s32 data) {
 						time_rough = (clock_period - 20) / 16;
 						time_fine = (clock_period - 20) % 16;
 					}
-					if (x <= 3) {
-						note_div_sync ^= 1;
-						flashc_memset8((void*)&(f.kria_state.note_div_sync), note_div_sync, sizeof(note_div_sync), true);
-					}
-					if (x >= 7 && x <= 8 && y >= 6) {
-						kria_sync_mode ^= 1;
-						flashc_memset8((void*)&(f.kria_state.sync_mode), kria_sync_mode, sizeof(kria_sync_mode), true);
-					}
-					if (x >= 12) {
-						if (y == 5) {
-							if (div_sync == 1) {
-								div_sync = 0;
-							} else {
-								div_sync = 1;
-							}
-							flashc_memset8((void*)&(f.kria_state.div_sync), div_sync, sizeof(div_sync), true);
-						}
-						if (y == 7) {
-							if (div_sync == 2) {
-								div_sync = 0;
-							} else {
-								div_sync = 2;
-							}
-							flashc_memset8((void*)&(f.kria_state.div_sync), div_sync, sizeof(div_sync), true);
-						}
-					}
 				}
 
 				clock_period = 20 + (time_rough * 16) + time_fine;
@@ -1614,9 +1588,37 @@ void handler_KriaGridKey(s32 data) {
 
 				// print_dbg("\r\nperiod: ");
 				// print_dbg_ulong(clock_period);
-
-				monomeFrameDirty++;
 			}
+
+
+			if (x <= 3) {
+				note_div_sync ^= 1;
+				flashc_memset8((void*)&(f.kria_state.note_div_sync), note_div_sync, sizeof(note_div_sync), true);
+			}
+			if (x >= 7 && x <= 8 && y >= 6) {
+				kria_sync_mode ^= 1;
+				flashc_memset8((void*)&(f.kria_state.sync_mode), kria_sync_mode, sizeof(kria_sync_mode), true);
+			}
+			if (x >= 12) {
+				if (y == 5) {
+					if (div_sync == 1) {
+						div_sync = 0;
+					} else {
+						div_sync = 1;
+					}
+					flashc_memset8((void*)&(f.kria_state.div_sync), div_sync, sizeof(div_sync), true);
+				}
+				if (y == 7) {
+					if (div_sync == 2) {
+						div_sync = 0;
+					} else {
+						div_sync = 2;
+					}
+					flashc_memset8((void*)&(f.kria_state.div_sync), div_sync, sizeof(div_sync), true);
+				}
+			}
+
+			monomeFrameDirty++;
 		}
 
 
