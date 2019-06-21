@@ -60,15 +60,20 @@ typedef const struct {
 	midi_arp_state_t midi_arp_state;
 	tt_state_t tt_state;
 	uint8_t scale[16][8];
+	uint8_t tuning_table[4][120];
 } nvram_data_t;
 
 extern nvram_data_t f;
 extern ansible_mode_t ansible_mode;
 
 extern softTimer_t auxTimer[4];
+extern uint16_t tuning_table[4][120];
 
 
 void (*clock)(u8 phase);
+void init_tuning(void);
+void default_tuning(void);
+void fit_tuning(void);
 
 extern void handler_None(s32 data);
 extern void clock_null(u8 phase);

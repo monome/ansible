@@ -1997,36 +1997,16 @@ static void generate_scales(uint8_t n) {
 }
 
 static void levels_dac_refresh(void) {
-	if(l.mode[0]) {
-		if(l.scale[0])
-			dac_set_value(0, ET[ levels_scales[0][ l.note[0][play] ] + l.octave[0]*12] << 2);
-		else
-			dac_set_value(0, ET[ l.note[0][play] + l.octave[0]*12] << 2);
+	for (uint8_t i = 0; i < 4; i++) {
+		if (l.mode[i]) {
+			if (l.scale[i]) {
+				dac_set_value(i, tuning_table[i][ levels_scales[i][ l.note[i][play] ] + l.octave[i]*12 ] << 2);
+			} else {
+				dac_set_value(i, tuning_table[i][ l.note[i][play] + l.octave[i]*12 ] << 2);
+			}
+			break;
+		} else {
+			dac_set_value(i, (l.pattern[i][play] + l.offset[i]) << (2 + l.range[i]));
+		}
 	}
-	else
-		dac_set_value(0, (l.pattern[0][play] + l.offset[0]) << (2 + l.range[0]));
-	if(l.mode[1]) {
-		if(l.scale[1])
-			dac_set_value(1, ET[ levels_scales[1][ l.note[1][play] ] + l.octave[1]*12] << 2);
-		else
-			dac_set_value(1, ET[ l.note[1][play] + l.octave[1]*12] << 2);
-	}
-	else
-		dac_set_value(1, (l.pattern[1][play] + l.offset[1]) << (2 + l.range[1]));
-	if(l.mode[2]) {
-		if(l.scale[2])
-			dac_set_value(2, ET[ levels_scales[2][ l.note[2][play] ] + l.octave[2]*12] << 2);
-		else
-			dac_set_value(2, ET[ l.note[2][play] + l.octave[2]*12] << 2);
-	}
-	else
-		dac_set_value(2, (l.pattern[2][play] + l.offset[2]) << (2 + l.range[2]));
-	if(l.mode[3]) {
-		if(l.scale[3])
-			dac_set_value(3, ET[ levels_scales[3][ l.note[3][play] ] + l.octave[3]*12] << 2);
-		else
-			dac_set_value(3, ET[ l.note[3][play] + l.octave[3]*12] << 2);
-	}
-	else
-		dac_set_value(3, (l.pattern[3][play] + l.offset[3]) << (2 + l.range[3]));
 }
