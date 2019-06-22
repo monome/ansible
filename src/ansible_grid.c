@@ -1765,7 +1765,7 @@ void handler_KriaGridKey(s32 data) {
 								} else {
 									update_loop_start(loop_edit, loop_first, mTr);
 									if (note_sync) {
-										update_loop_start(loop_edit, loop_first, mTr);
+										update_loop_start(loop_edit, loop_first, mNote);
 									}
 								}
 							}
