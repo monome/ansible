@@ -1627,9 +1627,15 @@ void handler_KriaGridKey(s32 data) {
 	}
 	else if(view_config) {
 		if(z) {
-			if(x<8 && y<7) {
+			if(x<8 && y > 0 && y<7) {
 				note_sync ^= 1;
 				flashc_memset8((void*)&(f.kria_state.note_sync), note_sync, 1, true);
+			}
+			else if(y == 0 && x < 3) {
+				grid_varibrightness = x == 0 ? 1 :
+						      x == 1 ? 4 :
+						      16;
+				flashc_memset8((void*)&(f.state.grid_varibrightness), grid_varibrightness, 1, true);
 			}
 			else if(y == 3) {
 				if(loop_sync == 1) {
@@ -2943,6 +2949,11 @@ void refresh_kria_pattern(void) {
 void refresh_kria_config(void) {
 	// clear grid
 	memset(monomeLedBuffer,0,128);
+
+	memset(monomeLedBuffer,4, 3);
+	monomeLedBuffer[R0 + (grid_varibrightness == 1 ? 0 :
+			      grid_varibrightness == 4 ? 1 :
+			      2)] = 12;
 
 	uint8_t i = note_sync * 4 + 3;
 
