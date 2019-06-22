@@ -2653,10 +2653,11 @@ void refresh_kria_note(bool isAlt) {
 		monomeLedBuffer[pos[track][noteMode] + (6-(*notesArray)[pos[track][noteMode]])*16] += 4;
 
 		if(k.p[k.pattern].t[track].lswap[noteMode]) {
-			for(uint8_t i=0;i<k.p[k.pattern].t[track].llen[noteMode];i++)
-				monomeLedBuffer[((i+k.p[k.pattern].t[track].lstart[noteMode])%16)+
-					(6-(*notesArray)[i])*16] += 3 + (k_mod_mode == modLoop)*2;
-				// monomeLedBuffer[i*16 + (i2+k.p[k.pattern].t[i].lstart[mTr])%16] += 2 + (k_mod_mode == modLoop);
+			for(uint8_t i=0;i<k.p[k.pattern].t[track].llen[noteMode];i++) {
+				uint8_t x = (k.p[k.pattern].t[track].lstart[noteMode] + i) % 16;
+				uint8_t y = 6 - (*notesArray)[x];
+				monomeLedBuffer[16*y + x] += 3 + (k_mod_mode == modLoop)*2;
+			}
 		}
 		else {
 			for(uint8_t i=k.p[k.pattern].t[track].lstart[noteMode];i<=k.p[k.pattern].t[track].lend[noteMode];i++)
