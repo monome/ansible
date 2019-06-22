@@ -398,6 +398,7 @@ u8 loop_count;
 u8 loop_first;
 s8 loop_last;
 u8 loop_edit;
+u8 vrange_last;
 
 bool note_sync;
 uint8_t loop_sync;
@@ -589,13 +590,8 @@ void grid_keytimer_kria(uint8_t held_key) {
 		break;
 	case mRpt:
 		if(held_key < 16) {
-			uint8_t rpt = 0;
-			uint8_t rptBits = k.p[k.pattern].t[track].rptBits[held_key];
-			while (rptBits) {
-				rptBits >>= 1;
-				rpt++;
-			}
-			k.p[k.pattern].t[track].rpt[held_key] = rpt;
+			k.p[k.pattern].t[track].rpt[held_key] -= 1;
+			k.p[k.pattern].t[track].rptBits[held_key] = ~(0xff << k.p[k.pattern].t[track].rpt[held_key]);
 		}
 		else if(held_key >= R6 && held_key < R7) {
 			k.p[k.pattern].t[track].rpt[held_key - R6] = 1;
@@ -1996,9 +1992,7 @@ void handler_KriaGridKey(s32 data) {
 							uint8_t rpt = 1;
 							k.p[k.pattern].t[track].rptBits[x] = rptBits;
 							while (rptBits >>= 1) rpt++;
-							if (rpt > k.p[k.pattern].t[track].rpt[x]) {
-								k.p[k.pattern].t[track].rpt[x] = rpt;
-							}
+							k.p[k.pattern].t[track].rpt[x] = rpt;
 
 							monomeFrameDirty++;
 						}
@@ -2017,11 +2011,18 @@ void handler_KriaGridKey(s32 data) {
 						if(loop_count == 0) {
 							loop_first = x;
 							loop_last = -1;
+							vrange_last = -1;
 						}
 						else {
 							loop_last = x;
-							update_loop_start(track, loop_first, mRpt);
-							update_loop_end(track, loop_last, mRpt);
+							if(loop_last == loop_first) {
+								vrange_last = y;
+								k.p[k.pattern].t[track].rpt[x] = 6 - y;
+							}
+							else {
+								update_loop_start(track, loop_first, mRpt);
+								update_loop_end(track, loop_last, mRpt);
+							}
 						}
 
 						loop_count++;
@@ -2032,11 +2033,17 @@ void handler_KriaGridKey(s32 data) {
 						if(loop_count == 0) {
 							if(loop_last == -1) {
 								if(loop_first == k.p[k.pattern].t[track].lstart[mRpt]) {
-									update_loop_start(track, loop_first, mRpt);
-									update_loop_end(track, loop_first, mRpt);
+									if(vrange_last == -1 && x == loop_first) {
+										k.p[k.pattern].t[track].rpt[x] = 6 - y;
+									}
+									else {
+										update_loop_start(track, loop_first, mRpt);
+										update_loop_end(track, loop_first, mRpt);
+									}
 								}
-								else
+								else {
 									update_loop_start(track, loop_first, mRpt);
+								}
 							}
 							monomeFrameDirty++;
 						}
@@ -2811,8 +2818,8 @@ void refresh_kria_rpt(void) {
 				uint8_t y = max(1, activeRpt[track] - repeats[track]);
 				monomeLedBuffer[R6 - y*16 + i] += (rptBits & (1 << y)) ? 4 : 2;
 			}
-			monomeLedBuffer[i] = 1;
-			monomeLedBuffer[R6+i] = 1;
+			monomeLedBuffer[i] = 2;
+			monomeLedBuffer[R6+i] = 2;
 		}
 		break;
 	}
