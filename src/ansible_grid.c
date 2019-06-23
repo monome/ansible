@@ -275,17 +275,16 @@ void refresh_grid_tuning(void) {
 	memset(monomeLedBuffer,0,128);
 
 	for (uint8_t i = 0; i < 4; i++) {
-		if (tuning_track == i) {
-			memset(monomeLedBuffer + i*16 + 2, L1, 12);
-		} else {
-			memset(monomeLedBuffer + i*16 + 2, L0, 12);
+		monomeLedBuffer[i*16] = tuning_note_on[i] ? L1 : L0;
+
+		memset(monomeLedBuffer + i*16 + 2, L0, 12);
+		monomeLedBuffer[(int)i*16 + 2 + tuning_octave_offset[i]] += 4;
+		if (i == tuning_track) {
+			monomeLedBuffer[i*16 + 2 + tuning_octave_offset[tuning_track]] += 4;
 		}
-		if (tuning_note_on[i]) {
-			monomeLedBuffer[(int)i*16 + tuning_octave_offset[i] + 2] += 4;
-	        }
 	}
 
-	memset(monomeLedBuffer + R5, L0, 5);
+	memset(monomeLedBuffer + R5, L0, 10);
 	monomeLedBuffer[R5 + tuning_octave] = L1;
 	monomeLedBuffer[R5 + 12] = L1; // reload / longpress to restore factory default
 	monomeLedBuffer[R5 + 14] = L1; // save interpolated key
@@ -297,6 +296,7 @@ void refresh_grid_tuning(void) {
 		fix16_from_int(tuning_table[tuning_track][tuning_slot]),
 		fix16_from_int(DAC_10V));
 	int dac_step = fix16_to_int(fix16_mul(dac_range_percent, fix16_from_int(256)));
+	memset(monomeLedBuffer + R6, 3, dac_step / 16);
 	monomeLedBuffer[R6 + dac_step / 16] = dac_step % 16;
 
 	// tuning steps either direction
@@ -390,9 +390,11 @@ void grid_keytimer(void) {
 			if (view_tuning) {
 				if (y == 5) {
 					if (x == 12) {
-						// reload factory default
+						// reload factory default, don't immediately save it
 						for (uint8_t i = 0; i < 4; i++) {
-							memcpy((void *)&tuning_table[i], ET, sizeof(ET));
+							for (uint8_t j = 0; j < 120; j ++) {
+								tuning_table[i][j] = ET[j] << 2;
+							}
 						}
 						restore_grid_tuning();
 					}
@@ -1767,13 +1769,30 @@ void handler_KriaGridKey(s32 data) {
 	else if(view_tuning) {
 		if(z) {
 			if (y <= 4) {
-				if (x >= 2 && x <= 13) {
-					if (tuning_track == y && tuning_note_on[y] && x == (tuning_octave_offset[y] + 2)) {
+				if (x == 0) {
+			  		if (tuning_note_on[y]) {
 						tuning_note_on[y] = false;
 						clr_tr(TR1 + y);
-					} else {
-						tuning_track = y;
+					}
+					else {
 						tuning_note_on[y] = true;
+						set_tr(TR1 + y);
+					}
+				}
+				else if (x >= 2 && x <= 13) {
+					if (y == tuning_track
+					    && (x - 2 == tuning_octave_offset[y])) {
+			  			if (tuning_note_on[y]) {
+							tuning_note_on[y] = false;
+							clr_tr(TR1 + y);
+						}
+						else {
+							tuning_note_on[y] = true;
+							set_tr(TR1 + y);
+						}
+					}
+					else {
+						tuning_track = y;
 						tuning_octave_offset[y] = (int)x - 2;
 						dac_set_value_noslew(
 							y,
@@ -1781,11 +1800,10 @@ void handler_KriaGridKey(s32 data) {
 							        (int)(tuning_octave * 12) +
 								tuning_octave_offset[y]
 							]);
-						set_tr(TR1 + y);
 					}
 				}
 			}
-			else if (y == 5 && x <= 4) {
+			else if (y == 5 && x <= 9) {
 				tuning_octave = x;
 				for (uint8_t i = 0; i < 4; i++) {
 					dac_set_value_noslew(
