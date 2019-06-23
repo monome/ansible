@@ -78,6 +78,7 @@ CSRCS = \
        ../libavr32/src/euclidean/data.c \
        ../libavr32/src/euclidean/euclidean.c \
        ../libavr32/src/events.c     \
+       ../libavr32/src/libfixmath/fix16.c     \
        ../libavr32/src/i2c.c     \
        ../libavr32/src/init_ansible.c \
        ../libavr32/src/init_common.c \

@@ -9,6 +9,7 @@
 #include "dac.h"
 #include "util.h" // rnd
 #include "music.h"
+#include "libfixmath/fix16.h"
 #include "init_common.h"
 #include "ii.h"
 
@@ -291,9 +292,11 @@ void refresh_grid_tuning(void) {
 	monomeLedBuffer[R5 + 15] = L1; // save as-is key
 
 	// lit key indicating position
-	int tuning_slot = (int)(tuning_octave * 12) + tuning_octave_offset[tuning_track];
-	float dac_range_percent = (float)tuning_table[tuning_track][tuning_slot] / (float)(DAC_10V);
-	int dac_step = (int)(256.0 * dac_range_percent);
+	uint8_t tuning_slot = (int)(tuning_octave * 12) + tuning_octave_offset[tuning_track];
+	fix16_t dac_range_percent = fix16_div(
+		fix16_from_int(tuning_table[tuning_track][tuning_slot]),
+		fix16_from_int(DAC_10V));
+	int dac_step = fix16_to_int(fix16_mul(dac_range_percent, fix16_from_int(256)));
 	monomeLedBuffer[R6 + dac_step / 16] = dac_step % 16;
 
 	// tuning steps either direction
