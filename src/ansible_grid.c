@@ -292,10 +292,7 @@ void refresh_grid_tuning(void) {
 
 	// lit key indicating position
 	uint8_t tuning_slot = (int)(tuning_octave * 12) + tuning_octave_offset[tuning_track];
-	fix16_t dac_range_percent = fix16_div(
-		fix16_from_int(tuning_table[tuning_track][tuning_slot]),
-		fix16_from_int(DAC_10V));
-	int dac_step = fix16_to_int(fix16_mul(dac_range_percent, fix16_from_int(256)));
+	uint8_t dac_step = tuning_table[tuning_track][tuning_slot] >> 6;
 	memset(monomeLedBuffer + R6, 3, dac_step / 16);
 	monomeLedBuffer[R6 + dac_step / 16] = dac_step % 16;
 
