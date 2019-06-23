@@ -2000,9 +2000,9 @@ static void levels_dac_refresh(void) {
 	for (uint8_t i = 0; i < 4; i++) {
 		if (l.mode[i]) {
 			if (l.scale[i]) {
-				dac_set_value(i, tuning_table[i][ levels_scales[i][ l.note[i][play] ] + l.octave[i]*12 ] << 2);
+				dac_set_value(i, tuning_table[i][ levels_scales[i][ l.note[i][play] ] + l.octave[i]*12 ]);
 			} else {
-				dac_set_value(i, tuning_table[i][ l.note[i][play] + l.octave[i]*12 ] << 2);
+				dac_set_value(i, tuning_table[i][ l.note[i][play] + l.octave[i]*12 ]);
 			}
 			break;
 		} else {
