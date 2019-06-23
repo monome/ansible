@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from schemata.ansible.ansible_preset_schema import AnsiblePresetSchema
 
 
@@ -298,6 +300,9 @@ typedef const struct {
                                                     'note',
                                                     'dur',
                                                     'rpt',
+                                                ]),
+                                                self.extract_rpt_bits(track),
+                                                self.array_1d_settings(track, [
                                                     'alt_note',
                                                     'glide',
                                                 ]),
@@ -341,6 +346,17 @@ typedef const struct {
                 ),
             ]),
         )
+
+    def extract_rpt_bits(self, track):
+        return OrderedDict([
+            self.pair(
+                track,
+                'rpt:rptBits',
+                lambda xs, f: self.encode_bytes(
+                    map(lambda rpt: ~(0xFF << rpt) & 0xFF, xs)
+                )
+            )
+        ])
 
     def extract_mp_state(self, state):
         return self.combine(

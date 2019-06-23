@@ -150,6 +150,7 @@ static void blink_write(void* o) {
 }
 
 void set_mode_usb_disk(void) {
+	clock = &clock_null;
 	update_leds(0);
 	app_event_handlers[kEventKey] = &handler_UsbDiskKey;
 	app_event_handlers[kEventFront] = &handler_UsbDiskFront;
