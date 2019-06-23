@@ -275,7 +275,7 @@ void refresh_grid_tuning(void) {
 
 	for (uint8_t i = 0; i < 4; i++) {
 		if (tuning_track == i) {
-			memset(monomeLedBuffer + i*16 + 2, L0 + 2, 12);
+			memset(monomeLedBuffer + i*16 + 2, L1, 12);
 		} else {
 			memset(monomeLedBuffer + i*16 + 2, L0, 12);
 		}
@@ -298,8 +298,12 @@ void refresh_grid_tuning(void) {
 
 	// tuning steps either direction
 	for (uint8_t i = 0; i < 8; i++) {
-		monomeLedBuffer[R7 + 8 + i] = 2*i + 1;
-		monomeLedBuffer[R7 + 7 - i] = 2*i + 1;
+		if ((DAC_10V >> 2) - tuning_table[tuning_track][tuning_slot] > (1 << i)) {
+			monomeLedBuffer[R7 + 8 + i] = 2*i + 1;
+		}
+		if (tuning_table[tuning_track][tuning_slot] > (1 << i)) {
+			monomeLedBuffer[R7 + 7 - i] = 2*i + 1;
+		}
 	}
 }
 
