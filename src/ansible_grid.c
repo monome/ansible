@@ -396,16 +396,12 @@ void grid_keytimer(void) {
 					if (x == 14) {
 						// interpolate octaves and save
 						fit_tuning();
-						for (uint8_t i = 0; i < 4; i++) {
-							flashc_memcpy((void *)&f.tuning_table[i], tuning_table[i], sizeof(tuning_table[0]), true);
-						}
+						flashc_memcpy((void*)f.tuning_table, tuning_table, sizeof(tuning_table), true);
 						restore_grid_tuning();
 					}
 					if (x == 15) {
 						// save all tuning entries as-is
-						for (uint8_t i = 0; i < 4; i++) {
-							flashc_memcpy((void *)&f.tuning_table[i], tuning_table[i], sizeof(tuning_table[0]), true);
-						}
+						flashc_memcpy((void *)f.tuning_table, tuning_table, sizeof(tuning_table), true);
 						restore_grid_tuning();
 					}
 				}

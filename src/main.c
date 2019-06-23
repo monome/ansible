@@ -456,15 +456,12 @@ void default_tuning(void) {
 		for (uint8_t j = 0; j < 120; j++) {
 			tuning_table[i][j] = ET[j] << 2;
 		}
-		flashc_memcpy((void *)&f.tuning_table[i], tuning_table[i], sizeof(tuning_table[0]), true);
 	}
+	flashc_memcpy((void *)f.tuning_table, tuning_table, sizeof(tuning_table), true);
 }
 
 void init_tuning(void) {
-	for (uint8_t i = 0; i < 4; i++) {
-		memcpy((void*)&tuning_table[i], &f.tuning_table[i], sizeof(tuning_table[0]));
-	}
-	/* memcpy((void *)&tuning_table, &f.tuning_table, sizeof(tuning_table)); */
+	memcpy((void *)&tuning_table, &f.tuning_table, sizeof(tuning_table));
 }
 
 void fit_tuning(void) {
