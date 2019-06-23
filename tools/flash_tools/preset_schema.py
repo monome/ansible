@@ -37,10 +37,11 @@ class PresetSchema(ABC):
     def shared(self, nvram):
         pass
 
+    def encode_bytes(self, b):
+        return binascii.hexlify(bytes(b)).decode().upper()
+
     def encode_buffer(self, cdata):
-        return binascii.hexlify(
-            bytes(self.ffi.buffer(cdata))
-        ).decode().upper()
+        return self.encode_bytes(self.ffi.buffer(cdata))
 
     def pair(self, state, name, lam=None):
         mu = lam or (lambda x: x)
@@ -50,8 +51,12 @@ class PresetSchema(ABC):
             field = dict(self.ffi.typeof(state).fields)[struct_name]
         except AttributeError:
             field = None
-        val = getattr(state, struct_name)
-        return (json_name, mu(val, field))
+        try:
+            val = getattr(state, struct_name)
+            return (json_name, mu(val, field))
+        except Exception:
+            print('failed at {}.{} -> "{}"'.format(state, struct_name, json_name))
+            raise
 
     def scalar_settings(self, state, names):
         return OrderedDict(
@@ -64,7 +69,7 @@ class PresetSchema(ABC):
         # so by the time they're loaded the sign has been lost
         f = {
             'uint16_t': htons,
-            'int16_t': lambda x: 0 if x == 0 else htons(x) - 2**16,
+            'int16_t': lambda x: 0 if x == 0 else htons(x & 0xFFFF) - 2**16,
             'uint32_t': htonl,
             'int32_t': lambda x: 0 if x == 0 else htonl(x) - 2**32,
         }.get(field.type.cname, lambda x: x)
