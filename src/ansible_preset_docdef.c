@@ -153,6 +153,25 @@ json_docdef_t ansible_shared_docdefs[] = {
 			})
 		})
 	},
+	{
+		.name = "tuning_table",
+		.read = json_read_array,
+		.write = json_write_array,
+		.state = &ansible_json_read_array_state,
+		.params = &((json_read_array_params_t) {
+			.array_len = sizeof_field(nvram_data_t, tuning_table) / sizeof_field(nvram_data_t, tuning_table[0]),
+			.item_size = sizeof_field(nvram_data_t, tuning_table[0]),
+			.item_docdef = &((json_docdef_t) {
+				.read = json_read_buffer,
+				.write = json_write_buffer,
+				.state = &ansible_json_read_buffer_state,
+				.params = &((json_read_buffer_params_t) {
+					.dst_size = sizeof_field(nvram_data_t, tuning_table[0]),
+					.dst_offset = offsetof(nvram_data_t, tuning_table),
+				}),
+			})
+		})
+	},
 };
 
 /////////

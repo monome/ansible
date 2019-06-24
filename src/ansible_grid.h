@@ -202,6 +202,7 @@ void set_mode_grid(void);
 void handler_GridFrontShort(s32 data);
 void handler_GridFrontLong(s32 data);
 void refresh_preset(void);
+void refresh_grid_tuning(void);
 void grid_keytimer(void);
 void ii_grid(uint8_t* data, uint8_t len);
 

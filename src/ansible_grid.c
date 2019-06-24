@@ -9,6 +9,7 @@
 #include "dac.h"
 #include "util.h" // rnd
 #include "music.h"
+#include "libfixmath/fix16.h"
 #include "init_common.h"
 #include "ii.h"
 
@@ -38,6 +39,7 @@ u8 key_times[128];
 bool clock_external;
 bool view_clock;
 bool view_config;
+bool view_tuning;
 uint32_t clock_period;
 uint8_t clock_count;
 uint8_t clock_mul;
@@ -49,6 +51,11 @@ u32 clock_deltas[4];
 
 uint8_t time_rough;
 uint8_t time_fine;
+
+uint8_t tuning_track;
+uint8_t tuning_octave;
+int16_t tuning_octave_offset[4];
+bool tuning_note_on[4];
 
 uint8_t cue_div;
 uint8_t cue_steps;
@@ -264,13 +271,67 @@ void refresh_preset(void) {
 	monome_set_quadrant_flag(1);
 }
 
+void refresh_grid_tuning(void) {
+	memset(monomeLedBuffer,0,128);
+
+	for (uint8_t i = 0; i < 4; i++) {
+		monomeLedBuffer[i*16] = tuning_note_on[i] ? L1 : L0;
+
+		memset(monomeLedBuffer + i*16 + 2, L0, 12);
+		monomeLedBuffer[(int)i*16 + 2 + tuning_octave_offset[i]] += 4;
+		if (i == tuning_track) {
+			monomeLedBuffer[i*16 + 2 + tuning_octave_offset[tuning_track]] += 4;
+		}
+	}
+
+	memset(monomeLedBuffer + R5, L0, 10);
+	monomeLedBuffer[R5 + tuning_octave] = L1;
+	monomeLedBuffer[R5 + 12] = L1; // reload / longpress to restore factory default
+	monomeLedBuffer[R5 + 14] = L1; // save interpolated key
+	monomeLedBuffer[R5 + 15] = L1; // save as-is key
+
+	// lit key indicating position
+	uint8_t tuning_slot = (int)(tuning_octave * 12) + tuning_octave_offset[tuning_track];
+	uint8_t dac_step = tuning_table[tuning_track][tuning_slot] >> 6;
+	memset(monomeLedBuffer + R6, 3, dac_step / 16);
+	monomeLedBuffer[R6 + dac_step / 16] = dac_step % 16;
+
+	// tuning steps either direction
+	for (uint8_t i = 0; i < 8; i++) {
+		if ((DAC_10V) - tuning_table[tuning_track][tuning_slot] > (1 << i)) {
+			monomeLedBuffer[R7 + 8 + i] = 2*i + 1;
+		}
+		if (tuning_table[tuning_track][tuning_slot] > (1 << i)) {
+			monomeLedBuffer[R7 + 7 - i] = 2*i + 1;
+		}
+	}
+}
+
+static void restore_grid_tuning(void) {
+	tuning_octave = 0;
+	tuning_track = 0;
+	for (uint8_t i = 0; i < 4; i++) {
+		tuning_note_on[i] = true;
+		tuning_octave_offset[i] = 0;
+		dac_set_value_noslew(
+			i,
+			tuning_table[i][
+		        	(int)(tuning_octave * 12) +
+				tuning_octave_offset[i]
+			]);
+		set_tr(TR1 + i);
+	}
+}
+
 void grid_keytimer(void) {
 	for(uint8_t i1=0;i1<key_count;i1++) {
 		if(key_times[held_keys[i1]])
 		if(--key_times[held_keys[i1]]==0) {
+			uint8_t x = held_keys[i1] % 16;
+			uint8_t y = held_keys[i1] / 16;
 			if(preset_mode == 1) {
-				if(held_keys[i1] % 16 == 0) {
-					preset = held_keys[i1] / 16;
+				if(x == 0) {
+					preset = y;
 
 					// WRITE PRESET
 
@@ -321,6 +382,31 @@ void grid_keytimer(void) {
 			}
 			else if(ansible_mode == mGridKria) {
 				grid_keytimer_kria(held_keys[i1]);
+			}
+
+			if (view_tuning) {
+				if (y == 5) {
+					if (x == 12) {
+						// reload factory default, don't immediately save it
+						for (uint8_t i = 0; i < 4; i++) {
+							for (uint8_t j = 0; j < 120; j ++) {
+								tuning_table[i][j] = ET[j] << 2;
+							}
+						}
+						restore_grid_tuning();
+					}
+					if (x == 14) {
+						// interpolate octaves and save
+						fit_tuning();
+						flashc_memcpy((void*)f.tuning_table, tuning_table, sizeof(tuning_table), true);
+						restore_grid_tuning();
+					}
+					if (x == 15) {
+						// save all tuning entries as-is
+						flashc_memcpy((void *)f.tuning_table, tuning_table, sizeof(tuning_table), true);
+						restore_grid_tuning();
+					}
+				}
 			}
 
 			// print_dbg("\rlong press: ");
@@ -783,8 +869,8 @@ void clock_kria(uint8_t phase) {
 	}
 }
 
-static inline int8_t sum_clip_octave(int8_t l, int8_t r) {
-	return min(5, max(0, l + r));
+static inline int sum_clip(int l, int r, int clip) {
+	return min(clip, max(0, l + r));
 }
 
 void clock_kria_note(kria_track* track, uint8_t trackNum) {
@@ -794,7 +880,7 @@ void clock_kria_note(kria_track* track, uint8_t trackNum) {
 		dur[trackNum] = (u16)(unscaled * clock_scale);
 	}
 	if(kria_next_step(trackNum, mOct)) {
-		oct[trackNum] = sum_clip_octave(track->octshift, track->oct[pos[trackNum][mOct]]);
+		oct[trackNum] = sum_clip(track->octshift, track->oct[pos[trackNum][mOct]], 5);
 	}
 	if(kria_next_step(trackNum, mNote)) {
 		note[trackNum] = track->note[pos[trackNum][mNote]];
@@ -810,7 +896,13 @@ void clock_kria_note(kria_track* track, uint8_t trackNum) {
 static void kria_set_note(uint8_t trackNum) {
 	u8 noteInScale = (note[trackNum] + alt_note[trackNum]) % 7; // combine both note params
 	u8 octaveBump = (note[trackNum] + alt_note[trackNum]) / 7; // if it wrapped around the octave, bump it
-	dac_set_value(trackNum, ET[(int)cur_scale[noteInScale] + scale_adj[noteInScale] + (int)((oct[trackNum]+octaveBump) * 12)] << 2);
+	dac_set_value(
+		trackNum,
+		tuning_table[trackNum][
+			(int)cur_scale[noteInScale] +
+			scale_adj[noteInScale] +
+			(int)((oct[trackNum]+octaveBump) * 12)
+		]);
 }
 
 void clock_kria_track( uint8_t trackNum ) {
@@ -1520,6 +1612,17 @@ void handler_KriaGridKey(s32 data) {
 					}
 				}
 			}
+			else if(view_tuning) {
+				if (y == 5) {
+					if (x == 12) {
+						init_tuning();
+						restore_grid_tuning();
+					} else if (x == 14) {
+						fit_tuning();
+						restore_grid_tuning();
+					}
+				}
+			}
 		}
 	}
 
@@ -1649,7 +1752,96 @@ void handler_KriaGridKey(s32 data) {
 
 				flashc_memset8((void*)&(f.kria_state.loop_sync), loop_sync, 1, true);
 			}
+			else if (y == 7 && x == 14) {
+				view_config = false;
+				view_clock = false;
+				view_tuning = true;
+
+				grid_refresh = &refresh_grid_tuning;
+				restore_grid_tuning();
+			}
 			monomeFrameDirty++;
+		}
+	}
+	else if(view_tuning) {
+		if(z) {
+			if (y <= 4) {
+				if (x == 0) {
+			  		if (tuning_note_on[y]) {
+						tuning_note_on[y] = false;
+						clr_tr(TR1 + y);
+					}
+					else {
+						tuning_note_on[y] = true;
+						set_tr(TR1 + y);
+					}
+				}
+				else if (x >= 2 && x <= 13) {
+					if (y == tuning_track
+					    && (x - 2 == tuning_octave_offset[y])) {
+			  			if (tuning_note_on[y]) {
+							tuning_note_on[y] = false;
+							clr_tr(TR1 + y);
+						}
+						else {
+							tuning_note_on[y] = true;
+							set_tr(TR1 + y);
+						}
+					}
+					else {
+						tuning_track = y;
+						tuning_octave_offset[y] = (int)x - 2;
+						dac_set_value_noslew(
+							y,
+							tuning_table[y][
+							        (int)(tuning_octave * 12) +
+								tuning_octave_offset[y]
+							]);
+					}
+				}
+			}
+			else if (y == 5 && x <= 9) {
+				tuning_octave = x;
+				for (uint8_t i = 0; i < 4; i++) {
+					dac_set_value_noslew(
+						i,
+						tuning_table[i][
+						        (int)(tuning_octave * 12) +
+							tuning_octave_offset[i]
+						]);
+				}
+			}
+			else if (y == 6) {
+				int tuning_slot = (int)(tuning_octave * 12) + tuning_octave_offset[tuning_track];
+				tuning_table[tuning_track][tuning_slot] = x * ((DAC_10V) / 16);
+				dac_set_value_noslew(
+					tuning_track,
+					tuning_table[tuning_track][
+					        (int)(tuning_octave * 12) +
+						tuning_octave_offset[tuning_track]
+					]);
+			}
+			else if (y == 7) {
+				int tuning_slot = (int)(tuning_octave * 12) + tuning_octave_offset[tuning_track];
+
+				if (x >= 8) {
+					tuning_table[tuning_track][tuning_slot] = sum_clip(
+						tuning_table[tuning_track][tuning_slot],
+						1 << (x - 8),
+					        DAC_10V);
+				} else {
+					tuning_table[tuning_track][tuning_slot] = sum_clip(
+						tuning_table[tuning_track][tuning_slot],
+						- (1 << (8 - x)),
+					        DAC_10V);
+				}
+				dac_set_value_noslew(
+					tuning_track,
+					tuning_table[tuning_track][
+					        (int)(tuning_octave * 12) +
+						tuning_octave_offset[tuning_track]
+					]);
+			}
 		}
 	}
 	// NORMAL
@@ -2452,10 +2644,17 @@ void handler_KriaKey(s32 data) {
 		view_config = false;
 		break;
 	case 2:
-		grid_refresh = &refresh_kria;
-		view_config = false;
+		if (!view_tuning) {
+			grid_refresh = &refresh_kria;
+			view_config = false;
+		}
 		break;
 	case 3:
+		if (view_tuning) {
+			view_tuning = false;
+			resume_kria();
+			break;
+		}
 		grid_refresh = &refresh_kria_config;
 		view_config = true;
 		view_clock = false;
@@ -2698,7 +2897,7 @@ void refresh_kria_oct(void) {
 
 		for(uint8_t i=0;i<16;i++) {
 			const uint8_t octshift = k.p[k.pattern].t[track].octshift;
-			const int8_t octsum = sum_clip_octave(k.p[k.pattern].t[track].oct[i], (int)octshift);
+			const int8_t octsum = sum_clip(k.p[k.pattern].t[track].oct[i], (int)octshift, 5);
 
 			for(uint8_t j=0;j<=5;j++) {
 				if (octsum >= octshift) {
@@ -2987,6 +3186,8 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R5 + 11] = i;
 	monomeLedBuffer[R5 + 12] = i;
 	monomeLedBuffer[R5 + 13] = i;
+
+	monomeLedBuffer[R7 + 14] = L0;
 }
 
 
@@ -3353,7 +3554,7 @@ void mp_note_on(uint8_t n) {
 		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
-			dac_set_value(0, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
+			dac_set_value(0, tuning_table[0][(int)cur_scale[7-n] + scale_adj[7-n]]);
 			set_tr(TR1);
 		}
 		break;
@@ -3362,7 +3563,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(2);
 			note_now[w] = n;
-			dac_set_value(w, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
+			dac_set_value(w, tuning_table[w][(int)cur_scale[7-n] + scale_adj[7-n]]);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3371,7 +3572,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(4);
 			note_now[w] = n;
-			dac_set_value(w, ET[(int)cur_scale[7-n] + scale_adj[7-n]] << 2);
+			dac_set_value(w, tuning_table[w][(int)cur_scale[7-n] + scale_adj[7-n]]);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -4191,7 +4392,7 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
         note_index = 0;
     else if (note_index > 119)
         note_index = 119;
-    dac_set_value_noslew(note, ET[note_index] << 2);
+    dac_set_value_noslew(note, tuning_table[note][note_index]);
     dac_update_now();
     set_tr(TR1 + note);
 
@@ -4212,7 +4413,7 @@ static void es_update_pitches(void) {
             note_index = 0;
         else if (note_index > 119)
             note_index = 119;
-        dac_set_value_noslew(i, ET[note_index] << 2);
+        dac_set_value_noslew(i, tuning_table[i][note_index]);
         dac_update_now();
     }
 }

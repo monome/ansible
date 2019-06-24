@@ -41,11 +41,13 @@ usb flash
 // libavr32
 #include "types.h"
 #include "events.h"
+#include "libfixmath/fix16.h"
 #include "i2c.h"
 #include "init_ansible.h"
 #include "init_common.h"
 #include "monome.h"
 #include "midi.h"
+#include "music.h"
 #include "notes.h"
 #include "timers.h"
 #include "util.h"
@@ -119,6 +121,8 @@ softTimer_t auxTimer[4] = {
 	{ .next = NULL, .prev = NULL },
 	{ .next = NULL, .prev = NULL }
 };
+
+uint16_t tuning_table[4][120];
 
 static uint8_t clock_phase;
 
@@ -445,6 +449,39 @@ void flash_read(void) {
 	// ...
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// tuning
+
+void default_tuning(void) {
+	for (uint8_t i = 0; i < 4; i++) {
+		for (uint8_t j = 0; j < 120; j++) {
+			tuning_table[i][j] = ET[j] << 2;
+		}
+	}
+	flashc_memcpy((void *)f.tuning_table, tuning_table, sizeof(tuning_table), true);
+}
+
+void init_tuning(void) {
+	memcpy((void *)&tuning_table, &f.tuning_table, sizeof(tuning_table));
+}
+
+void fit_tuning(void) {
+	for (uint8_t i = 0; i < 4; i++) {
+		fix16_t step = 0;
+		for (uint8_t j = 0; j < 10; j++) {
+			fix16_t acc = fix16_from_int(tuning_table[i][j*12]);
+			if (j < 9) {
+				step = fix16_div(
+					fix16_from_int(tuning_table[i][(j+1)*12] - tuning_table[i][j*12]),
+					fix16_from_int(12));
+			}
+			for (uint8_t k = j*12; k < (j+1)*12; k++) {
+				tuning_table[i][k] = fix16_to_int(acc);
+				acc = fix16_add(acc, step);
+			}
+		}
+	}
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // functions
@@ -489,6 +526,7 @@ void clock_set_tr(uint32_t n, uint8_t phase) {
 ///////
 // global ii handlers
 void load_flash_state(void) {
+	init_tuning();
 	init_levels();
 	init_cycles();
 	init_kria();
@@ -587,6 +625,7 @@ int main(void)
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		flashc_memset8((void*)&(f.state.grid_varibrightness), 16, 1, true);
+		default_tuning();
 		default_kria();
 		default_mp();
 		default_es();
