@@ -385,7 +385,7 @@ static bool usb_disk_restore_backup(FS_STRING fname) {
 
 static bool usb_disk_load_flash(FS_STRING fname) {
 	print_dbg("\r\n> starting usb disk load");
-	if (!nav_setcwd(fname, true, true)) {
+	if (!nav_setcwd(fname, true, false)) {
 		print_dbg("\r\n!! could not find JSON file");
 		return false;
 	}
