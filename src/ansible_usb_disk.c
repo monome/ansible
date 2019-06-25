@@ -77,12 +77,13 @@ static void handler_UsbDiskKey(int32_t data) {
 			success = false;
 			timer_add(&auxTimer[0], DISK_BLINK_INTERVAL, &blink_read, NULL);
 
-			usb_disk_enter();
-			if (usb_disk_backup_binary(ANSIBLE_BACKUP_FILE)) {
-				if (usb_disk_load_flash(ANSIBLE_PRESET_FILE)) {
-					success = true;
-				} else {
-					usb_disk_restore_backup(ANSIBLE_BACKUP_FILE);
+			if (usb_disk_enter()) {
+				if (usb_disk_backup_binary(ANSIBLE_BACKUP_FILE)) {
+					if (usb_disk_load_flash(ANSIBLE_PRESET_FILE)) {
+						success = true;
+					} else {
+						usb_disk_restore_backup(ANSIBLE_BACKUP_FILE);
+					}
 				}
 			}
 			usb_disk_exit();
@@ -94,6 +95,8 @@ static void handler_UsbDiskKey(int32_t data) {
 				flash_unfresh();
 				load_flash_state();
 			} else {
+				print_dbg("\r\n!! filesystem error code: ");
+				print_dbg_hex(fs_g_status - FAIL);
 				update_leds(3);
 			}
 		}
@@ -113,14 +116,17 @@ static void handler_UsbDiskKey(int32_t data) {
 			success = false;
 			timer_add(&auxTimer[0], DISK_BLINK_INTERVAL, &blink_write, NULL);
 
-			usb_disk_enter();
-			success = usb_disk_save_flash(ANSIBLE_PRESET_FILE);
+			if (usb_disk_enter()) {
+				success = usb_disk_save_flash(ANSIBLE_PRESET_FILE);
+			}
 			usb_disk_exit();
 
 			usb_disk_unlock();
 			timer_remove(&auxTimer[0]);
 			update_leds(0);
 			if (!success) {
+				print_dbg("\r\n!! filesystem error code: ");
+				print_dbg_hex(fs_g_status - FAIL);
 				update_leds(3);
 			}
 		}
@@ -156,12 +162,22 @@ void set_mode_usb_disk(void) {
 	app_event_handlers[kEventFront] = &handler_UsbDiskFront;
 }
 
-void usb_disk_enter() {
+bool usb_disk_enter() {
 	nav_reset();
-	nav_select(0);
-	if (!usb_disk_mount_drive()) {
-		usb_disk_exit();
+	for (uint8_t i = 0; i < FS_NB_NAVIGATOR; i++) {
+		if (nav_select(i)) {
+			if (usb_disk_mount_drive()) {
+				print_dbg("\r\nmounted nav id ");
+				print_dbg_hex(i);
+				return true;
+			}
+			print_dbg("\r\n!! could not mount nav id ");
+			print_dbg_hex(i);
+		}
 	}
+	print_dbg("\r\n!! no nav id worked");
+	usb_disk_exit();
+	return false;
 }
 
 void usb_disk_exit() {
@@ -315,8 +331,12 @@ static bool usb_disk_mount_drive(void) {
 				if (nav_partition_mount()) {
 					return true;
 				}
+				print_dbg("\r\n!! could not mount partition");
 			}
 		}
+		print_dbg("\r\n!! drive mount failed");
+	} else {
+		print_dbg("\r\n!! msc unavailable for mount");
 	}
 	return false;
 }
@@ -325,10 +345,12 @@ static bool usb_disk_backup_binary(FS_STRING fname) {
 	print_dbg("\r\n> making binary backup");
 	if (!nav_file_create(fname)) {
 		if (fs_g_status != FS_ERR_FILE_EXIST) {
+			print_dbg("\r\n!! could not create backup file");
 			return false;
 		}
 	}
 	if (!file_open(FOPEN_MODE_W)) {
+		print_dbg("\r\n!! could not open binary backup for write");
 		return false;
 	}
 	puts_buffered((char*)&f, sizeof(nvram_data_t));
@@ -342,9 +364,11 @@ static bool usb_disk_backup_binary(FS_STRING fname) {
 static bool usb_disk_restore_backup(FS_STRING fname) {
 	print_dbg("\r\n> restoring binary backup");
 	if (!nav_setcwd(fname, true, true)) {
+		print_dbg("\r\n!! could not find binary backup");
 		return false;
 	}
 	if (!file_open(FOPEN_MODE_R)) {
+		print_dbg("\r\n!! could not open binary backup for read");
 		return false;
 	}
 	size_t read = 0;
@@ -361,10 +385,12 @@ static bool usb_disk_restore_backup(FS_STRING fname) {
 
 static bool usb_disk_load_flash(FS_STRING fname) {
 	print_dbg("\r\n> starting usb disk load");
-	if (!nav_setcwd(fname, true, true)) {
+	if (!nav_setcwd(fname, true, false)) {
+		print_dbg("\r\n!! could not find JSON file");
 		return false;
 	}
 	if (!file_open(FOPEN_MODE_R)) {
+		print_dbg("\r\n!! could not open JSON file for read");
 		return false;
 	}
 	json_read_result_t result = json_read(
@@ -395,12 +421,13 @@ static bool usb_disk_save_flash(FS_STRING fname) {
 	print_dbg("\r\n> writing flash to disk");
 	if (!nav_file_create(fname)) {
 		if (fs_g_status != FS_ERR_FILE_EXIST) {
-			print_dbg("\r\n!! could not create file");
+			print_dbg("\r\n!! could not create JSON file: ");
+			print_dbg_hex(fs_g_status);
 			return false;
 		}
 	}
 	if (!file_open(FOPEN_MODE_W)) {
-		print_dbg("\r\n!! could not open file");
+		print_dbg("\r\n!! could not open JSON file for write");
 		return false;
 	}
 	total_written = 0;
