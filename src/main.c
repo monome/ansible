@@ -285,6 +285,7 @@ static void handler_MscConnect(s32 data) {
 static void handler_MscDisconnect(s32 data) {
 	print_dbg("\r\n> usb disk disconnect");
 	usb_disk_exit();
+	update_leds(0);
 	app_event_handlers[kEventFront]	= &handler_Front;
 	usb_disk_skip_apps(false);
 }

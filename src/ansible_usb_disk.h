@@ -12,7 +12,7 @@
 #define ANSIBLE_FLASH_BLOCKSIZE (1 << 14)
 
 void set_mode_usb_disk(void);
-void usb_disk_enter(void);
+bool usb_disk_enter(void);
 void usb_disk_exit(void);
 void usb_disk_skip_apps(bool skip);
 void usb_disk_select_app(ansible_mode_t mode);
