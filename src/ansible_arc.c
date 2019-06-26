@@ -2004,7 +2004,6 @@ static void levels_dac_refresh(void) {
 			} else {
 				dac_set_value(i, tuning_table[i][ l.note[i][play] + l.octave[i]*12 ]);
 			}
-			break;
 		} else {
 			dac_set_value(i, (l.pattern[i][play] + l.offset[i]) << (2 + l.range[i]));
 		}
