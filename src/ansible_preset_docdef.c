@@ -10,7 +10,8 @@
 
 #define ALLOC_DEBUG 1
 
-
+// WARNING: order must match definition order of
+// connected_t, ansible_mode_t in main.h
 const char* connected_t_options[] = {
 	"conNONE",
 	"conARC",
@@ -23,10 +24,12 @@ const char* ansible_mode_options[] = {
 	"mArcCycles",
 	"mGridKria",
 	"mGridMP",
+	"mGridES",
 	"mMidiStandard",
 	"mMidiArp",
 	"mTT",
 };
+// END WARNING
 
 json_read_object_state_t ansible_root_object_state;
 json_read_object_state_t ansible_section_object_state;
