@@ -14,6 +14,9 @@
 
 #define KEY_HOLD_TIME 8
 
+// WARNING: order must match array order of
+// connected_t_options[], ansible_mode_options[]
+// in ansible_preset_docdef.c
 typedef enum {
 	conNONE,
 	conARC,
@@ -21,8 +24,6 @@ typedef enum {
 	conMIDI,
 	conFLASH
 } connected_t;
-
-connected_t connected;
 
 typedef enum {
 	mArcLevels,
@@ -35,6 +36,9 @@ typedef enum {
 	mTT,
 	mUsbDisk,
 } ansible_mode_t;
+// END WARNING
+
+connected_t connected;
 
 typedef struct {
 	connected_t connected;
