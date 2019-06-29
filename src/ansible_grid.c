@@ -40,6 +40,7 @@ bool clock_external;
 bool view_clock;
 bool view_config;
 bool view_tuning;
+bool mod_tuning;
 uint32_t clock_period;
 uint8_t clock_count;
 uint8_t clock_mul;
@@ -283,6 +284,8 @@ void refresh_grid_tuning(void) {
 			monomeLedBuffer[i*16 + 2 + tuning_octave_offset[tuning_track]] += 4;
 		}
 	}
+
+	monomeLedBuffer[R4] = mod_tuning ? L1 : L0;
 
 	memset(monomeLedBuffer + R5, L0, 10);
 	monomeLedBuffer[R5 + tuning_octave] = L1;
@@ -1690,7 +1693,7 @@ void handler_KriaGridKey(s32 data) {
 			}
 
 
-			if (x <= 3) {
+			if (y >= 4 && x <= 3) {
 				note_div_sync ^= 1;
 				flashc_memset8((void*)&(f.kria_state.note_div_sync), note_div_sync, sizeof(note_div_sync), true);
 			}
@@ -1765,7 +1768,10 @@ void handler_KriaGridKey(s32 data) {
 	}
 	else if(view_tuning) {
 		if(z) {
-			if (y <= 4) {
+			if (y == 4 && x == 0) {
+			   	mod_tuning = true;
+		        }
+			if (y <= 3) {
 				if (x == 0) {
 			  		if (tuning_note_on[y]) {
 						tuning_note_on[y] = false;
@@ -1823,25 +1829,66 @@ void handler_KriaGridKey(s32 data) {
 			}
 			else if (y == 7) {
 				int tuning_slot = (int)(tuning_octave * 12) + tuning_octave_offset[tuning_track];
-
 				if (x >= 8) {
-					tuning_table[tuning_track][tuning_slot] = sum_clip(
-						tuning_table[tuning_track][tuning_slot],
-						1 << (x - 8),
-					        DAC_10V);
+					if (mod_tuning) {
+						for (uint8_t t = 0; t < 4; t++) {
+							for (uint8_t s = 0; s < 120; s++) {
+								tuning_table[t][s] = sum_clip(
+									tuning_table[t][s],
+									1 << (x - 8),
+									DAC_10V);
+							}
+						}
+					}
+					else {
+						tuning_table[tuning_track][tuning_slot] = sum_clip(
+							tuning_table[tuning_track][tuning_slot],
+							1 << (x - 8),
+							DAC_10V);
+					}
 				} else {
-					tuning_table[tuning_track][tuning_slot] = sum_clip(
-						tuning_table[tuning_track][tuning_slot],
-						- (1 << (8 - x)),
-					        DAC_10V);
+					if (mod_tuning) {
+						for (uint8_t t = 0; t < 4; t++) {
+							for (uint8_t s = 0; s < 120; s++) {
+								tuning_table[t][s] = sum_clip(
+									tuning_table[t][s],
+									- (1 << (8 - x)),
+									DAC_10V);
+							}
+						}
+					}
+					else {
+						tuning_table[tuning_track][tuning_slot] = sum_clip(
+							tuning_table[tuning_track][tuning_slot],
+							- (1 << (8 - x)),
+							DAC_10V);
+					}
 				}
-				dac_set_value_noslew(
-					tuning_track,
-					tuning_table[tuning_track][
-					        (int)(tuning_octave * 12) +
-						tuning_octave_offset[tuning_track]
-					]);
+
+				if (mod_tuning) {
+					for (uint8_t t = 0; t < 4; t++) {
+						dac_set_value_noslew(
+							t,
+							tuning_table[t][
+							        (int)(tuning_octave * 12) +
+								tuning_octave_offset[t]
+							]);
+					}
+				}
+				else {
+					dac_set_value_noslew(
+						tuning_track,
+						tuning_table[tuning_track][
+						        (int)(tuning_octave * 12) +
+							tuning_octave_offset[tuning_track]
+						]);
+				}
 			}
+		}
+		else {
+			if (y == 4 && x == 0) {
+			   	mod_tuning = false;
+		        }
 		}
 	}
 	// NORMAL
@@ -2652,6 +2699,8 @@ void handler_KriaKey(s32 data) {
 	case 3:
 		if (view_tuning) {
 			view_tuning = false;
+			view_config = false;
+			view_clock = false;
 			resume_kria();
 			break;
 		}
