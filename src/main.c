@@ -77,6 +77,30 @@ __attribute__((__section__(".flash_nvram")))
 nvram_data_t f;
 
 ansible_mode_t ansible_mode;
+i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
+	{
+		.active = false,
+		.addr = JF_ADDR,
+		.tr_cmd = JF_TR,
+		.cv_cmd = JF_VOX,
+	},
+	{
+		.active = false,
+		.addr = TELEXO_0,
+		.tr_cmd = 0x67, // TO_ENV_TRIG
+		.cv_cmd = 0x40, // TO_OSC
+		.cv_slew_cmd = 0x4F, // TO_OSC_SCLEW
+		.init_cmd = 0x60, // TO_ENV_ACT
+		.vol_cmd = 0x10, // TO_CV
+	},
+	{
+		.active = false,
+		.addr = ER301_1,
+		.tr_cmd = 0x05, // TO_TR_PULSE -> SC.TR.P
+		.cv_cmd = 0x10, // TO_CV -> SC.CV
+		.cv_slew_cmd = 0x12, // TO_CV_SLEW -> SC.CV.SLEW
+	},
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
@@ -504,14 +528,117 @@ void update_leds(uint8_t m) {
 
 void set_tr(uint8_t n) {
 	gpio_set_gpio_pin(n);
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		if (followers[i].active) {
+			uint8_t d[] = {
+				followers[i].tr_cmd,
+				n - TR1,
+				1,
+			};
+			i2c_master_tx(followers[i].addr, d, 3);
+		}
+	}
 }
 
 void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		if (followers[i].active) {
+			uint8_t d[] = {
+				followers[i].tr_cmd,
+				n - TR1,
+				0,
+			};
+			i2c_master_tx(followers[i].addr, d, 3);
+		}
+	}
 }
 
 uint8_t get_tr(uint8_t n) {
 	return gpio_get_pin_value(n);
+}
+
+void set_cv(uint8_t n, uint16_t cv) {
+	dac_set_value(n, cv);
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		if (followers[i].active) {
+			uint8_t d[] = {
+				followers[i].cv_cmd,
+				n,
+				(cv + 8192) >> 8,
+				(cv + 8192) & 0xFF,
+			};
+			i2c_master_tx(followers[i].addr, d, 4);
+		}
+	}
+}
+
+void set_cv_slew(uint8_t n, uint16_t s) {
+	dac_set_slew(n, s);
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		if (followers[i].active && followers[i].cv_slew_cmd > 0) {
+			uint8_t d[] = {
+				followers[i].cv_slew_cmd,
+				n,
+				s >> 8,
+				s & 0xFF,
+			};
+			i2c_master_tx(followers[i].addr, d, 4);
+		}
+	}
+}
+
+static void follower_on(uint8_t n) {
+	if (followers[n].init_cmd > 0) {
+		for (uint8_t i = 0; i < 4; i++) {
+			uint8_t d[] = { followers[n].init_cmd, i, 1 };
+			i2c_master_tx(followers[n].addr, d, 3);
+		}
+	}
+	if (followers[n].vol_cmd > 0) {
+		for (uint8_t i = 0; i < 4; i++) {
+			uint8_t d[] = { followers[n].vol_cmd, i, 8192 >> 8, 8192 & 0xFF }; // 5V
+			i2c_master_tx(followers[n].addr, d, 4);
+		}
+	}
+}
+
+static void follower_off(uint8_t n) {
+	if (followers[n].init_cmd > 0) {
+		for (uint8_t i = 0; i < 4; i++) {
+			uint8_t d[] = { followers[n].init_cmd, i, 0 };
+			i2c_master_tx(followers[n].addr, d, 3);
+		}
+	}
+	if (followers[n].vol_cmd > 0) {
+		for (uint8_t i = 0; i < 4; i++) {
+			uint8_t d[] = { followers[n].vol_cmd, i, 0, 0 };
+			i2c_master_tx(followers[n].addr, d, 3);
+		}
+	}
+}
+
+void toggle_follower(uint8_t n) {
+	followers[n].active = !followers[n].active;
+	if (followers[n].active) {
+		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+			if (i != n && followers[i].active) {
+				follower_on(n);
+				return;
+			}
+		}
+		init_i2c_master();
+		follower_on(n);
+	}
+	else {
+		follower_off(n);
+		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+			if (i != n && !followers[i].active) {
+				return;
+			}
+		}
+		// TODO: restore i2c follower address
+	}
 }
 
 void clock_set(uint32_t n) {
