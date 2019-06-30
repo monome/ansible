@@ -222,5 +222,5 @@ POSTBUILD_CMD =
 
 ansible: all
 
-../src/gitversion.c:
+../src/gitversion.c: ../.git/HEAD ../.git/index
 	echo 'const char git_version[] = "$(shell git describe --tags | cut -f1 -d'-')-$(shell git describe --always --dirty)";' > $@
