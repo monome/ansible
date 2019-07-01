@@ -83,11 +83,21 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.addr = JF_ADDR,
 		.tr_cmd = JF_TR,
 		.cv_cmd = JF_VOX,
+		.cv_extra = true,
 	},
 	{
 		.active = false,
 		.addr = TELEXO_0,
-		.tr_cmd = 0x67, // TO_ENV_TRIG
+		.tr_cmd = 0x6D, // TO_ENV
+		.cv_cmd = 0x40, // TO_OSC
+		.cv_slew_cmd = 0x4F, // TO_OSC_SCLEW
+		.init_cmd = 0x60, // TO_ENV_ACT
+		.vol_cmd = 0x10, // TO_CV
+	},
+	{
+		.active = false,
+		.addr = TELEXO_1,
+		.tr_cmd = 0x6D, // TO_ENV
 		.cv_cmd = 0x40, // TO_OSC
 		.cv_slew_cmd = 0x4F, // TO_OSC_SCLEW
 		.init_cmd = 0x60, // TO_ENV_ACT
@@ -101,6 +111,8 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.cv_slew_cmd = 0x12, // TO_CV_SLEW -> SC.CV.SLEW
 	},
 };
+bool leader_mode = false;
+uint16_t cv_extra[4] = { 8192, 8192, 8192, 8192 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
@@ -348,7 +360,7 @@ static void handler_FrontLong(s32 data) {
 	print_dbg("\r\n+ i2c address: ");
 	print_dbg_hex(f.state.i2c_addr);
 	// TEST
-	init_i2c_slave(f.state.i2c_addr);
+	if (!leader_mode) init_i2c_slave(f.state.i2c_addr);
 }
 
 static void handler_SaveFlash(s32 data) {
@@ -567,8 +579,10 @@ void set_cv(uint8_t n, uint16_t cv) {
 				n,
 				(cv + 8192) >> 8,
 				(cv + 8192) & 0xFF,
+				cv_extra[i] >> 8,
+				cv_extra[i] & 0xFF,
 			};
-			i2c_master_tx(followers[i].addr, d, 4);
+			i2c_master_tx(followers[i].addr, d, followers[i].cv_extra ? 6 : 4);
 		}
 	}
 }
@@ -627,6 +641,7 @@ void toggle_follower(uint8_t n) {
 				return;
 			}
 		}
+		leader_mode = true;
 		init_i2c_master();
 		follower_on(n);
 	}
@@ -637,7 +652,35 @@ void toggle_follower(uint8_t n) {
 				return;
 			}
 		}
-		// TODO: restore i2c follower address
+		leader_mode = false;
+		switch (ansible_mode) {
+		case mArcLevels:
+			init_i2c_slave(II_LV_ADDR);
+			break;
+		case mArcCycles:
+			init_i2c_slave(II_CY_ADDR);
+			break;
+		case mGridKria:
+			init_i2c_slave(II_KR_ADDR);
+			break;
+		case mGridMP:
+			init_i2c_slave(II_MP_ADDR);
+			break;
+		case mGridES:
+			init_i2c_slave(ES);
+			break;
+		case mMidiStandard:
+			init_i2c_slave(II_MID_ADDR);
+			break;
+		case mMidiArp:
+			init_i2c_slave(II_ARP_ADDR);
+			break;
+		case mTT:
+			init_i2c_slave(f.state.i2c_addr);
+			break;
+	        default:
+			break;
+		}
 	}
 }
 
@@ -664,7 +707,7 @@ void load_flash_state(void) {
 
 	print_dbg("\r\ni2c addr: ");
 	print_dbg_hex(f.state.i2c_addr);
-	init_i2c_slave(f.state.i2c_addr);
+	if (!leader_mode) init_i2c_slave(f.state.i2c_addr);
 }
 
 void ii_ansible(uint8_t* d, uint8_t len) {

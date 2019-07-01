@@ -241,7 +241,7 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
 		restore_midi_standard();
-		init_i2c_slave(II_MID_ADDR);
+		if (!leader_mode) init_i2c_slave(II_MID_ADDR);
 		process_ii = &ii_midi_standard;
 		update_leds(1);
 		break;
@@ -255,7 +255,7 @@ void set_mode_midi(void) {
 		restore_midi_arp();
 		clock = &clock_midi_arp;
 		clock_set(arp_state.clock_period);
-		init_i2c_slave(II_ARP_ADDR);
+		if (!leader_mode) init_i2c_slave(II_ARP_ADDR);
 		process_ii = &ii_midi_arp;
 		update_leds(2);
 		break;

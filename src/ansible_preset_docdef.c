@@ -80,6 +80,89 @@ json_docdef_t ansible_meta_docdefs[] = {
 		}),
 	},
 	{
+		.name = "followers",
+		.read = json_read_array,
+		.write = json_write_array,
+		.state = &ansible_json_read_array_state[0],
+		.params = &((json_read_array_params_t) {
+			.array_len = sizeof_field(nvram_data_t, state.followers) / sizeof_field(nvram_data_t, state.followers[0]),
+			.item_size = sizeof_field(nvram_data_t, state.followers[0]),
+			.item_docdef = &((json_docdef_t) {
+				.read = json_read_object,
+				.write = json_write_object,
+				.state = &ansible_app_object_state[0],
+				.params = &((json_read_object_params_t) {
+					.docdef_ct = 7,
+					.docdefs = ((json_docdef_t[]) {
+						{
+							.name = "active",
+							.read = json_read_scalar,
+							.write = json_write_bool,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].active),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].active),
+							}),
+						},
+						{
+							.name = "addr",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].addr),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].addr),
+							}),
+						},
+						{
+							.name = "tr_cmd",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].tr_cmd),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].tr_cmd),
+							}),
+						},
+						{
+							.name = "cv_cmd",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].cv_cmd),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].cv_cmd),
+							}),
+						},
+						{
+							.name = "cv_slew_cmd",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].cv_slew_cmd),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].cv_slew_cmd),
+							}),
+						},
+						{
+							.name = "init_cmd",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].init_cmd),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].init_cmd),
+							}),
+						},
+						{
+							.name = "vol_cmd",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].vol_cmd),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].vol_cmd),
+							}),
+						},
+					}),
+				}),
+			}),
+		}),
+	},
+	{
 		.name = "connected",
 		.read = json_read_enum,
 		.write = json_write_enum,

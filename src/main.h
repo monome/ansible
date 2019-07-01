@@ -46,10 +46,14 @@ typedef struct {
 	uint8_t addr;
 	uint8_t tr_cmd;
 	uint8_t cv_cmd;
+	bool cv_extra;
 	uint8_t cv_slew_cmd;
 	uint8_t init_cmd;
 	uint8_t vol_cmd;
 } i2c_follower_t;
+
+extern bool leader_mode;
+extern uint16_t cv_extra[4];
 
 typedef struct {
 	connected_t connected;
