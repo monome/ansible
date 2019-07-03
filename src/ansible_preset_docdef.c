@@ -928,6 +928,7 @@ json_docdef_t ansible_app_docdefs[] = {
 										.state = &ansible_json_read_buffer_state,
 										.params = &((json_read_buffer_params_t) {
 											.dst_offset = offsetof(nvram_data_t, es_state.e[0].keymap),
+											.dst_size = sizeof_field(nvram_data_t, es_state.e[0].keymap),
 										}),
 									},
 									{
