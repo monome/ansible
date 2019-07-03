@@ -43,6 +43,8 @@ connected_t connected;
 
 typedef struct {
 	bool active;
+	uint8_t track_en;
+	uint8_t oct;
 	uint8_t addr;
 	uint8_t tr_cmd;
 	uint8_t cv_cmd;

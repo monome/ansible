@@ -80,6 +80,8 @@ ansible_mode_t ansible_mode;
 i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 	{
 		.active = false,
+		.track_en = 0xF,
+		.oct = 0,
 		.addr = JF_ADDR,
 		.tr_cmd = JF_TR,
 		.cv_cmd = JF_VOX,
@@ -87,6 +89,8 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 	},
 	{
 		.active = false,
+		.track_en = 0xF,
+		.oct = 5,
 		.addr = TELEXO_0,
 		.tr_cmd = 0x6D, // TO_ENV
 		.cv_cmd = 0x40, // TO_OSC
@@ -96,6 +100,8 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 	},
 	{
 		.active = false,
+		.track_en = 0xF,
+		.oct = 5,
 		.addr = TELEXO_1,
 		.tr_cmd = 0x6D, // TO_ENV
 		.cv_cmd = 0x40, // TO_OSC
@@ -105,6 +111,8 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 	},
 	{
 		.active = false,
+		.track_en = 0xF,
+		.oct = 0,
 		.addr = ER301_1,
 		.tr_cmd = 0x05, // TO_TR_PULSE -> SC.TR.P
 		.cv_cmd = 0x10, // TO_CV -> SC.CV
@@ -541,7 +549,9 @@ void update_leds(uint8_t m) {
 void set_tr(uint8_t n) {
 	gpio_set_gpio_pin(n);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
-		if (followers[i].active) {
+		bool play_follower = followers[i].active
+				  && followers[i].track_en & (1 << n);
+		if (play_follower) {
 			uint8_t d[] = {
 				followers[i].tr_cmd,
 				n - TR1,
@@ -555,7 +565,9 @@ void set_tr(uint8_t n) {
 void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
-		if (followers[i].active) {
+		bool play_follower = followers[i].active
+				  && followers[i].track_en & (1 << n);
+		if (play_follower) {
 			uint8_t d[] = {
 				followers[i].tr_cmd,
 				n - TR1,
@@ -573,12 +585,15 @@ uint8_t get_tr(uint8_t n) {
 void set_cv(uint8_t n, uint16_t cv) {
 	dac_set_value(n, cv);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
-		if (followers[i].active) {
+		bool play_follower = followers[i].active
+				  && followers[i].track_en & (1 << n);
+		if (play_follower) {
+			uint16_t cv_transposed = cv + tuning_table[i][12 * followers[i].oct];
 			uint8_t d[] = {
 				followers[i].cv_cmd,
 				n,
-				(cv + 8192) >> 8,
-				(cv + 8192) & 0xFF,
+				cv_transposed >> 8,
+				cv_transposed & 0xFF,
 				cv_extra[i] >> 8,
 				cv_extra[i] & 0xFF,
 			};
@@ -590,7 +605,10 @@ void set_cv(uint8_t n, uint16_t cv) {
 void set_cv_slew(uint8_t n, uint16_t s) {
 	dac_set_slew(n, s);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
-		if (followers[i].active && followers[i].cv_slew_cmd > 0) {
+		bool play_follower = followers[i].active
+				  && followers[i].cv_slew_cmd > 0
+				  && followers[i].track_en & (1 << n);
+		if (play_follower) {
 			uint8_t d[] = {
 				followers[i].cv_slew_cmd,
 				n,
@@ -634,9 +652,14 @@ static void follower_off(uint8_t n) {
 
 void toggle_follower(uint8_t n) {
 	followers[n].active = !followers[n].active;
+	print_dbg("\r\ntoggle follower ");
+	print_dbg_ulong(n);
 	if (followers[n].active) {
 		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 			if (i != n && followers[i].active) {
+				print_dbg("\r\follower ");
+				print_dbg_ulong(n);
+				print_dbg(" also on, quit");
 				follower_on(n);
 				return;
 			}
@@ -648,7 +671,10 @@ void toggle_follower(uint8_t n) {
 	else {
 		follower_off(n);
 		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
-			if (i != n && !followers[i].active) {
+			if (i != n && followers[i].active) {
+				print_dbg("\r\follower ");
+				print_dbg_ulong(n);
+				print_dbg("still on, quit");
 				return;
 			}
 		}
