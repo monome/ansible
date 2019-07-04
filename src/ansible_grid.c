@@ -1668,7 +1668,6 @@ void handler_KriaGridKey(s32 data) {
 
 	// PRESET SCREEN
 	if(preset_mode) {
-		// glyph magic
 		if(z) {
 			if (x == 2 && y == 7) {
 				if (follower_select) {
@@ -1724,6 +1723,7 @@ void handler_KriaGridKey(s32 data) {
 		else {
 			if (x == 2 && y == 7) {
 				mod_follower = false;
+				monomeFrameDirty++;
 			}
 		}
 	}
@@ -3902,11 +3902,64 @@ void handler_MPGridKey(s32 data) {
 
 	// PRESET SCREEN
 	if(preset_mode) {
-		// draw glyph
-		if(z && x>7)
-			m.glyph[y] ^= 1<<(x-8);
+		if (z) {
+			if (x == 2 && y == 7) {
+				if (follower_select) {
+					follower_select = false;
+				} else {
+					mod_follower = true;
+				}
+			}
+			if (follower_select) {
+				if (y == 0 && x <= 4) {
+					followers[follower].oct = x + 3;
+				}
+				if (y >= 2 && y <= 5) {
+					if (x == 2) {
+						follower = y - 2;
+					}
+					if (x == 4) {
+						followers[follower].track_en ^= 1 << (y - 2);
+					}
+					if (x == 7) {
+						followers[y - 2].cv_extra = !followers[y - 2].cv_extra;
+					}
+				}
+				if (x >= 8) {
+					switch (x) {
+					case  8: followers[follower].addr ^= 1 << (7 - y); break;
+					case  9: followers[follower].tr_cmd ^= 1 << (7 - y); break;
+					case 10: followers[follower].cv_cmd ^= 1 << (7 - y); break;
+					case 11: followers[follower].cv_slew_cmd ^= 1 << (7 - y); break;
+					case 12: followers[follower].init_cmd ^= 1 << (7 - y); break;
+					case 13: followers[follower].vol_cmd ^= 1 << (7 - y); break;
+					default: break;
+					}
+				}
+			}
+			else {
+				if (x > 7) {
+					k.glyph[y] ^= 1<<(x-8);
+				}
+				if (x == 2 && y >= 2 && y <= 5) {
+					if (mod_follower) {
+						follower = y - 2;
+						follower_select = true;
+					}
+					else {
+						toggle_follower(y - 2);
+					}
+				}
+			}
 
-		monomeFrameDirty++;
+			monomeFrameDirty++;
+		}
+		else {
+			if (x == 2 && y == 7) {
+				mod_follower = false;
+				monomeFrameDirty++;
+			}
+		}
 	}
 	else if(view_clock) {
 		if(z) {
@@ -5029,18 +5082,71 @@ void handler_ESGridKey(s32 data) {
 
     // preset screen
     if (preset_mode) {
-        if (!z && x == 0) {
-            if (y != preset) {
-                preset = y;
-                for (u8 i = 0; i < GRID_PRESETS; i++)
-                    e.glyph[i] = f.es_state.e[preset].glyph[i];
-            } else {
-                // flash read
-                es_load_preset();
-            }
-        } else if (z && x > 7) {
-            e.glyph[y] ^= 1 << (x - 8);
+	if (z) {
+	    if (x == 2 && y == 7) {
+	        if (follower_select) {
+		    follower_select = false;
+		} else {
+		    mod_follower = true;
+		}
+	    }
+	    if (follower_select) {
+	        if (y == 0 && x <= 4) {
+		    followers[follower].oct = x + 3;
+		}
+		if (y >= 2 && y <= 5) {
+		    if (x == 2) {
+		        follower = y - 2;
+		    }
+		    if (x == 4) {
+		        followers[follower].track_en ^= 1 << (y - 2);
+		    }
+		    if (x == 7) {
+		        followers[y - 2].cv_extra = !followers[y - 2].cv_extra;
+		    }
+		}
+		if (x >= 8) {
+		    switch (x) {
+		    case  8: followers[follower].addr ^= 1 << (7 - y); break;
+		    case  9: followers[follower].tr_cmd ^= 1 << (7 - y); break;
+		    case 10: followers[follower].cv_cmd ^= 1 << (7 - y); break;
+		    case 11: followers[follower].cv_slew_cmd ^= 1 << (7 - y); break;
+		    case 12: followers[follower].init_cmd ^= 1 << (7 - y); break;
+		    case 13: followers[follower].vol_cmd ^= 1 << (7 - y); break;
+		    default: break;
+		    }
+		}
+	    }
+	    else {
+	        if (x > 7) {
+		    e.glyph[y] ^= 1 << (x - 8);
+		}
+		if (x == 2 && y >= 2 && y <= 5) {
+		    if (mod_follower) {
+		        follower = y - 2;
+			follower_select = true;
+		    }
+		    else {
+		      toggle_follower(y - 2);
+		    }
+		}
+	    }
         }
+	else {
+	    if (x == 0) {
+	        if (y != preset) {
+		    preset = y;
+		    for (u8 i = 0; i < GRID_PRESETS; i++)
+		        e.glyph[i] = f.es_state.e[preset].glyph[i];
+		} else {
+		    // flash read
+		    es_load_preset();
+		}
+	    }
+	    if (x == 2 && y == 7) {
+	        mod_follower = false;
+	    }
+	}
 
         monomeFrameDirty++;
         return;
