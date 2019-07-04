@@ -548,13 +548,14 @@ void update_leds(uint8_t m) {
 
 void set_tr(uint8_t n) {
 	gpio_set_gpio_pin(n);
+	uint8_t tr = n - TR1;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
-				  && followers[i].track_en & (1 << n);
+				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
 			uint8_t d[] = {
 				followers[i].tr_cmd,
-				n - TR1,
+				tr,
 				1,
 			};
 			i2c_master_tx(followers[i].addr, d, 3);
@@ -564,13 +565,14 @@ void set_tr(uint8_t n) {
 
 void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
+	uint8_t tr = n - TR1;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
-				  && followers[i].track_en & (1 << n);
+				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
 			uint8_t d[] = {
 				followers[i].tr_cmd,
-				n - TR1,
+				tr,
 				0,
 			};
 			i2c_master_tx(followers[i].addr, d, 3);
@@ -621,14 +623,14 @@ void set_cv_slew(uint8_t n, uint16_t s) {
 }
 
 static void follower_on(uint8_t n) {
-	if (followers[n].init_cmd > 0) {
-		for (uint8_t i = 0; i < 4; i++) {
+	for (uint8_t i = 0; i < 4; i++) {
+		bool play_follower = followers[n].active
+		  && followers[n].track_en & (1 << i);
+		if (play_follower && followers[n].init_cmd > 0) {
 			uint8_t d[] = { followers[n].init_cmd, i, 1 };
 			i2c_master_tx(followers[n].addr, d, 3);
 		}
-	}
-	if (followers[n].vol_cmd > 0) {
-		for (uint8_t i = 0; i < 4; i++) {
+		if (play_follower && followers[n].vol_cmd > 0) {
 			uint8_t d[] = { followers[n].vol_cmd, i, 8192 >> 8, 8192 & 0xFF }; // 5V
 			i2c_master_tx(followers[n].addr, d, 4);
 		}
@@ -636,14 +638,14 @@ static void follower_on(uint8_t n) {
 }
 
 static void follower_off(uint8_t n) {
-	if (followers[n].init_cmd > 0) {
-		for (uint8_t i = 0; i < 4; i++) {
+	for (uint8_t i = 0; i < 4; i++) {
+		bool play_follower = followers[n].active
+				  && followers[n].track_en & (1 << i);
+		if (play_follower && followers[n].init_cmd > 0) {
 			uint8_t d[] = { followers[n].init_cmd, i, 0 };
 			i2c_master_tx(followers[n].addr, d, 3);
 		}
-	}
-	if (followers[n].vol_cmd > 0) {
-		for (uint8_t i = 0; i < 4; i++) {
+		if (play_follower && followers[n].vol_cmd > 0) {
 			uint8_t d[] = { followers[n].vol_cmd, i, 0, 0 };
 			i2c_master_tx(followers[n].addr, d, 3);
 		}
@@ -652,18 +654,14 @@ static void follower_off(uint8_t n) {
 
 void toggle_follower(uint8_t n) {
 	followers[n].active = !followers[n].active;
-	print_dbg("\r\ntoggle follower ");
-	print_dbg_ulong(n);
 	if (followers[n].active) {
 		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 			if (i != n && followers[i].active) {
-				print_dbg("\r\follower ");
-				print_dbg_ulong(n);
-				print_dbg(" also on, quit");
 				follower_on(n);
 				return;
 			}
 		}
+		print_dbg("\r\n> enter i2c leader mode");
 		leader_mode = true;
 		init_i2c_master();
 		follower_on(n);
@@ -672,12 +670,10 @@ void toggle_follower(uint8_t n) {
 		follower_off(n);
 		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 			if (i != n && followers[i].active) {
-				print_dbg("\r\follower ");
-				print_dbg_ulong(n);
-				print_dbg("still on, quit");
 				return;
 			}
 		}
+		print_dbg("\r\n> exit i2c leader mode");
 		leader_mode = false;
 		switch (ansible_mode) {
 		case mArcLevels:
