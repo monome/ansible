@@ -11,6 +11,6 @@ grid- arc- teletype- midi- enabled. requires at least one of these.
 
 ---
 
-MIDI design and code by @ngwese
-earthsea implementation by @scanner-darkly
-preset JSON engine by @csboling
+- MIDI design and code by @ngwese
+- earthsea implementation by @scanner-darkly
+- preset JSON engine by @csboling
