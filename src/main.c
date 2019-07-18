@@ -114,7 +114,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.track_en = 0xF,
 		.oct = 0,
 		.addr = ER301_1,
-		.tr_cmd = 0x05, // TO_TR_PULSE -> SC.TR.P
+		.tr_cmd = 0x00, // TO_TR -> SC.TR
 		.cv_cmd = 0x10, // TO_CV -> SC.CV
 		.cv_slew_cmd = 0x12, // TO_CV_SLEW -> SC.CV.SLEW
 	},
