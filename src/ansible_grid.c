@@ -821,10 +821,10 @@ bool kria_next_step(uint8_t t, uint8_t p) {
 				uint8_t llen = k.p[k.pattern].t[t].llen[p];
 
 				if (lend >= lstart) {
-					pos[t][p] = lstart + rnd() % (lend - lstart);
+					pos[t][p] = lstart + rnd() % (lend - lstart + 1);
 				}
 				else {
-					pos[t][p] = (lstart + rnd() % llen) % 16;
+					pos[t][p] = (lstart + rnd() % (llen + 1)) % 16;
 				}
 				break;
 			}
