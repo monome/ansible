@@ -584,13 +584,13 @@ uint8_t get_tr(uint8_t n) {
 	return gpio_get_pin_value(n);
 }
 
-void set_cv(uint8_t n, uint16_t cv) {
-	dac_set_value(n, cv);
+void set_cv_note(uint8_t n, uint16_t note) {
+	dac_set_value(n, tuning_table[n][note]);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			uint16_t cv_transposed = cv + tuning_table[i][12 * followers[i].oct];
+			uint16_t cv_transposed = tuning_table[i][12 * followers[i].oct + note];
 			uint8_t d[] = {
 				followers[i].cv_cmd,
 				n,
@@ -729,7 +729,20 @@ void load_flash_state(void) {
 
 	print_dbg("\r\ni2c addr: ");
 	print_dbg_hex(f.state.i2c_addr);
-	if (!leader_mode) init_i2c_slave(f.state.i2c_addr);
+	leader_mode = false;
+	memcpy((void*)followers, f.state.followers, sizeof(followers));
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		if (followers[i].active) {
+			if (!leader_mode) {
+				leader_mode = true;
+				init_i2c_master();
+			}
+			follower_on(i);
+		}
+	}
+	if (!leader_mode) {
+		init_i2c_slave(f.state.i2c_addr);
+	}
 }
 
 void ii_ansible(uint8_t* d, uint8_t len) {
@@ -818,6 +831,7 @@ int main(void)
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		flashc_memset8((void*)&(f.state.grid_varibrightness), 16, 1, true);
+		flashc_memcpy((void*)f.state.followers, followers, sizeof(followers), true);
 		default_tuning();
 		default_kria();
 		default_mp();

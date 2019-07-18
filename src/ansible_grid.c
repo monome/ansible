@@ -936,13 +936,11 @@ void clock_kria_note(kria_track* track, uint8_t trackNum) {
 static void kria_set_note(uint8_t trackNum) {
 	u8 noteInScale = (note[trackNum] + alt_note[trackNum]) % 7; // combine both note params
 	u8 octaveBump = (note[trackNum] + alt_note[trackNum]) / 7; // if it wrapped around the octave, bump it
-	set_cv(
+	set_cv_note(
 		trackNum,
-		tuning_table[trackNum][
-			(int)cur_scale[noteInScale] +
-			scale_adj[noteInScale] +
-			(int)((oct[trackNum]+octaveBump) * 12)
-		]);
+		(int)cur_scale[noteInScale] +
+		scale_adj[noteInScale] +
+		(int)((oct[trackNum]+octaveBump) * 12));
 }
 
 void clock_kria_track( uint8_t trackNum ) {
@@ -3686,13 +3684,13 @@ void mp_note_on(uint8_t n) {
 			if(n < 4)
 				set_tr(TR1 + n);
 			else
-				set_cv(n-4, DAC_10V);
+				dac_set_value(n-4, DAC_10V);
 		break;
 	case MP_1V:
 		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
-			set_cv(0, tuning_table[0][(int)cur_scale[7-n] + scale_adj[7-n]]);
+			set_cv_note(0, (int)cur_scale[7-n] + scale_adj[7-n]);
 			set_tr(TR1);
 		}
 		break;
@@ -3701,7 +3699,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(2);
 			note_now[w] = n;
-			set_cv(w, tuning_table[w][(int)cur_scale[7-n] + scale_adj[7-n]]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3710,7 +3708,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(4);
 			note_now[w] = n;
-			set_cv(w, tuning_table[w][(int)cur_scale[7-n] + scale_adj[7-n]]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3727,7 +3725,7 @@ void mp_note_off(uint8_t n) {
 			if(n < 4)
 				clr_tr(TR1 + n);
 			else
-				set_cv(n-4, 0);
+				dac_set_value(n-4, 0);
 		break;
 	case MP_1V:
 		if(note_now[0] == n) {
@@ -4583,7 +4581,7 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
         note_index = 0;
     else if (note_index > 119)
         note_index = 119;
-    set_cv(note, tuning_table[note][note_index]);
+    set_cv_note(note, note_index);
     dac_update_now();
     set_tr(TR1 + note);
 
