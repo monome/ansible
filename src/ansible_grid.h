@@ -219,6 +219,7 @@ void handler_KriaKey(s32 data);
 void handler_KriaTr(s32 data);
 void handler_KriaTrNormal(s32 data);
 void refresh_kria(void);
+bool refresh_kria_mod(void);
 void refresh_kria_tr(void);
 void refresh_kria_note(bool isAlt);
 void refresh_kria_oct(void);
