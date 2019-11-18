@@ -1423,11 +1423,22 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			break;
 		}
 		case II_KR_DIR:
-			if (l >= 3 && d[2] <= krDirRandom) {
+			if ( d[1] < 0
+			  || d[1] > KRIA_NUM_TRACKS
+			  || d[2] < 0
+			  || d[2] > krDirRandom) break;
+			if ( d[1] == 0 ) {
+				for ( int i=0; i<KRIA_NUM_TRACKS; i++) {
+					k.p[k.pattern].t[i].direction = d[2];
+				}
+			}
+			else {
 				k.p[k.pattern].t[d[1]-1].direction = d[2];
 			}
 			break;
 		case II_KR_DIR + II_GET:
+			if ( d[1] <= 0
+			  || d[1] > KRIA_NUM_TRACKS) break;
 			if (l >= 2) {
 				ii_tx_queue(k.p[k.pattern].t[d[1] - 1].direction);
 			}
