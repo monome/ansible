@@ -1437,6 +1437,8 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			}
 			break;
 		case II_KR_DIR + II_GET:
+			if ( d[1] <= 0
+			  || d[1] > KRIA_NUM_TRACKS) break;
 			if (l >= 2) {
 				ii_tx_queue(k.p[k.pattern].t[d[1] - 1].direction);
 			}
