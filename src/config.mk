@@ -71,6 +71,7 @@ CSRCS = \
        ../src/ansible_tt.c    \
        ../src/ansible_usb_disk.c    \
        ../src/ansible_preset_docdef.c    \
+       ../src/ansible_ii_leader.c    \
        ../src/gitversion.c    \
        ../libavr32/src/adc.c     \
        ../libavr32/src/arp.c     \

@@ -6,6 +6,7 @@
 #include "ansible_arc.h"
 #include "ansible_midi.h"
 #include "ansible_tt.h"
+#include "ansible_ii_leader.h"
 
 #define TR1 B02
 #define TR2 B03
@@ -13,7 +14,6 @@
 #define TR4 B05
 
 #define KEY_HOLD_TIME 8
-#define I2C_FOLLOWER_COUNT 4
 
 // WARNING: order must match array order of
 // connected_t_options[], ansible_mode_options[]
@@ -41,18 +41,7 @@ typedef enum {
 
 connected_t connected;
 
-typedef struct {
-	bool active;
-	uint8_t track_en;
-	uint8_t oct;
-	uint8_t addr;
-	uint8_t tr_cmd;
-	uint8_t cv_cmd;
-	bool cv_extra;
-	uint8_t cv_slew_cmd;
-	uint8_t init_cmd;
-	uint8_t vol_cmd;
-} i2c_follower_t;
+
 
 extern bool leader_mode;
 extern uint16_t cv_extra[4];
