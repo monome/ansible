@@ -44,7 +44,7 @@ connected_t connected;
 
 
 extern bool leader_mode;
-extern uint16_t cv_extra[4];
+extern uint16_t aux_param[2][4];
 
 typedef struct {
 	connected_t connected;

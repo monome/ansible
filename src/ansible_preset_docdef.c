@@ -103,60 +103,6 @@ json_docdef_t ansible_meta_docdefs[] = {
 								.dst_offset = offsetof(nvram_data_t, state.followers[0].active),
 							}),
 						},
-						{
-							.name = "addr",
-							.read = json_read_scalar,
-							.write = json_write_number,
-							.params = &((json_read_scalar_params_t) {
-								.dst_size = sizeof_field(nvram_data_t, state.followers[0].addr),
-								.dst_offset = offsetof(nvram_data_t, state.followers[0].addr),
-							}),
-						},
-						{
-							.name = "tr_cmd",
-							.read = json_read_scalar,
-							.write = json_write_number,
-							.params = &((json_read_scalar_params_t) {
-								.dst_size = sizeof_field(nvram_data_t, state.followers[0].tr_cmd),
-								.dst_offset = offsetof(nvram_data_t, state.followers[0].tr_cmd),
-							}),
-						},
-						{
-							.name = "cv_cmd",
-							.read = json_read_scalar,
-							.write = json_write_number,
-							.params = &((json_read_scalar_params_t) {
-								.dst_size = sizeof_field(nvram_data_t, state.followers[0].cv_cmd),
-								.dst_offset = offsetof(nvram_data_t, state.followers[0].cv_cmd),
-							}),
-						},
-						{
-							.name = "cv_slew_cmd",
-							.read = json_read_scalar,
-							.write = json_write_number,
-							.params = &((json_read_scalar_params_t) {
-								.dst_size = sizeof_field(nvram_data_t, state.followers[0].cv_slew_cmd),
-								.dst_offset = offsetof(nvram_data_t, state.followers[0].cv_slew_cmd),
-							}),
-						},
-						{
-							.name = "init_cmd",
-							.read = json_read_scalar,
-							.write = json_write_number,
-							.params = &((json_read_scalar_params_t) {
-								.dst_size = sizeof_field(nvram_data_t, state.followers[0].init_cmd),
-								.dst_offset = offsetof(nvram_data_t, state.followers[0].init_cmd),
-							}),
-						},
-						{
-							.name = "vol_cmd",
-							.read = json_read_scalar,
-							.write = json_write_number,
-							.params = &((json_read_scalar_params_t) {
-								.dst_size = sizeof_field(nvram_data_t, state.followers[0].vol_cmd),
-								.dst_offset = offsetof(nvram_data_t, state.followers[0].vol_cmd),
-							}),
-						},
 					}),
 				}),
 			}),

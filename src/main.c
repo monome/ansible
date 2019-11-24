@@ -84,40 +84,6 @@ ansible_mode_t ansible_mode;
 /* 		.active = false, */
 /* 		.track_en = 0xF, */
 /* 		.oct = 0, */
-/* 		.addr = JF_ADDR, */
-/* 		.tr_cmd = JF_TR, */
-/* 		.cv_cmd = JF_VOX, */
-/* 		.cv_extra = true, */
-/* 		.note = ii_note_jf, */
-/* 	}, */
-/* 	{ */
-/* 		.active = false, */
-/* 		.track_en = 0xF, */
-/* 		.oct = 5, */
-/* 		.addr = TELEXO_0, */
-/* 		.tr_cmd = 0x6D, // TO_ENV */
-/* 		.cv_cmd = 0x40, // TO_OSC */
-/* 		.cv_slew_cmd = 0x4F, // TO_OSC_SCLEW */
-/* 		.init_cmd = 0x60, // TO_ENV_ACT */
-/* 		.vol_cmd = 0x10, // TO_CV */
-/* 		.note = ii_note_nop, */
-/* 	}, */
-/* 	{ */
-/* 		.active = false, */
-/* 		.track_en = 0xF, */
-/* 		.oct = 5, */
-/* 		.addr = TELEXO_1, */
-/* 		.tr_cmd = 0x6D, // TO_ENV */
-/* 		.cv_cmd = 0x40, // TO_OSC */
-/* 		.cv_slew_cmd = 0x4F, // TO_OSC_SCLEW */
-/* 		.init_cmd = 0x60, // TO_ENV_ACT */
-/* 		.vol_cmd = 0x10, // TO_CV */
-/* 		.note = ii_note_nop, */
-/* 	}, */
-/* 	{ */
-/* 		.active = false, */
-/* 		.track_en = 0xF, */
-/* 		.oct = 0, */
 /* 		.addr = ER301_1, */
 /* 		.tr_cmd = 0x00, // TO_TR -> SC.TR */
 /* 		.cv_cmd = 0x10, // TO_CV -> SC.CV */
@@ -126,7 +92,7 @@ ansible_mode_t ansible_mode;
 /* 	}, */
 /* }; */
 bool leader_mode = false;
-uint16_t cv_extra[4] = { 8192, 8192, 8192, 8192 };
+uint16_t aux_param[2][4] = { { 0 } };
 
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
@@ -559,7 +525,7 @@ void set_tr(uint8_t n) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(tr, 1);
+			followers[i].tr(&followers[i], tr, 1);
 		}
 	}
 }
@@ -571,7 +537,7 @@ void clr_tr(uint8_t n) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(tr, 0);
+			followers[i].tr(&followers[i], tr, 0);
 		}
 	}
 }
@@ -587,7 +553,7 @@ void set_cv_note(uint8_t n, uint16_t note) {
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
 			uint16_t cv_transposed = tuning_table[i][12 * followers[i].oct + note];
-			followers[i].cv(n, cv_transposed);
+			followers[i].cv(&followers[i], n, cv_transposed);
 		}
 	}
 }
@@ -598,7 +564,7 @@ void set_cv_slew(uint8_t n, uint16_t s) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			followers[i].slew(n, s);
+			followers[i].slew(&followers[i], n, s);
 		}
 	}
 }
@@ -608,7 +574,7 @@ static void follower_on(uint8_t n) {
 		bool play_follower = followers[n].active
 		  && followers[n].track_en & (1 << i);
 		if (play_follower) {
-			followers[n].init(i, 1);
+			followers[n].init(&followers[n], i, 1);
 		}
 	}
 }
@@ -618,7 +584,7 @@ static void follower_off(uint8_t n) {
 		bool play_follower = followers[n].active
 				  && followers[n].track_en & (1 << i);
 		if (play_follower) {
-			followers[n].init(i, 0);
+			followers[n].init(&followers[n], i, 0);
 		}
 	}
 }
