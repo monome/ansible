@@ -36,6 +36,7 @@ bool follower_select;
 bool mod_follower;
 uint8_t follower;
 uint8_t follower_param_sel;
+bool kriaAltModeBlink; // flag gets flipped for the blinking
 
 u8 grid_varibrightness = 16;
 u8 key_count = 0;
@@ -115,6 +116,7 @@ softTimer_t repeatTimer[4] = {
 
 static void grid_keytimer_kria(uint8_t held_key);
 static void kria_set_note(uint8_t trackNum);
+static void preset_mode_handle_key(uint8_t x, uint8_t y, uint8_t z, uint8_t* glyph);
 static kria_modes_t ii_kr_mode_for_cmd(uint8_t cmd);
 static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode);
 
@@ -259,7 +261,6 @@ void refresh_preset(void) {
 		if (follower_select) {
 			monomeLedBuffer[5 + (2 + i)*16] = i == follower ? L1 : L0;
 			monomeLedBuffer[R7 + i] = (followers[follower].track_en & (1 << i)) ? L1 : L0;
-			/* monomeLedBuffer[7 + (2 + i)*16] = followers[i].cv_extra ? L1 : L0; */
 		}
 		else {
 			monomeLedBuffer[5 + (2 + i)*16] = followers[i].active ? L1 : L0;
@@ -271,29 +272,26 @@ void refresh_preset(void) {
 		memset(monomeLedBuffer, L0, 5);
 		monomeLedBuffer[followers[follower].oct - 3] = L1;
 
-		memset(monomeLedBuffer + 13, L0, followers[follower].mode_ct);
-		monomeLedBuffer[13 + followers[follower].active_mode] = L1;
+		if (followers[follower].mode_ct > 1) {
+			memset(monomeLedBuffer + 13, L0, followers[follower].mode_ct);
+			monomeLedBuffer[13 + followers[follower].active_mode] = L1;
+		}
 
-		monomeLedBuffer[R7 + 8] = L0;
-		if (follower_param_sel > 0) {
-			for (uint8_t i = 0; i < followers[follower].param_ct; i++) {
-				if (i == followers[follower].active_param[follower_param_sel - 1]) {
-					monomeLedBuffer[8 + (6 - i)*16] = L1;
-				}
-				else {
-					monomeLedBuffer[8 + (6 - i)*16] = L0;
+		if (followers[follower].param_ct > 1) {
+			monomeLedBuffer[R7 + 8] = L0;
+			if (follower_param_sel > 0) {
+				monomeLedBuffer[R7 + 8] += 4;
+				if (kriaAltModeBlink) monomeLedBuffer[R7 + 8] += 4;
+				for (uint8_t i = 0; i < followers[follower].param_ct; i++) {
+					if (i == followers[follower].active_param[follower_param_sel - 1]) {
+						monomeLedBuffer[8 + (6 - i)*16] = L1;
+					}
+					else {
+						monomeLedBuffer[8 + (6 - i)*16] = L0;
+					}
 				}
 			}
 		}
-
-		/* for (uint8_t i = 0; i < 8; i++) { */
-		/* 	monomeLedBuffer[i*16 + 8 ] = (followers[follower].addr & (1 << (7 - i))) ? L1 : L0; */
-		/* 	monomeLedBuffer[i*16 + 9 ] = (followers[follower].tr_cmd & (1 << (7 - i))) ? L1 : L0; */
-		/* 	monomeLedBuffer[i*16 + 10] = (followers[follower].cv_cmd & (1 << (7 - i))) ? L1 : L0; */
-		/* 	monomeLedBuffer[i*16 + 11] = (followers[follower].cv_slew_cmd & (1 << (7 - i))) ? L1 : L0; */
-		/* 	monomeLedBuffer[i*16 + 11] = (followers[follower].init_cmd & (1 << (7 - i))) ? L1 : L0; */
-		/* 	monomeLedBuffer[i*16 + 11] = (followers[follower].vol_cmd & (1 << (7 - i))) ? L1 : L0; */
-		/* } */
 	}
 	else {
 		switch(ansible_mode) {
@@ -578,7 +576,6 @@ static void kria_rpt_off(void* o);
 static void kria_alt_mode_blink(void* o);
 static void kria_set_alt_blink_timer(kria_modes_t mode);
 softTimer_t altBlinkTimer = { .next = NULL, .prev = NULL };
-bool kriaAltModeBlink; // flag gets flipped for the blinking
 bool k_mode_is_alt = false;
 
 bool kria_next_step(uint8_t t, uint8_t p);
@@ -1607,6 +1604,78 @@ static void kria_set_tmul(uint8_t track, kria_modes_t mode, uint8_t new_tmul) {
 	}
 }
 
+
+static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
+	if (z) {
+		if (x == 5 && y == 7) {
+			if (follower_select) {
+				follower_select = false;
+			} else {
+				mod_follower = true;
+			}
+		}
+		if (follower_select) {
+			if (y == 0) {
+				if (x <= 4) {
+					followers[follower].oct = x + 3;
+				}
+				if (followers[follower].mode_ct > 1
+				 && x >= 13
+				 && x <= (13 + followers[follower].mode_ct)) {
+					followers[follower].mode(&followers[follower], 0, x - 13);
+				}
+			}
+			if (y >= 2 && y <= 5) {
+				if (x == 5) {
+					follower = y - 2;
+				}
+			}
+			if (y == 7) {
+				if (x <= 3) {
+					followers[follower].track_en ^= 1 << x;
+				}
+				if (x == 8) {
+					follower_param_sel = (follower_param_sel + 1) % 3;
+					if (follower_param_sel == 2) {
+						timer_add(&altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
+					}
+					else if (follower_param_sel == 0) {
+						timer_remove(&altBlinkTimer);
+					}
+				}
+			}
+			if (follower_param_sel > 0
+			 && x == 8
+			 && y >= 1
+			 && y <= followers[follower].mode_ct) {
+				followers[follower].active_param[follower_param_sel - 1] = y - 1;
+			}
+		}
+		else {
+			if (x > 7) {
+				glyph[y] ^= 1<<(x-8);
+			}
+			if (x == 5 && y >= 2 && y <= 5) {
+				if (mod_follower) {
+					follower = y - 2;
+					follower_select = true;
+				}
+				else {
+					toggle_follower(y - 2);
+				}
+			}
+		}
+
+		monomeFrameDirty++;
+	}
+	else {
+		if (x == 5 && y == 7) {
+			mod_follower = false;
+			monomeFrameDirty++;
+		}
+	}
+}
+
 void handler_KriaGridKey(s32 data) {
 	u8 x, y, z, index, i1, found;
 
@@ -1693,66 +1762,7 @@ void handler_KriaGridKey(s32 data) {
 
 	// PRESET SCREEN
 	if(preset_mode) {
-		if(z) {
-			if (x == 5 && y == 7) {
-				if (follower_select) {
-					follower_select = false;
-				} else {
-					mod_follower = true;
-				}
-			}
-			if (follower_select) {
-				if (y == 0) {
-					if (x <= 4) {
-						followers[follower].oct = x + 3;
-					}
-					if (x >= 13 && x <= (13 + followers[follower].mode_ct)) {
-						followers[follower].active_mode = x - 13;
-					}
-				}
-				if (y >= 2 && y <= 5) {
-					if (x == 5) {
-						follower = y - 2;
-					}
-				}
-				if (y == 7 && x <= 3) {
-					followers[follower].track_en ^= 1 << x;
-				}
-				/* if (x >= 8) { */
-				/* 	switch (x) { */
-				/* 	case  8: followers[follower].addr ^= 1 << (7 - y); break; */
-				/* 	case  9: followers[follower].tr_cmd ^= 1 << (7 - y); break; */
-				/* 	case 10: followers[follower].cv_cmd ^= 1 << (7 - y); break; */
-				/* 	case 11: followers[follower].cv_slew_cmd ^= 1 << (7 - y); break; */
-				/* 	case 12: followers[follower].init_cmd ^= 1 << (7 - y); break; */
-				/* 	case 13: followers[follower].vol_cmd ^= 1 << (7 - y); break; */
-				/* 	default: break; */
-				/* 	} */
-				/* } */
-			}
-			else {
-				if (x > 7) {
-					k.glyph[y] ^= 1<<(x-8);
-				}
-				if (x == 5 && y >= 2 && y <= 5) {
-					if (mod_follower) {
-						follower = y - 2;
-						follower_select = true;
-					}
-					else {
-						toggle_follower(y - 2);
-					}
-				}
-			}
-
-			monomeFrameDirty++;
-		}
-		else {
-			if (x == 5 && y == 7) {
-				mod_follower = false;
-				monomeFrameDirty++;
-			}
-		}
+		preset_mode_handle_key(x, y, z, k.glyph);
 	}
 	else if(view_clock) {
 		if(z) {
@@ -3863,66 +3873,7 @@ void handler_MPGridKey(s32 data) {
 
 	// PRESET SCREEN
 	if(preset_mode) {
-		if (z) {
-			if (x == 5 && y == 7) {
-				if (follower_select) {
-					follower_select = false;
-				} else {
-					mod_follower = true;
-				}
-			}
-			if (follower_select) {
-				if (y == 0) {
-					if (x <= 4) {
-						followers[follower].oct = x + 3;
-					}
-					if (x >= 13 && x <= (13 + followers[follower].mode_ct)) {
-						followers[follower].active_mode = x - 13;
-					}
-				}
-				if (y >= 2 && y <= 5) {
-					if (x == 5) {
-						follower = y - 2;
-					}
-				}
-				if (y == 7 && x <= 3) {
-					followers[follower].track_en ^= 1 << x;
-				}
-				/* if (x >= 8) { */
-				/* 	switch (x) { */
-				/* 	case  8: followers[follower].addr ^= 1 << (7 - y); break; */
-				/* 	case  9: followers[follower].tr_cmd ^= 1 << (7 - y); break; */
-				/* 	case 10: followers[follower].cv_cmd ^= 1 << (7 - y); break; */
-				/* 	case 11: followers[follower].cv_slew_cmd ^= 1 << (7 - y); break; */
-				/* 	case 12: followers[follower].init_cmd ^= 1 << (7 - y); break; */
-				/* 	case 13: followers[follower].vol_cmd ^= 1 << (7 - y); break; */
-				/* 	default: break; */
-				/* 	} */
-				/* } */
-			}
-			else {
-				if (x > 7) {
-					k.glyph[y] ^= 1<<(x-8);
-				}
-				if (x == 5 && y >= 2 && y <= 5) {
-					if (mod_follower) {
-						follower = y - 2;
-						follower_select = true;
-					}
-					else {
-						toggle_follower(y - 2);
-					}
-				}
-			}
-
-			monomeFrameDirty++;
-		}
-		else {
-			if (x == 5 && y == 7) {
-				mod_follower = false;
-				monomeFrameDirty++;
-			}
-		}
+		preset_mode_handle_key(x, y, z, m.glyph);
 	}
 	else if(view_clock) {
 		if(z) {
@@ -5045,61 +4996,8 @@ void handler_ESGridKey(s32 data) {
 
     // preset screen
     if (preset_mode) {
-	if (z) {
-	    if (x == 5 && y == 7) {
-	        if (follower_select) {
-		    follower_select = false;
-		} else {
-		    mod_follower = true;
-		}
-	    }
-	    if (follower_select) {
-		if (y == 0) {
-			if (x <= 4) {
-				followers[follower].oct = x + 3;
-			}
-			if (x >= 13 && x <= (13 + followers[follower].mode_ct)) {
-				followers[follower].active_mode = x - 13;
-			}
-		}
-		if (y >= 2 && y <= 5) {
-		    if (x == 5) {
-		        follower = y - 2;
-		    }
-		    if (x == 4) {
-		    }
-		}
-		if (y == 7 && x <= 3) {
-		        followers[follower].track_en ^= 1 << x;
-		}
-		/* if (x >= 8) { */
-		/*     switch (x) { */
-		/*     case  8: followers[follower].addr ^= 1 << (7 - y); break; */
-		/*     case  9: followers[follower].tr_cmd ^= 1 << (7 - y); break; */
-		/*     case 10: followers[follower].cv_cmd ^= 1 << (7 - y); break; */
-		/*     case 11: followers[follower].cv_slew_cmd ^= 1 << (7 - y); break; */
-		/*     case 12: followers[follower].init_cmd ^= 1 << (7 - y); break; */
-		/*     case 13: followers[follower].vol_cmd ^= 1 << (7 - y); break; */
-		/*     default: break; */
-		/*     } */
-		/* } */
-	    }
-	    else {
-	        if (x > 7) {
-		    e.glyph[y] ^= 1 << (x - 8);
-		}
-		if (x == 5 && y >= 2 && y <= 5) {
-		    if (mod_follower) {
-		        follower = y - 2;
-			follower_select = true;
-		    }
-		    else {
-		      toggle_follower(y - 2);
-		    }
-		}
-	    }
-        }
-	else {
+        preset_mode_handle_key(x, y, z, e.glyph);
+        if (z == 0) {
 	    if (x == 0) {
 	        if (y != preset) {
 		    preset = y;
@@ -5109,9 +5007,6 @@ void handler_ESGridKey(s32 data) {
 		    // flash read
 		    es_load_preset();
 		}
-	    }
-	    if (x == 5 && y == 7) {
-	        mod_follower = false;
 	    }
 	}
 
