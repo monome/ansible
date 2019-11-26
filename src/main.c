@@ -79,18 +79,6 @@ nvram_data_t f;
 
 ansible_mode_t ansible_mode;
 
-/* i2c_follower_t followers[I2C_FOLLOWER_COUNT] = { */
-/* 	{ */
-/* 		.active = false, */
-/* 		.track_en = 0xF, */
-/* 		.oct = 0, */
-/* 		.addr = ER301_1, */
-/* 		.tr_cmd = 0x00, // TO_TR -> SC.TR */
-/* 		.cv_cmd = 0x10, // TO_CV -> SC.CV */
-/* 		.cv_slew_cmd = 0x12, // TO_CV_SLEW -> SC.CV.SLEW */
-/* 		.note = ii_note_nop, */
-/* 	}, */
-/* }; */
 bool leader_mode = false;
 uint16_t aux_param[2][4] = { { 0 } };
 
@@ -552,7 +540,7 @@ void set_cv_note(uint8_t n, uint16_t note) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			uint16_t cv_transposed = tuning_table[i][12 * followers[i].oct + note];
+			uint16_t cv_transposed = tuning_table[i][12 + note];
 			followers[i].cv(&followers[i], n, cv_transposed);
 		}
 	}
@@ -574,7 +562,8 @@ static void follower_on(uint8_t n) {
 		bool play_follower = followers[n].active
 		  && followers[n].track_en & (1 << i);
 		if (play_follower) {
-			followers[n].init(&followers[n], i, 1);
+			followers[n].mode(&followers[n], i, followers[n].active_mode);
+			followers[n].octave(&followers[n], 0, followers[n].oct);
 		}
 	}
 }

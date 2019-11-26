@@ -35,7 +35,6 @@ static void preset_mode_exit(void);
 bool follower_select;
 bool mod_follower;
 uint8_t follower;
-uint8_t follower_param_sel;
 bool kriaAltModeBlink; // flag gets flipped for the blinking
 
 u8 grid_varibrightness = 16;
@@ -257,10 +256,14 @@ void refresh_preset(void) {
 		monomeLedBuffer[preset * 16] = 11;
 	}
 
-	for (uint8_t i = 0; i < 4; i++) {
+	if (follower_select) {
+		for (uint8_t i = 0; i < 4; i++) {
+			monomeLedBuffer[R7 + i] = (followers[follower].track_en & (1 << i)) ? L1 : L0;
+		}
+	}
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		if (follower_select) {
 			monomeLedBuffer[5 + (2 + i)*16] = i == follower ? L1 : L0;
-			monomeLedBuffer[R7 + i] = (followers[follower].track_en & (1 << i)) ? L1 : L0;
 		}
 		else {
 			monomeLedBuffer[5 + (2 + i)*16] = followers[i].active ? L1 : L0;
@@ -269,28 +272,12 @@ void refresh_preset(void) {
 	monomeLedBuffer[5 + R7] = mod_follower ? L1 : L0;
 
 	if (follower_select) {
-		memset(monomeLedBuffer, L0, 5);
-		monomeLedBuffer[followers[follower].oct - 3] = L1;
+		memset(monomeLedBuffer, L0, 7);
+		monomeLedBuffer[followers[follower].oct + 3] = L1;
 
 		if (followers[follower].mode_ct > 1) {
 			memset(monomeLedBuffer + 13, L0, followers[follower].mode_ct);
 			monomeLedBuffer[13 + followers[follower].active_mode] = L1;
-		}
-
-		if (followers[follower].param_ct > 1) {
-			monomeLedBuffer[R7 + 8] = L0;
-			if (follower_param_sel > 0) {
-				monomeLedBuffer[R7 + 8] += 4;
-				if (kriaAltModeBlink) monomeLedBuffer[R7 + 8] += 4;
-				for (uint8_t i = 0; i < followers[follower].param_ct; i++) {
-					if (i == followers[follower].active_param[follower_param_sel - 1]) {
-						monomeLedBuffer[8 + (6 - i)*16] = L1;
-					}
-					else {
-						monomeLedBuffer[8 + (6 - i)*16] = L0;
-					}
-				}
-			}
 		}
 	}
 	else {
@@ -1616,8 +1603,9 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 		}
 		if (follower_select) {
 			if (y == 0) {
-				if (x <= 4) {
-					followers[follower].oct = x + 3;
+				if (x <= 6) {
+					followers[follower].oct = x - 3;
+					followers[follower].octave(&followers[follower], 0, followers[follower].oct);
 				}
 				if (followers[follower].mode_ct > 1
 				 && x >= 13
@@ -1634,21 +1622,6 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 				if (x <= 3) {
 					followers[follower].track_en ^= 1 << x;
 				}
-				if (x == 8) {
-					follower_param_sel = (follower_param_sel + 1) % 3;
-					if (follower_param_sel == 2) {
-						timer_add(&altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
-					}
-					else if (follower_param_sel == 0) {
-						timer_remove(&altBlinkTimer);
-					}
-				}
-			}
-			if (follower_param_sel > 0
-			 && x == 8
-			 && y >= 1
-			 && y <= followers[follower].mode_ct) {
-				followers[follower].active_param[follower_param_sel - 1] = y - 1;
 			}
 		}
 		else {

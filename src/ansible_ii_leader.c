@@ -3,11 +3,7 @@
 #include "ii.h"
 #include "ansible_ii_leader.h"
 #include "main.h"
-
-static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t on) {
-	uint8_t d[] = { JF_MODE, on };
-	i2c_master_tx(follower->addr, d, 2);
-}
+#include "music.h"
 
 static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[6] = { 0 };
@@ -72,16 +68,20 @@ static void ii_mode_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 	}
 }
 
-static void ii_init_txo(i2c_follower_t* follower, uint8_t track, uint8_t on) {
-	uint8_t d[4] = {
-		0x60, // TO_ENV_ACT
-		track,
-		on,
-	};
-	i2c_master_tx(follower->addr, d, 3);
-
-	if (on) {
+static void ii_octave_jf(i2c_follower_t* follower, uint8_t track, int8_t octave) {
+	int16_t shift;
+	if (octave > 0) {
+		shift = ET[12*octave] << 2;
 	}
+	else if (octave < 0) {
+		shift = -(ET[12*(-octave)] << 2);
+	}
+	else {
+		shift = 0;
+	}
+
+	uint8_t d[] = { JF_SHIFT, shift >> 8, shift & 0xFF };
+	i2c_master_tx(follower->addr, d, 3);
 }
 
 static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
@@ -109,6 +109,44 @@ static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 			d[1] = track;
 			d[2] = 0;
 			i2c_master_tx(follower->addr, d, 3);
+
+			d[0] = 0x10; // TO_CV
+			d[1] = track;
+			d[2] = 0;
+			d[3] = 0;
+			i2c_master_tx(follower->addr, d, 4);
+			break;
+		}
+		default: return;
+	}
+}
+
+static void ii_octave_txo(i2c_follower_t* follower, uint8_t track, int8_t octave) {
+	int16_t shift;
+	switch (follower->active_mode) {
+		case 0: { // enveloped oscillator, pitch is calculated from oct
+			break;
+		}
+		case 1: { // gate / cv
+			if (octave > 0) {
+				shift = ET[12*octave] << 2;
+			}
+			else if (octave < 0) {
+				shift = -(ET[12*(-octave)] << 2);
+			}
+			else {
+				shift = 0;
+			}
+			uint8_t d[] = {
+				0x15, // TO_CV_OFF
+				0,
+				shift >> 8,
+				shift & 0xFF,
+			};
+			for (uint8_t i = 0; i < 4; i++) {
+				d[1] = i + 1;
+				i2c_master_tx(follower->addr, d, 4);
+			}
 			break;
 		}
 		default: return;
@@ -142,6 +180,7 @@ static void ii_cv_txo(i2c_follower_t* follower, uint8_t track, uint16_t dac_valu
 
 	switch (follower->active_mode) {
 		case 0: { // enveloped oscillator
+			dac_value = (int)dac_value + (ET[12*(4+follower->oct)] << 2);
 			d[0] = 0x40; // TO_OSC
 			d[1] = track;
 			d[2] = dac_value >> 8;
@@ -185,16 +224,10 @@ static void ii_slew_txo(i2c_follower_t* follower, uint8_t track, uint16_t slew) 
 	}
 }
 
-static void ii_init_nop(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+static void ii_u8_nop(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 }
 
-static void ii_tr_nop(i2c_follower_t* follower, uint8_t track, uint8_t state) {
-}
-
-static void ii_cv_nop(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
-}
-
-static void ii_slew_nop(i2c_follower_t* follower, uint8_t track, uint16_t slew) {
+static void ii_u16_nop(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
 }
 
 i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
@@ -204,14 +237,12 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.track_en = 0xF,
 		.oct = 0,
 
-		.init = ii_init_jf,
 		.mode = ii_mode_jf,
-		.param = ii_cv_nop,
 		.tr = ii_tr_jf,
-		.cv = ii_cv_nop,
-		.slew = ii_slew_nop,
+		.cv = ii_u16_nop,
+		.octave = ii_octave_jf,
+		.slew = ii_u16_nop,
 
-		.param_ct = 2,
 		.mode_ct = 3,
 		.active_mode = 0,
 	},
@@ -219,16 +250,14 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.addr = TELEXO_0,
 		.active = false,
 		.track_en = 0xF,
-		.oct = 3,
+		.oct = 0,
 
-		.init = ii_init_txo,
-		.mode = ii_tr_nop,
-		.param = ii_cv_nop,
+		.mode = ii_mode_txo,
 		.tr = ii_tr_txo,
 		.cv = ii_cv_txo,
+		.octave = ii_octave_txo,
 		.slew = ii_slew_txo,
 
-		.param_ct = 3,
 		.mode_ct = 2,
 		.active_mode = 0,
 	},
@@ -238,14 +267,12 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.track_en = 0xF,
 		.oct = 0,
 
-		.init = ii_init_nop,
-		.mode = ii_tr_nop,
-		.param = ii_cv_nop,
+		.mode = ii_u8_nop,
 		.tr = ii_tr_txo,
 		.cv = ii_cv_txo,
+		.octave = ii_octave_txo,
 		.slew = ii_slew_txo,
 
-		.param_ct = 0,
 		.mode_ct = 1,
 		.active_mode = 1, // always gate/cv
 	},
