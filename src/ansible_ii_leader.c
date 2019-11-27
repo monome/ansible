@@ -46,10 +46,21 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		}
 	}
 	else {
-		d[0] = JF_TR;
-	        d[1] = track + 1;
-		d[2] = 0;
-		l = 3;
+		if (follower->active_mode == 0) {
+			d[0] = JF_NOTE;
+			d[1] = dac_value >> 8;
+			d[2] = dac_value & 0xFF;
+			d[3] = 0;
+			d[4] = 0;
+			l = 5;
+		}
+		else
+		{
+			d[0] = JF_TR;
+	        	d[1] = track + 1;
+			d[2] = 0;
+			l = 3;
+		}
 	}
 	i2c_master_tx(follower->addr, d, l);
 }
