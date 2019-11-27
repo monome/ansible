@@ -918,11 +918,6 @@ void clock_kria_track( uint8_t trackNum ) {
 
 	bool trNextStep = kria_next_step(trackNum, mTr);
 	bool isTrigger = track->tr[pos[trackNum][mTr]];
-	if(trNextStep) {
-		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)380.0;
-		f32 uncscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
-		dur[trackNum] = (u16)(uncscaled * clock_scale);
-	}
 
 	// if the track isn't in trigger_step mode, or if there is a trigger
 	// THEN we clock the other parameters
@@ -1442,6 +1437,16 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			if (l >= 2) {
 				ii_tx_queue(k.p[k.pattern].t[d[1] - 1].direction);
 			}
+			break;
+		case II_KR_DURATION + II_GET:
+			if ( d[1] < 0
+			  || d[1] >= KRIA_NUM_TRACKS) {
+				ii_tx_queue(0);
+				ii_tx_queue(0);
+				break;
+			}
+			ii_tx_queue(dur[d[1]] >> 8);
+			ii_tx_queue(dur[d[1]] & 0xFF);
 			break;
 		default:
 			ii_grid(d, l);
