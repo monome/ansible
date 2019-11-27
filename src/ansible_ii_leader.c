@@ -97,6 +97,12 @@ static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 			d[2] = 1;
 			i2c_master_tx(follower->addr, d, 3);
 
+			d[0] = 0x15; // TO_CV_OFF
+			d[1] = track;
+			d[2] = 0;
+			d[3] = 0;
+			i2c_master_tx(follower->addr, d, 4);
+
 			d[0] = 0x10; // TO_CV
 			d[1] = track;
 			d[2] = 8192 >> 8;
@@ -109,6 +115,12 @@ static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 			d[1] = track;
 			d[2] = 0;
 			i2c_master_tx(follower->addr, d, 3);
+
+			d[0] = 0x40; // TO_OSC
+			d[1] = track;
+			d[2] = 0;
+			d[3] = 0;
+			i2c_master_tx(follower->addr, d, 4);
 
 			d[0] = 0x10; // TO_CV
 			d[1] = track;
@@ -144,7 +156,7 @@ static void ii_octave_txo(i2c_follower_t* follower, uint8_t track, int8_t octave
 				shift & 0xFF,
 			};
 			for (uint8_t i = 0; i < 4; i++) {
-				d[1] = i + 1;
+				d[1] = i;
 				i2c_master_tx(follower->addr, d, 4);
 			}
 			break;

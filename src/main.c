@@ -540,7 +540,7 @@ void set_cv_note(uint8_t n, uint16_t note) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			uint16_t cv_transposed = tuning_table[i][12 + note];
+			uint16_t cv_transposed = tuning_table[i][note];
 			followers[i].cv(&followers[i], n, cv_transposed);
 		}
 	}
