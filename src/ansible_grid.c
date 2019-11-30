@@ -3812,7 +3812,7 @@ void handler_MPGridKey(s32 data) {
 		// FAST PRESS
 		if(key_times[index] > 0) {
 			if(preset_mode) {
-				if(x == 0) {
+				if(x == 0 && !follower_select) {
 					if(y != preset) {
 						preset = y;
 
@@ -4971,7 +4971,7 @@ void handler_ESGridKey(s32 data) {
     if (preset_mode) {
         preset_mode_handle_key(x, y, z, e.glyph);
         if (z == 0) {
-	    if (x == 0) {
+	    if (x == 0 && !follower_select) {
 	        if (y != preset) {
 		    preset = y;
 		    for (u8 i = 0; i < GRID_PRESETS; i++)

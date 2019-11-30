@@ -5,6 +5,11 @@
 #include "main.h"
 #include "music.h"
 
+static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+	uint8_t d[] = { JF_MODE, state };
+	i2c_master_tx(follower->addr, d, 2);
+}
+
 static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[6] = { 0 };
 	uint8_t l = 0;
@@ -46,7 +51,7 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		}
 	}
 	else {
-		if (follower->active_mode == 0) {
+		if (follower->active_mode == 0 && ansible_mode == mGridES) {
 			d[0] = JF_NOTE;
 			d[1] = dac_value >> 8;
 			d[2] = dac_value & 0xFF;
@@ -260,6 +265,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.track_en = 0xF,
 		.oct = 0,
 
+		.init = ii_init_jf,
 		.mode = ii_mode_jf,
 		.tr = ii_tr_jf,
 		.cv = ii_u16_nop,
@@ -275,6 +281,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.track_en = 0xF,
 		.oct = 0,
 
+		.init = ii_u8_nop,
 		.mode = ii_mode_txo,
 		.tr = ii_tr_txo,
 		.cv = ii_cv_txo,
@@ -290,6 +297,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.track_en = 0xF,
 		.oct = 0,
 
+		.init = ii_u8_nop,
 		.mode = ii_u8_nop,
 		.tr = ii_tr_txo,
 		.cv = ii_cv_txo,

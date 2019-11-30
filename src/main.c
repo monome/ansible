@@ -559,22 +559,15 @@ void set_cv_slew(uint8_t n, uint16_t s) {
 
 static void follower_on(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		bool play_follower = followers[n].active
-		  && followers[n].track_en & (1 << i);
-		if (play_follower) {
-			followers[n].mode(&followers[n], i, followers[n].active_mode);
-			followers[n].octave(&followers[n], 0, followers[n].oct);
-		}
+		followers[n].init(&followers[n], i, 1);
+		followers[n].mode(&followers[n], i, followers[n].active_mode);
+		followers[n].octave(&followers[n], 0, followers[n].oct);
 	}
 }
 
 static void follower_off(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		bool play_follower = followers[n].active
-				  && followers[n].track_en & (1 << i);
-		if (play_follower) {
-			followers[n].init(&followers[n], i, 0);
-		}
+		followers[n].init(&followers[n], i, 0);
 	}
 }
 
