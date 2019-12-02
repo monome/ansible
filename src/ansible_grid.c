@@ -884,16 +884,17 @@ void clock_kria(uint8_t phase) {
 
 		if(pos_reset) {
 			clock_count = 0;
+			u64 current_tick = get_ticks();
 			for(int i1=0;i1<KRIA_NUM_TRACKS;i1++)
 			for(int i2=0;i2<KRIA_NUM_PARAMS;i2++) {
 				pos[i1][i2] = k.p[k.pattern].t[i1].lend[i2];
 				pos_mul[i1][i2] = k.p[k.pattern].t[i1].tmul[i2];
+				last_ticks[i1] = current_tick - clock_deltas[i1];
 			}
 			cue_count = 0;
 			cue_sub_count = 0;
 			pos_reset = false;
 		}
-
 
 		for ( uint8_t i=0; i<KRIA_NUM_TRACKS; i++ )
 		{
@@ -953,11 +954,6 @@ void clock_kria_track( uint8_t trackNum ) {
 
 	bool trNextStep = kria_next_step(trackNum, mTr);
 	bool isTrigger = track->tr[pos[trackNum][mTr]];
-	if(trNextStep) {
-		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)380.0;
-		f32 uncscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
-		dur[trackNum] = (u16)(uncscaled * clock_scale);
-	}
 
 	// if the track isn't in trigger_step mode, or if there is a trigger
 	// THEN we clock the other parameters
@@ -1477,6 +1473,16 @@ void ii_kria(uint8_t *d, uint8_t l) {
 			if (l >= 2) {
 				ii_tx_queue(k.p[k.pattern].t[d[1] - 1].direction);
 			}
+			break;
+		case II_KR_DURATION + II_GET:
+			if ( d[1] < 0
+			  || d[1] >= KRIA_NUM_TRACKS) {
+				ii_tx_queue(0);
+				ii_tx_queue(0);
+				break;
+			}
+			ii_tx_queue(dur[d[1]] >> 8);
+			ii_tx_queue(dur[d[1]] & 0xFF);
 			break;
 		default:
 			ii_grid(d, l);
