@@ -6,7 +6,19 @@
 #include "music.h"
 
 static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
-	uint8_t d[] = { JF_MODE, state };
+	uint8_t d[3] = { 0 };
+
+	if (!state)
+	{
+		// clear all triggers to avoid hanging notes in SUSTAIN
+		d[0] = JF_TR;
+		d[1] = 0;
+		d[2] = 0;
+		i2c_master_tx(follower->addr, d, 3);
+	}
+
+	d[0] = JF_MODE;
+	d[1] = state;
 	i2c_master_tx(follower->addr, d, 2);
 }
 
@@ -29,7 +41,7 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 			}
 			case 1: { // tracks to first 4 voices
 				d[0] = JF_VOX;
-		        	d[1] = track + 1;
+				d[1] = track + 1;
 				d[2] = dac_value >> 8;
 				d[3] = dac_value & 0xFF;
 				d[4] = vel >> 8;
@@ -39,7 +51,7 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 			}
 			case 2: { // envelopes
 				d[0] = JF_VTR;
-		        	d[1] = track + 1;
+				d[1] = track + 1;
 				d[2] = vel >> 8;
 				d[3] = vel & 0xFF;
 				l = 4;
@@ -51,35 +63,54 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		}
 	}
 	else {
-		if (follower->active_mode == 0 && ansible_mode == mGridES) {
-			d[0] = JF_NOTE;
-			d[1] = dac_value >> 8;
-			d[2] = dac_value & 0xFF;
-			d[3] = 0;
-			d[4] = 0;
-			l = 5;
+		if (follower->active_mode == 0) {
+			if (ansible_mode == mGridES) {
+				d[0] = JF_NOTE;
+				d[1] = dac_value >> 8;
+				d[2] = dac_value & 0xFF;
+				d[3] = 0;
+				d[4] = 0;
+				l = 5;
+			}
+			else
+			{
+				l = 0;
+			}
 		}
 		else
 		{
 			d[0] = JF_TR;
-	        	d[1] = track + 1;
+			d[1] = track + 1;
 			d[2] = 0;
 			l = 3;
 		}
 	}
-	i2c_master_tx(follower->addr, d, l);
+	if (l > 0) {
+		i2c_master_tx(follower->addr, d, l);
+	}
 }
 
 static void ii_mode_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	uint8_t d[4] = { 0 };
+
 	if (mode > follower->mode_ct) return;
 	follower->active_mode = mode;
 	if (mode == 2) {
-		uint8_t d[] = { JF_MODE, 0 };
+		d[0] = JF_MODE;
+		d[1] = 0;
 		i2c_master_tx(follower->addr, d, 2);
+
+		// clear all triggers to avoid hanging notes in SUSTAIN
+		d[0] = JF_TR;
+		d[1] = 0;
+		d[2] = 0;
+		d[3] = 0;
+		i2c_master_tx(follower->addr, d, 3);
 	}
 	else
 	{
-		uint8_t d[] = { JF_MODE, 1 };
+		d[0] = JF_MODE;
+		d[1] = 1;
 		i2c_master_tx(follower->addr, d, 2);
 	}
 }
