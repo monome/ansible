@@ -219,8 +219,9 @@ static void ii_tr_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		case 0: { // enveloped oscillator
 			d[0] = 0x6D; // TO_ENV
 			d[1] = track;
-			d[2] = state;
-			i2c_master_tx(follower->addr, d, 3);
+			d[2] = 0;
+			d[3] = state;
+			i2c_master_tx(follower->addr, d, 4);
 			break;
 		}
 		case 1: { // gate/cv
