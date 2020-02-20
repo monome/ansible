@@ -213,7 +213,7 @@ static void ii_octave_txo(i2c_follower_t* follower, uint8_t track, int8_t octave
 }
 
 static void ii_tr_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
-	uint8_t d[3] = { 0 };
+	uint8_t d[4] = { 0 };
 
 	switch (follower->active_mode) {
 		case 0: { // enveloped oscillator
@@ -226,8 +226,9 @@ static void ii_tr_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		case 1: { // gate/cv
 			d[0] = 0x00; // TO_TR
 			d[1] = track;
-			d[2] = state;
-			i2c_master_tx(follower->addr, d, 3);
+			d[2] = 0;
+			d[3] = state;
+			i2c_master_tx(follower->addr, d, 4);
 			break;
 		}
 		default: return;
