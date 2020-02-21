@@ -131,6 +131,30 @@ static void ii_octave_jf(i2c_follower_t* follower, uint8_t track, int8_t octave)
 	i2c_master_tx(follower->addr, d, 3);
 }
 
+static void ii_init_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+	uint8_t d[4] = { 0 };
+
+	if (state == 0) {
+		d[0] = 0x60; // TO_ENV_ACT
+		d[1] = track;
+		d[2] = 0;
+		d[3] = 0;
+		i2c_master_tx(follower->addr, d, 4);
+
+		d[0] = 0x40; // TO_OSC
+		d[1] = track;
+		d[2] = 0;
+		d[3] = 0;
+		i2c_master_tx(follower->addr, d, 4);
+
+		d[0] = 0x10; // TO_CV
+		d[1] = track;
+		d[2] = 0;
+		d[3] = 0;
+		i2c_master_tx(follower->addr, d, 4);
+	}
+}
+
 static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 	uint8_t d[4] = { 0 };
 
@@ -141,8 +165,9 @@ static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 		case 0: { // enveloped oscillators
 			d[0] = 0x60; // TO_ENV_ACT
 			d[1] = track;
-			d[2] = 1;
-			i2c_master_tx(follower->addr, d, 3);
+			d[2] = 0;
+			d[3] = 1;
+			i2c_master_tx(follower->addr, d, 4);
 
 			d[0] = 0x15; // TO_CV_OFF
 			d[1] = track;
@@ -161,7 +186,8 @@ static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 			d[0] = 0x60; // TO_ENV_ACT
 			d[1] = track;
 			d[2] = 0;
-			i2c_master_tx(follower->addr, d, 3);
+			d[3] = 0;
+			i2c_master_tx(follower->addr, d, 4);
 
 			d[0] = 0x40; // TO_OSC
 			d[1] = track;
@@ -314,7 +340,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.track_en = 0xF,
 		.oct = 0,
 
-		.init = ii_u8_nop,
+		.init = ii_init_txo,
 		.mode = ii_mode_txo,
 		.tr = ii_tr_txo,
 		.cv = ii_cv_txo,
@@ -341,3 +367,19 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.active_mode = 1, // always gate/cv
 	},
 };
+
+void follower_change_mode(i2c_follower_t* follower, uint8_t param) {
+	for (int i = 0; i < 4; i++) {
+		if (follower->track_en & (1 << i)) {
+			follower->mode(follower, i, param);
+		}
+	}
+}
+
+void follower_change_octave(i2c_follower_t* follower, int8_t param) {
+	for (int i = 0; i < 4; i++) {
+		if (follower->track_en & (1 << i)) {
+			follower->octave(follower, i, param);
+		}
+	}
+}

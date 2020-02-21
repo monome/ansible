@@ -1611,12 +1611,12 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 			if (y == 0) {
 				if (x <= 6) {
 					followers[follower].oct = x - 3;
-					followers[follower].octave(&followers[follower], 0, followers[follower].oct);
+					follower_change_octave(&followers[follower], followers[follower].oct);
 				}
 				if (followers[follower].mode_ct > 1
 				 && x >= 13
 				 && x <= (13 + followers[follower].mode_ct)) {
-					followers[follower].mode(&followers[follower], 0, x - 13);
+					follower_change_mode(&followers[follower], x - 13);
 				}
 			}
 			if (y >= 2 && y <= 5) {

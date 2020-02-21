@@ -26,3 +26,6 @@ typedef struct i2c_follower_t {
 } i2c_follower_t;
 
 extern i2c_follower_t followers[I2C_FOLLOWER_COUNT];
+
+void follower_change_mode(i2c_follower_t* follower, uint8_t param);
+void follower_change_octave(i2c_follower_t* follower, int8_t param);
