@@ -466,21 +466,36 @@ void init_tuning(void) {
 	memcpy((void *)&tuning_table, &f.tuning_table, sizeof(tuning_table));
 }
 
-void fit_tuning(void) {
-	for (uint8_t i = 0; i < 4; i++) {
-		fix16_t step = 0;
-		for (uint8_t j = 0; j < 10; j++) {
-			fix16_t acc = fix16_from_int(tuning_table[i][j*12]);
-			if (j < 9) {
-				step = fix16_div(
-					fix16_from_int(tuning_table[i][(j+1)*12] - tuning_table[i][j*12]),
-					fix16_from_int(12));
+void fit_tuning(int mode) {
+	switch (mode) {
+		case 0: { // fixed offset per channel
+			for (uint8_t i = 0; i < 4; i++) {
+				uint16_t offset = tuning_table[i][0];
+				for (uint8_t j = 0; j < 120; j++) {
+					tuning_table[i][j] = (ET[j] << 2) + offset;
+				}
 			}
-			for (uint8_t k = j*12; k < (j+1)*12; k++) {
-				tuning_table[i][k] = fix16_to_int(acc);
-				acc = fix16_add(acc, step);
-			}
+			break;
 		}
+		case 1: { // linear fit between octaves
+			for (uint8_t i = 0; i < 4; i++) {
+				fix16_t step = 0;
+				for (uint8_t j = 0; j < 10; j++) {
+					fix16_t acc = fix16_from_int(tuning_table[i][j*12]);
+					if (j < 9) {
+						step = fix16_div(
+							fix16_from_int(tuning_table[i][(j+1)*12] - tuning_table[i][j*12]),
+							fix16_from_int(12));
+					}
+					for (uint8_t k = j*12; k < (j+1)*12; k++) {
+						tuning_table[i][k] = fix16_to_int(acc);
+						acc = fix16_add(acc, step);
+					}
+				}
+			}
+			break;
+		}
+		default: break;
 	}
 }
 
