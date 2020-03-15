@@ -85,7 +85,7 @@ extern uint16_t tuning_table[4][120];
 void (*clock)(u8 phase);
 void init_tuning(void);
 void default_tuning(void);
-void fit_tuning(void);
+void fit_tuning(int mode);
 
 extern void handler_None(s32 data);
 extern void clock_null(u8 phase);

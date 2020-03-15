@@ -325,7 +325,8 @@ void refresh_grid_tuning(void) {
 
 	memset(monomeLedBuffer + R5, L0, 10);
 	monomeLedBuffer[R5 + tuning_octave] = L1;
-	monomeLedBuffer[R5 + 12] = L1; // reload / longpress to restore factory default
+	monomeLedBuffer[R5 + 11] = L1; // reload / longpress to restore factory default
+	monomeLedBuffer[R5 + 13] = L1; // save offsets key
 	monomeLedBuffer[R5 + 14] = L1; // save interpolated key
 	monomeLedBuffer[R5 + 15] = L1; // save as-is key
 
@@ -426,7 +427,7 @@ void grid_keytimer(void) {
 
 			if (view_tuning) {
 				if (y == 5) {
-					if (x == 12) {
+					if (x == 11) {
 						// reload factory default, don't immediately save it
 						for (uint8_t i = 0; i < 4; i++) {
 							for (uint8_t j = 0; j < 120; j ++) {
@@ -435,9 +436,15 @@ void grid_keytimer(void) {
 						}
 						restore_grid_tuning();
 					}
+					if (x == 13) {
+						// apply fixed offset and save
+						fit_tuning(0);
+						flashc_memcpy((void*)f.tuning_table, tuning_table, sizeof(tuning_table), true);
+						restore_grid_tuning();
+					}
 					if (x == 14) {
 						// interpolate octaves and save
-						fit_tuning();
+						fit_tuning(1);
 						flashc_memcpy((void*)f.tuning_table, tuning_table, sizeof(tuning_table), true);
 						restore_grid_tuning();
 					}
@@ -1727,11 +1734,14 @@ void handler_KriaGridKey(s32 data) {
 			}
 			else if(view_tuning) {
 				if (y == 5) {
-					if (x == 12) {
+					if (x == 11) {
 						init_tuning();
 						restore_grid_tuning();
+					} else if (x == 13) {
+						fit_tuning(0);
+						restore_grid_tuning();
 					} else if (x == 14) {
-						fit_tuning();
+						fit_tuning(1);
 						restore_grid_tuning();
 					}
 				}
