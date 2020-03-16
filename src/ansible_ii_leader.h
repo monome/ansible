@@ -17,6 +17,8 @@ typedef struct i2c_follower_t {
 	ii_u8_cb init;
 	ii_u8_cb mode;
 	ii_u8_cb tr;
+        ii_u8_cb mute;
+
 	ii_u16_cb cv;
 	ii_u16_cb slew;
 	ii_s8_cb octave;

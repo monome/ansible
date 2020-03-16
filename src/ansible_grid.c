@@ -698,15 +698,7 @@ void resume_kria() {
 		last_ticks[i] = get_ticks();
 	}
 
-	set_cv_slew(0,0);
-	set_cv_slew(1,0);
-	set_cv_slew(2,0);
-	set_cv_slew(3,0);
-
-	clr_tr(TR1);
-	clr_tr(TR2);
-	clr_tr(TR3);
-	clr_tr(TR4);
+	reset_outputs();
 
 	monomeFrameDirty++;
 }
@@ -3433,15 +3425,7 @@ void resume_mp() {
 	else
 		clock = &clock_mp;
 
-	set_cv_slew(0,0);
-	set_cv_slew(1,0);
-	set_cv_slew(2,0);
-	set_cv_slew(3,0);
-
-	clr_tr(TR1);
-	clr_tr(TR2);
-	clr_tr(TR3);
-	clr_tr(TR4);
+	reset_outputs();
 
 	monomeFrameDirty++;
 }
@@ -4867,9 +4851,8 @@ void resume_es(void) {
     clock_external = !gpio_get_pin_value(B10);
     clock = &clock_null;
 
+    reset_outputs();
     for (u8 i = 0; i < 4; i++) {
-        set_cv_slew(i, 0);
-        clr_tr(TR1 + i);
         es_notes[i].active = 0;
     }
 

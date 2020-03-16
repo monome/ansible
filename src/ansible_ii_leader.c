@@ -64,18 +64,12 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	}
 	else {
 		if (follower->active_mode == 0) {
-			if (ansible_mode == mGridES) {
-				d[0] = JF_NOTE;
-				d[1] = dac_value >> 8;
-				d[2] = dac_value & 0xFF;
-				d[3] = 0;
-				d[4] = 0;
-				l = 5;
-			}
-			else
-			{
-				l = 0;
-			}
+			d[0] = JF_NOTE;
+			d[1] = dac_value >> 8;
+			d[2] = dac_value & 0xFF;
+			d[3] = 0;
+			d[4] = 0;
+			l = 5;
 		}
 		else
 		{
@@ -88,6 +82,16 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	if (l > 0) {
 		i2c_master_tx(follower->addr, d, l);
 	}
+}
+
+static void ii_mute_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	uint8_t d[3] = { 0 };
+
+	// clear all triggers to avoid hanging notes in SUSTAIN
+	d[0] = JF_TR;
+	d[1] = 0;
+	d[2] = 0;
+	i2c_master_tx(follower->addr, d, 3);
 }
 
 static void ii_mode_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
@@ -262,6 +266,12 @@ static void ii_tr_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	}
 }
 
+static void ii_mute_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	for (uint8_t i = 0; i < 4; i++) {
+		ii_tr_txo(follower, i, 0);
+	}
+}
+
 static void ii_cv_txo(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
 	uint8_t d[4] = { 0 };
 
@@ -327,6 +337,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.init = ii_init_jf,
 		.mode = ii_mode_jf,
 		.tr = ii_tr_jf,
+		.mute = ii_mute_jf,
 		.cv = ii_u16_nop,
 		.octave = ii_octave_jf,
 		.slew = ii_u16_nop,
@@ -343,6 +354,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.init = ii_init_txo,
 		.mode = ii_mode_txo,
 		.tr = ii_tr_txo,
+		.mute = ii_mute_txo,
 		.cv = ii_cv_txo,
 		.octave = ii_octave_txo,
 		.slew = ii_slew_txo,
@@ -359,6 +371,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.init = ii_u8_nop,
 		.mode = ii_u8_nop,
 		.tr = ii_tr_txo,
+		.mute = ii_mute_txo,
 		.cv = ii_cv_txo,
 		.octave = ii_octave_txo,
 		.slew = ii_slew_txo,

@@ -572,6 +572,20 @@ void set_cv_slew(uint8_t n, uint16_t s) {
 	}
 }
 
+void reset_outputs(void) {
+	for (uint8_t n = 0; n < 4; n++) {
+		dac_set_slew(n, 0);
+		gpio_clr_gpio_pin(n + TR1);
+		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+			bool play_follower = followers[i].active
+			  && followers[i].track_en & (1 << n);
+			if (play_follower) {
+				followers[i].mute(&followers[n], 0, 0);
+			}
+		}
+	}
+}
+
 static void follower_on(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
 		followers[n].init(&followers[n], i, 1);
