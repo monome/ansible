@@ -103,6 +103,33 @@ json_docdef_t ansible_meta_docdefs[] = {
 								.dst_offset = offsetof(nvram_data_t, state.followers[0].active),
 							}),
 						},
+						{
+							.name = "track_en",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].track_en),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].track_en),
+							}),
+						},
+						{
+							.name = "oct",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].oct),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].oct),
+							}),
+						},
+						{
+							.name = "active_mode",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].active_mode),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].active_mode),
+							}),
+						},
 					}),
 				}),
 			}),
