@@ -30,6 +30,12 @@
 
 bool preset_mode;
 uint8_t preset;
+static void preset_mode_exit(void);
+
+bool follower_select;
+bool mod_follower;
+uint8_t follower;
+bool kriaAltModeBlink; // flag gets flipped for the blinking
 
 u8 grid_varibrightness = 16;
 u8 key_count = 0;
@@ -109,6 +115,7 @@ softTimer_t repeatTimer[4] = {
 
 static void grid_keytimer_kria(uint8_t held_key);
 static void kria_set_note(uint8_t trackNum);
+static void preset_mode_handle_key(uint8_t x, uint8_t y, uint8_t z, uint8_t* glyph);
 static kria_modes_t ii_kr_mode_for_cmd(uint8_t cmd);
 static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode);
 
@@ -138,7 +145,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_KriaRefresh;
 		clock = &clock_kria;
 		clock_set(clock_period);
-		init_i2c_slave(II_KR_ADDR);
+		if (!leader_mode) init_i2c_slave(II_KR_ADDR);
 		process_ii = &ii_kria;
 		resume_kria();
 		update_leds(1);
@@ -152,7 +159,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_MPRefresh;
 		clock = &clock_mp;
 		clock_set(clock_period);
-		init_i2c_slave(II_MP_ADDR);
+		if (!leader_mode) init_i2c_slave(II_MP_ADDR);
 		process_ii = &ii_mp;
 		resume_mp();
 		update_leds(2);
@@ -166,7 +173,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_ESRefresh;
 		clock = &clock_null;
 		clock_set(clock_period);
-		init_i2c_slave(ES);
+		if (!leader_mode) init_i2c_slave(ES);
 		process_ii = &ii_es;
 		resume_es();
 		update_leds(3);
@@ -184,11 +191,15 @@ void set_mode_grid() {
 	flashc_memset32((void*)&(f.state.grid_mode), ansible_mode, 4, true);
 }
 
+static void preset_mode_exit(void) {
+	 // print_dbg("\r\n> PRESET EXIT");
+	preset_mode = false;
+	flashc_memcpy((void*)f.state.followers, followers, sizeof(followers), true);
+}
 
 void handler_GridFrontShort(s32 data) {
 	if(preset_mode) {
-		// print_dbg("\r\n> PRESET EXIT");
-		preset_mode = false;
+		preset_mode_exit();
 
 		switch (ansible_mode) {
 			case mGridKria:
@@ -241,31 +252,56 @@ void refresh_preset(void) {
 
 	memset(monomeLedBuffer,0,128);
 
-	for(i1=0;i1<128;i1++)
-		monomeLedBuffer[i1] = 0;
+	if (!follower_select) {
+		monomeLedBuffer[preset * 16] = 11;
+	}
 
-	monomeLedBuffer[preset * 16] = 11;
+	if (follower_select) {
+		for (uint8_t i = 0; i < 4; i++) {
+			monomeLedBuffer[R7 + i] = (followers[follower].track_en & (1 << i)) ? L1 : L0;
+		}
+	}
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		if (follower_select) {
+			monomeLedBuffer[5 + (2 + i)*16] = i == follower ? L1 : L0;
+		}
+		else {
+			monomeLedBuffer[5 + (2 + i)*16] = followers[i].active ? L1 : L0;
+		}
+	}
+	monomeLedBuffer[5 + R7] = mod_follower ? L1 : L0;
 
-	switch(ansible_mode) {
-	case mGridMP:
-		for(i1=0;i1<8;i1++)
-			for(i2=0;i2<8;i2++)
-				if(m.glyph[i1] & (1<<i2))
-					monomeLedBuffer[i1*16+i2+8] = 9;
-		break;
-	case mGridKria:
-		for(i1=0;i1<8;i1++)
-			for(i2=0;i2<8;i2++)
-				if(k.glyph[i1] & (1<<i2))
-					monomeLedBuffer[i1*16+i2+8] = 9;
-		break;
-	case mGridES:
-		for(i1=0;i1<8;i1++)
-			for(i2=0;i2<8;i2++)
-				if(e.glyph[i1] & (1<<i2))
-					monomeLedBuffer[i1*16+i2+8] = 9;
-		break;
-	default: break;
+	if (follower_select) {
+		memset(monomeLedBuffer, L0, 7);
+		monomeLedBuffer[followers[follower].oct + 3] = L1;
+
+		if (followers[follower].mode_ct > 1) {
+			memset(monomeLedBuffer + 13, L0, followers[follower].mode_ct);
+			monomeLedBuffer[13 + followers[follower].active_mode] = L1;
+		}
+	}
+	else {
+		switch(ansible_mode) {
+		case mGridMP:
+			for(i1=0;i1<8;i1++)
+				for(i2=0;i2<8;i2++)
+					if(m.glyph[i1] & (1<<i2))
+						monomeLedBuffer[i1*16+i2+8] = 9;
+			break;
+		case mGridKria:
+			for(i1=0;i1<8;i1++)
+				for(i2=0;i2<8;i2++)
+					if(k.glyph[i1] & (1<<i2))
+						monomeLedBuffer[i1*16+i2+8] = 9;
+			break;
+		case mGridES:
+			for(i1=0;i1<8;i1++)
+				for(i2=0;i2<8;i2++)
+					if(e.glyph[i1] & (1<<i2))
+						monomeLedBuffer[i1*16+i2+8] = 9;
+			break;
+		default: break;
+		}
 	}
 
 	monome_set_quadrant_flag(0);
@@ -334,7 +370,8 @@ void grid_keytimer(void) {
 			uint8_t x = held_keys[i1] % 16;
 			uint8_t y = held_keys[i1] / 16;
 			if(preset_mode == 1) {
-				if(x == 0) {
+				if(x == 0 && !follower_select) {
+
 					preset = y;
 
 					// WRITE PRESET
@@ -348,7 +385,7 @@ void grid_keytimer(void) {
 
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
 
-						preset_mode = false;
+						preset_mode_exit();
 						grid_refresh = &refresh_mp;
 						break;
 
@@ -361,7 +398,7 @@ void grid_keytimer(void) {
 
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
 
-						preset_mode = false;
+						preset_mode_exit();
 						grid_refresh = &refresh_kria;
 						break;
 
@@ -370,7 +407,7 @@ void grid_keytimer(void) {
 						flashc_memcpy((void *)&f.es_state.e[preset], &e, sizeof(e), true);
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
 
-						preset_mode = false;
+						preset_mode_exit();
 						grid_refresh = &refresh_es;
 						break;
 
@@ -533,7 +570,6 @@ static void kria_rpt_off(void* o);
 static void kria_alt_mode_blink(void* o);
 static void kria_set_alt_blink_timer(kria_modes_t mode);
 softTimer_t altBlinkTimer = { .next = NULL, .prev = NULL };
-bool kriaAltModeBlink; // flag gets flipped for the blinking
 bool k_mode_is_alt = false;
 
 bool kria_next_step(uint8_t t, uint8_t p);
@@ -662,15 +698,7 @@ void resume_kria() {
 		last_ticks[i] = get_ticks();
 	}
 
-	dac_set_slew(0,0);
-	dac_set_slew(1,0);
-	dac_set_slew(2,0);
-	dac_set_slew(3,0);
-
-	clr_tr(TR1);
-	clr_tr(TR2);
-	clr_tr(TR3);
-	clr_tr(TR4);
+	reset_outputs();
 
 	monomeFrameDirty++;
 }
@@ -889,6 +917,7 @@ void clock_kria_note(kria_track* track, uint8_t trackNum) {
 		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)384.0;
 		f32 unscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
 		dur[trackNum] = (u16)(unscaled * clock_scale);
+		aux_param[0][trackNum] = (int)unscaled;
 	}
 	if(kria_next_step(trackNum, mOct)) {
 		oct[trackNum] = sum_clip(track->octshift, track->oct[pos[trackNum][mOct]], 5);
@@ -907,13 +936,11 @@ void clock_kria_note(kria_track* track, uint8_t trackNum) {
 static void kria_set_note(uint8_t trackNum) {
 	u8 noteInScale = (note[trackNum] + alt_note[trackNum]) % 7; // combine both note params
 	u8 octaveBump = (note[trackNum] + alt_note[trackNum]) / 7; // if it wrapped around the octave, bump it
-	dac_set_value(
+	set_cv_note(
 		trackNum,
-		tuning_table[trackNum][
-			(int)cur_scale[noteInScale] +
-			scale_adj[noteInScale] +
-			(int)((oct[trackNum]+octaveBump) * 12)
-		]);
+		(int)cur_scale[noteInScale] +
+		scale_adj[noteInScale] +
+		(int)((oct[trackNum]+octaveBump) * 12));
 }
 
 void clock_kria_track( uint8_t trackNum ) {
@@ -940,7 +967,7 @@ void clock_kria_track( uint8_t trackNum ) {
 	if(trNextStep && isTrigger) {
 		if( !kria_mutes[trackNum] ) {
 
-			dac_set_slew( trackNum, glide[trackNum] * 20 );
+			set_cv_slew( trackNum, glide[trackNum] * 20 );
 
 			activeRpt[trackNum] = rpt[trackNum];
 
@@ -1569,6 +1596,64 @@ static void kria_set_tmul(uint8_t track, kria_modes_t mode, uint8_t new_tmul) {
 	}
 }
 
+
+static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
+	if (z) {
+		if (x == 5 && y == 7) {
+			if (follower_select) {
+				follower_select = false;
+			} else {
+				mod_follower = true;
+			}
+		}
+		if (follower_select) {
+			if (y == 0) {
+				if (x <= 6) {
+					followers[follower].oct = x - 3;
+					follower_change_octave(&followers[follower], followers[follower].oct);
+				}
+				if (followers[follower].mode_ct > 1
+				 && x >= 13
+				 && x <= (13 + followers[follower].mode_ct)) {
+					follower_change_mode(&followers[follower], x - 13);
+				}
+			}
+			if (y >= 2 && y <= 5) {
+				if (x == 5) {
+					follower = y - 2;
+				}
+			}
+			if (y == 7) {
+				if (x <= 3) {
+					followers[follower].track_en ^= 1 << x;
+				}
+			}
+		}
+		else {
+			if (x > 7) {
+				glyph[y] ^= 1<<(x-8);
+			}
+			if (x == 5 && y >= 2 && y <= 5) {
+				if (mod_follower) {
+					follower = y - 2;
+					follower_select = true;
+				}
+				else {
+					toggle_follower(y - 2);
+				}
+			}
+		}
+
+		monomeFrameDirty++;
+	}
+	else {
+		if (x == 5 && y == 7) {
+			mod_follower = false;
+			monomeFrameDirty++;
+		}
+	}
+}
+
 void handler_KriaGridKey(s32 data) {
 	u8 x, y, z, index, i1, found;
 
@@ -1600,7 +1685,7 @@ void handler_KriaGridKey(s32 data) {
 		if(key_times[index] > 0) {
 			// PRESET MODE FAST PRESS DETECT
 			if(preset_mode == 1) {
-				if(x == 0) {
+				if(x == 0 && !follower_select) {
 					if(y != preset) {
 						preset = y;
 
@@ -1616,7 +1701,7 @@ void handler_KriaGridKey(s32 data) {
 						init_kria();
 						resume_kria();
 
-						preset_mode = false;
+						preset_mode_exit();
 						grid_refresh = &refresh_kria;
 
 						// print_dbg("\r\npreset RECALL:");
@@ -1658,12 +1743,7 @@ void handler_KriaGridKey(s32 data) {
 
 	// PRESET SCREEN
 	if(preset_mode) {
-		// glyph magic
-		if(z && x > 7) {
-			k.glyph[y] ^= 1<<(x-8);
-
-			monomeFrameDirty++;
-		}
+		preset_mode_handle_key(x, y, z, k.glyph);
 	}
 	else if(view_clock) {
 		if(z) {
@@ -3345,15 +3425,7 @@ void resume_mp() {
 	else
 		clock = &clock_mp;
 
-	dac_set_slew(0,0);
-	dac_set_slew(1,0);
-	dac_set_slew(2,0);
-	dac_set_slew(3,0);
-
-	clr_tr(TR1);
-	clr_tr(TR2);
-	clr_tr(TR3);
-	clr_tr(TR4);
+	reset_outputs();
 
 	monomeFrameDirty++;
 }
@@ -3564,7 +3636,7 @@ void mp_note_on(uint8_t n) {
 		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
-			dac_set_value(0, tuning_table[0][(int)cur_scale[7-n] + scale_adj[7-n]]);
+			set_cv_note(0, (int)cur_scale[7-n] + scale_adj[7-n]);
 			set_tr(TR1);
 		}
 		break;
@@ -3573,7 +3645,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(2);
 			note_now[w] = n;
-			dac_set_value(w, tuning_table[w][(int)cur_scale[7-n] + scale_adj[7-n]]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3582,7 +3654,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(4);
 			note_now[w] = n;
-			dac_set_value(w, tuning_table[w][(int)cur_scale[7-n] + scale_adj[7-n]]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3740,7 +3812,7 @@ void handler_MPGridKey(s32 data) {
 		// FAST PRESS
 		if(key_times[index] > 0) {
 			if(preset_mode) {
-				if(x == 0) {
+				if(x == 0 && !follower_select) {
 					if(y != preset) {
 						preset = y;
 
@@ -3755,7 +3827,7 @@ void handler_MPGridKey(s32 data) {
 						flashc_memset8((void*)&(f.mp_state.preset), preset, 1, true);
 						init_mp();
 
-						preset_mode = false;
+						preset_mode_exit();
 						grid_refresh = &refresh_mp;
 
 						// print_dbg("\r\npreset RECALL:");
@@ -3774,11 +3846,7 @@ void handler_MPGridKey(s32 data) {
 
 	// PRESET SCREEN
 	if(preset_mode) {
-		// draw glyph
-		if(z && x>7)
-			m.glyph[y] ^= 1<<(x-8);
-
-		monomeFrameDirty++;
+		preset_mode_handle_key(x, y, z, m.glyph);
 	}
 	else if(view_clock) {
 		if(z) {
@@ -4402,7 +4470,7 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
         note_index = 0;
     else if (note_index > 119)
         note_index = 119;
-    dac_set_value_noslew(note, tuning_table[note][note_index]);
+    set_cv_note(note, note_index);
     dac_update_now();
     set_tr(TR1 + note);
 
@@ -4783,9 +4851,8 @@ void resume_es(void) {
     clock_external = !gpio_get_pin_value(B10);
     clock = &clock_null;
 
+    reset_outputs();
     for (u8 i = 0; i < 4; i++) {
-        dac_set_slew(i, 0);
-        clr_tr(TR1 + i);
         es_notes[i].active = 0;
     }
 
@@ -4901,18 +4968,19 @@ void handler_ESGridKey(s32 data) {
 
     // preset screen
     if (preset_mode) {
-        if (!z && x == 0) {
-            if (y != preset) {
-                preset = y;
-                for (u8 i = 0; i < GRID_PRESETS; i++)
-                    e.glyph[i] = f.es_state.e[preset].glyph[i];
-            } else {
-                // flash read
-                es_load_preset();
-            }
-        } else if (z && x > 7) {
-            e.glyph[y] ^= 1 << (x - 8);
-        }
+        preset_mode_handle_key(x, y, z, e.glyph);
+        if (z == 0) {
+	    if (x == 0 && !follower_select) {
+	        if (y != preset) {
+		    preset = y;
+		    for (u8 i = 0; i < GRID_PRESETS; i++)
+		        e.glyph[i] = f.es_state.e[preset].glyph[i];
+		} else {
+		    // flash read
+		    es_load_preset();
+		}
+	    }
+	}
 
         monomeFrameDirty++;
         return;

@@ -80,6 +80,62 @@ json_docdef_t ansible_meta_docdefs[] = {
 		}),
 	},
 	{
+		.name = "followers",
+		.read = json_read_array,
+		.write = json_write_array,
+		.state = &ansible_json_read_array_state[0],
+		.params = &((json_read_array_params_t) {
+			.array_len = sizeof_field(nvram_data_t, state.followers) / sizeof_field(nvram_data_t, state.followers[0]),
+			.item_size = sizeof_field(nvram_data_t, state.followers[0]),
+			.item_docdef = &((json_docdef_t) {
+				.read = json_read_object,
+				.write = json_write_object,
+				.state = &ansible_app_object_state[0],
+				.params = &((json_read_object_params_t) {
+					.docdef_ct = 7,
+					.docdefs = ((json_docdef_t[]) {
+						{
+							.name = "active",
+							.read = json_read_scalar,
+							.write = json_write_bool,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].active),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].active),
+							}),
+						},
+						{
+							.name = "track_en",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].track_en),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].track_en),
+							}),
+						},
+						{
+							.name = "oct",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].oct),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].oct),
+							}),
+						},
+						{
+							.name = "active_mode",
+							.read = json_read_scalar,
+							.write = json_write_number,
+							.params = &((json_read_scalar_params_t) {
+								.dst_size = sizeof_field(nvram_data_t, state.followers[0].active_mode),
+								.dst_offset = offsetof(nvram_data_t, state.followers[0].active_mode),
+							}),
+						},
+					}),
+				}),
+			}),
+		}),
+	},
+	{
 		.name = "connected",
 		.read = json_read_enum,
 		.write = json_write_enum,

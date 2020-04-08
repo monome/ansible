@@ -6,6 +6,7 @@
 #include "ansible_arc.h"
 #include "ansible_midi.h"
 #include "ansible_tt.h"
+#include "ansible_ii_leader.h"
 
 #define TR1 B02
 #define TR2 B03
@@ -40,6 +41,11 @@ typedef enum {
 
 connected_t connected;
 
+
+
+extern bool leader_mode;
+extern uint16_t aux_param[2][4];
+
 typedef struct {
 	connected_t connected;
 	ansible_mode_t arc_mode;
@@ -48,6 +54,7 @@ typedef struct {
 	ansible_mode_t none_mode;
 	uint8_t i2c_addr;
 	uint8_t grid_varibrightness;
+	i2c_follower_t followers[I2C_FOLLOWER_COUNT];
 } ansible_state_t;
 
 
@@ -69,6 +76,7 @@ typedef const struct {
 
 extern nvram_data_t f;
 extern ansible_mode_t ansible_mode;
+extern i2c_follower_t followers[I2C_FOLLOWER_COUNT];
 
 extern softTimer_t auxTimer[4];
 extern uint16_t tuning_table[4][120];
@@ -87,6 +95,10 @@ void set_mode(ansible_mode_t m);
 void update_leds(uint8_t m);
 void set_tr(uint8_t n);
 void clr_tr(uint8_t n);
+void set_cv_note(uint8_t n, uint16_t cv);
+void set_cv_slew(uint8_t n, uint16_t s);
+void reset_outputs(void);
+void toggle_follower(uint8_t n);
 uint8_t get_tr(uint8_t n);
 void clock_set(uint32_t n);
 void clock_set_tr(uint32_t n, uint8_t phase);

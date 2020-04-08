@@ -65,6 +65,7 @@ usb flash
 #include "ansible_midi.h"
 #include "ansible_tt.h"
 #include "ansible_usb_disk.h"
+#include "ansible_ii_leader.h"
 
 
 #define FIRSTRUN_KEY 0x22
@@ -77,6 +78,9 @@ __attribute__((__section__(".flash_nvram")))
 nvram_data_t f;
 
 ansible_mode_t ansible_mode;
+
+bool leader_mode = false;
+uint16_t aux_param[2][4] = { { 0 } };
 
 ////////////////////////////////////////////////////////////////////////////////
 // prototypes
@@ -324,7 +328,7 @@ static void handler_FrontLong(s32 data) {
 	print_dbg("\r\n+ i2c address: ");
 	print_dbg_hex(f.state.i2c_addr);
 	// TEST
-	init_i2c_slave(f.state.i2c_addr);
+	if (!leader_mode) init_i2c_slave(f.state.i2c_addr);
 }
 
 static void handler_SaveFlash(s32 data) {
@@ -519,14 +523,135 @@ void update_leds(uint8_t m) {
 
 void set_tr(uint8_t n) {
 	gpio_set_gpio_pin(n);
+	uint8_t tr = n - TR1;
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		bool play_follower = followers[i].active
+				  && followers[i].track_en & (1 << tr);
+		if (play_follower) {
+			followers[i].tr(&followers[i], tr, 1);
+		}
+	}
 }
 
 void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
+	uint8_t tr = n - TR1;
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		bool play_follower = followers[i].active
+				  && followers[i].track_en & (1 << tr);
+		if (play_follower) {
+			followers[i].tr(&followers[i], tr, 0);
+		}
+	}
 }
 
 uint8_t get_tr(uint8_t n) {
 	return gpio_get_pin_value(n);
+}
+
+void set_cv_note(uint8_t n, uint16_t note) {
+	dac_set_value(n, tuning_table[n][note]);
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		bool play_follower = followers[i].active
+				  && followers[i].track_en & (1 << n);
+		if (play_follower) {
+			uint16_t cv_transposed = ET[note] << 2;
+			followers[i].cv(&followers[i], n, cv_transposed);
+		}
+	}
+}
+
+void set_cv_slew(uint8_t n, uint16_t s) {
+	dac_set_slew(n, s);
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		bool play_follower = followers[i].active
+				  && followers[i].track_en & (1 << n);
+		if (play_follower) {
+			followers[i].slew(&followers[i], n, s);
+		}
+	}
+}
+
+void reset_outputs(void) {
+	for (uint8_t n = 0; n < 4; n++) {
+		dac_set_slew(n, 0);
+		gpio_clr_gpio_pin(n + TR1);
+		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+			bool play_follower = followers[i].active
+			  && followers[i].track_en & (1 << n);
+			if (play_follower) {
+				followers[i].mute(&followers[n], 0, 0);
+			}
+		}
+	}
+}
+
+static void follower_on(uint8_t n) {
+	for (uint8_t i = 0; i < 4; i++) {
+		followers[n].init(&followers[n], i, 1);
+		followers[n].mode(&followers[n], i, followers[n].active_mode);
+		followers[n].octave(&followers[n], 0, followers[n].oct);
+	}
+}
+
+static void follower_off(uint8_t n) {
+	for (uint8_t i = 0; i < 4; i++) {
+		followers[n].init(&followers[n], i, 0);
+	}
+}
+
+void toggle_follower(uint8_t n) {
+	followers[n].active = !followers[n].active;
+	if (followers[n].active) {
+		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+			if (i != n && followers[i].active) {
+				follower_on(n);
+				return;
+			}
+		}
+		print_dbg("\r\n> enter i2c leader mode");
+		leader_mode = true;
+		init_i2c_master();
+		follower_on(n);
+	}
+	else {
+		follower_off(n);
+		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+			if (i != n && followers[i].active) {
+				return;
+			}
+		}
+		print_dbg("\r\n> exit i2c leader mode");
+		leader_mode = false;
+		switch (ansible_mode) {
+		case mArcLevels:
+			init_i2c_slave(II_LV_ADDR);
+			break;
+		case mArcCycles:
+			init_i2c_slave(II_CY_ADDR);
+			break;
+		case mGridKria:
+			init_i2c_slave(II_KR_ADDR);
+			break;
+		case mGridMP:
+			init_i2c_slave(II_MP_ADDR);
+			break;
+		case mGridES:
+			init_i2c_slave(ES);
+			break;
+		case mMidiStandard:
+			init_i2c_slave(II_MID_ADDR);
+			break;
+		case mMidiArp:
+			init_i2c_slave(II_ARP_ADDR);
+			break;
+		case mTT:
+			init_i2c_slave(f.state.i2c_addr);
+			break;
+	        default:
+			break;
+		}
+	}
 }
 
 void clock_set(uint32_t n) {
@@ -552,7 +677,21 @@ void load_flash_state(void) {
 
 	print_dbg("\r\ni2c addr: ");
 	print_dbg_hex(f.state.i2c_addr);
-	init_i2c_slave(f.state.i2c_addr);
+
+	leader_mode = false;
+	memcpy((void*)followers, f.state.followers, sizeof(followers));
+	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
+		if (followers[i].active) {
+			if (!leader_mode) {
+				leader_mode = true;
+				init_i2c_master();
+			}
+			follower_on(i);
+		}
+	}
+	if (!leader_mode) {
+		init_i2c_slave(f.state.i2c_addr);
+	}
 }
 
 void ii_ansible(uint8_t* d, uint8_t len) {
@@ -641,6 +780,7 @@ int main(void)
 		flashc_memset32((void*)&(f.state.midi_mode), mMidiStandard, 4, true);
 		flashc_memset8((void*)&(f.state.i2c_addr), 0xA0, 1, true);
 		flashc_memset8((void*)&(f.state.grid_varibrightness), 16, 1, true);
+		flashc_memcpy((void*)f.state.followers, followers, sizeof(followers), true);
 		default_tuning();
 		default_kria();
 		default_mp();

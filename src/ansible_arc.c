@@ -79,7 +79,7 @@ void set_mode_arc(void) {
 		clock = &clock_null;
 		// clock = &clock_levels;
 		// clock_set(f.levels_state.clock_period);
-		init_i2c_slave(II_LV_ADDR);
+		if (!leader_mode) init_i2c_slave(II_LV_ADDR);
 		process_ii = &ii_levels;
 		resume_levels();
 		update_leds(1);
@@ -94,7 +94,7 @@ void set_mode_arc(void) {
 		clock = &clock_cycles;
 		// 24
 		clock_set(DAC_RATE_CV << 3);
-		init_i2c_slave(II_CY_ADDR);
+		if (!leader_mode) init_i2c_slave(II_CY_ADDR);
 		process_ii = &ii_cycles;
 		resume_cycles();
 		update_leds(2);
