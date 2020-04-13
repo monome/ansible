@@ -4,7 +4,7 @@
 - **NEW**: kria: playhead shows on probability page
 - **FIX**: avoid some types of i2c crashes
 - **FIX**: kria: glitches when stopping and restarting external clock
-- **FIX**: compensate-shift scales by holding scale key when changing scale notes
+- **NEW**: compensate-shift scales by holding scale key when changing scale notes
 - **NEW**: supports new kria teletype ops: `KR.CUE`, `KR.DIR`, `KR.DUR`
 
 
