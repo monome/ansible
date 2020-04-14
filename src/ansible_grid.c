@@ -1734,7 +1734,7 @@ void handler_KriaGridKey(s32 data) {
 							change_pattern(x);
 						}
 					}
-					else {
+					else if(!cue) {
 						k.meta_pat[meta_edit] = x;
 					}
 				}
@@ -3004,7 +3004,8 @@ bool refresh_kria_mod(void) {
 		memset(monomeLedBuffer + R5, 3, 16);
 		for(uint8_t i=0;i<16;i++) {
 			if(k.p[edit_pattern].t[track].p[k_mode][i]) {
-				monomeLedBuffer[(5 - k.p[edit_pattern].t[track].p[k_mode][i]) * 16 + i] = i == pos[track][k_mode] ? 10 : 6;
+				monomeLedBuffer[(5 - k.p[edit_pattern].t[track].p[k_mode][i]) * 16 + i] =
+					(edit_pattern == k.pattern && i == pos[track][k_mode]) ? 10 : 6;
 			}
 		}
 		return true;
