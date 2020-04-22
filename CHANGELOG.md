@@ -1,4 +1,4 @@
-## v2.x.x
+## v3.0.0
 
 - **NEW**: i2c leader mode for controlling Just Friends, TELEXo, or ER-301 from ansible
 - **NEW**: kria: playhead shows on probability page
