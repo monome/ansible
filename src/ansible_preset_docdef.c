@@ -92,7 +92,7 @@ json_docdef_t ansible_meta_docdefs[] = {
 				.write = json_write_object,
 				.state = &ansible_app_object_state[0],
 				.params = &((json_read_object_params_t) {
-					.docdef_ct = 7,
+					.docdef_ct = 4,
 					.docdefs = ((json_docdef_t[]) {
 						{
 							.name = "active",
