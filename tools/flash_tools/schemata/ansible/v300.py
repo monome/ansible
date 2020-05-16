@@ -377,20 +377,21 @@ typedef const struct {
 
     def meta(self, nvram):
         return self.combine(
-            self.scalar_settings(nvram.state, ['i2c_addr', 'grid_varibrightness']),
-			self.array_settings(nvram.state, [
-				(
-					'followers', 
-					lambda follower: self.combine(
-						self.scalar_settings(follower, [
-							'active',
-							'track_en',
-							'oct',
-							'active_mode',
-						])
-					)
-				)
-			]),
+            self.scalar_settings(
+                nvram.state, ['i2c_addr', 'grid_varibrightness']),
+            self.array_settings(nvram.state, [
+                (
+                                'followers',
+                                lambda follower: self.combine(
+                                    self.scalar_settings(follower, [
+                                        'active',
+                                        'track_en',
+                                        'oct',
+                                        'active_mode',
+                                    ])
+                                )
+                                )
+            ]),
             self.enum_settings(nvram.state, [
                 ('connected', 'connected_t', 'conNONE'),
                 ('arc_mode', 'ansible_mode_t', 'mArcLevels'),
@@ -402,21 +403,20 @@ typedef const struct {
 
     def shared(self, nvram):
         return self.combine(
-			self.array_2d_settings(nvram, ['scale:scales']),
-			self.array_2d_settings(nvram, ['tuning_table'])
-		)
-
+            self.array_2d_settings(nvram, ['scale:scales']),
+            self.array_2d_settings(nvram, ['tuning_table'])
+        )
 
     def extract_kria_state(self, state):
         return self.combine(
             self.scalar_settings(state, [
                 'clock_period',
                 'preset:curr_preset',
-				'sync_mode',
+                'sync_mode',
                 'note_sync',
                 'loop_sync',
-				'note_div_sync',
-				'div_sync',
+                'note_div_sync',
+                'div_sync',
                 'cue_div',
                 'cue_steps',
                 'meta',
@@ -465,7 +465,7 @@ typedef const struct {
                                                 ]),
                                                 self.scalar_settings(track, [
                                                     'tt_clocked',
-													'trigger_clocked'
+                                                    'trigger_clocked'
                                                 ]),
                                             ),
                                         ),
