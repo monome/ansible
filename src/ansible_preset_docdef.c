@@ -293,7 +293,7 @@ json_docdef_t ansible_app_docdefs[] = {
 				{
 					.name = "note_div_sync",
 					.read = json_read_scalar,
-					.write = json_write_number,
+					.write = json_write_bool,
 					.params = &((json_read_scalar_params_t) {
 						.dst_size = sizeof_field(nvram_data_t, kria_state.note_div_sync),
 						.dst_offset = offsetof(nvram_data_t, kria_state.note_div_sync),

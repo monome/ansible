@@ -3,7 +3,7 @@ from commands.firmware_tool import FirmwareTool
 
 
 class PresetExtractor(FirmwareTool):
-    target_version = '1.6.1-dev'
+    target_version = '3.0.0'
 
     def extract(self):
         if not self.schema.check(self.nvram_data):
