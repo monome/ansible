@@ -2,7 +2,7 @@ from preset_schema import PresetSchema
 
 
 class AnsiblePresetSchema(PresetSchema):
-    LATEST_VERSION = '1.6.1-dev'
+    LATEST_VERSION = '3.0.0'
 
     def firmware_name(self):
         return 'ansible'

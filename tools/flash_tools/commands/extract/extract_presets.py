@@ -25,7 +25,7 @@ def command(parser):
         '--version',
         type=str,
         help='firmware version of the ansible which saved the preset',
-        default='1.6.1'
+        default='3.0.0'
     )
     parser.add_argument(
         '--target_version',
