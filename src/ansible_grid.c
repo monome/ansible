@@ -4571,7 +4571,7 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
     es_notes[note].start = get_ticks();
     es_notes[note].from_pattern = from_pattern;
 
-    s16 note_index = x + (7 - y) * 5 - 1;
+    s16 note_index = x + ((monome_size_y() - 1) - y) * 5 - 1;
     if (note_index < 0)
         note_index = 0;
     else if (note_index > 119)
@@ -5157,6 +5157,9 @@ void handler_ESGridKey(s32 data) {
             es_runes = z;
         } else if (y == 7) { // voices
             es_voices = z;
+        } else if (y > 7 && y < 16) { // 256-mode pattern change hotkeys
+            // jump between patterns 0-7 or 8-15, whichever half is currently active
+            e.p_select = (e.p_select & 0x8) + (15 - y);
         }
 
         if (!es_edge) {
@@ -5165,8 +5168,12 @@ void handler_ESGridKey(s32 data) {
         }
     }
 
-    if (es_runes) {
+    if (es_runes || (es_view == es_patterns && y > 8)) {
         if (!z) return;
+
+        if (es_view == es_patterns) { // show runes view on bottom half of 256 in patterns mode
+            y = y - 8;
+        }
 
         if (x > 1 && x < 5 && y > 1 && y < 5) {
             e.p[e.p_select].linearize = !e.p[e.p_select].linearize;
@@ -5341,40 +5348,46 @@ void refresh_es(void) {
             if (i <= pos) monomeLedBuffer[i] = 8;
     }
 
+    // show active pattern on column 0 for 256
+    monomeLedBuffer[16*(15-(e.p_select % 8))] = 7;
+
     u8 l;
-    if (es_runes) {
+    if (es_runes || (es_view == es_patterns && monome_size_y() == 16)) {
+        u8 rune_offset = (es_view == es_patterns) ? 128 : 0; // on 256, show runes on bottom half of pattern hold view 
         l = e.p[e.p_select].linearize ? 15 : 7;
 
         // linearize
-        monomeLedBuffer[34] = l;
-        monomeLedBuffer[36] = l;
-        monomeLedBuffer[66] = l;
-        monomeLedBuffer[68] = l;
+        monomeLedBuffer[rune_offset + 34] = l;
+        monomeLedBuffer[rune_offset + 36] = l;
+        monomeLedBuffer[rune_offset + 66] = l;
+        monomeLedBuffer[rune_offset + 68] = l;
 
         l = e.p[e.p_select].dir ? 15 : 7;
         // reverse
-        monomeLedBuffer[39] = l;
-        monomeLedBuffer[54] = l;
-        monomeLedBuffer[71] = l;
+        monomeLedBuffer[rune_offset + 39] = l;
+        monomeLedBuffer[rune_offset + 54] = l;
+        monomeLedBuffer[rune_offset + 71] = l;
 
         l = e.p[e.p_select].dir ? 7 : 15;
         // forward
-        monomeLedBuffer[41] = l;
-        monomeLedBuffer[58] = l;
-        monomeLedBuffer[73] = l;
+        monomeLedBuffer[rune_offset + 41] = l;
+        monomeLedBuffer[rune_offset + 58] = l;
+        monomeLedBuffer[rune_offset + 73] = l;
 
         l = 8;
         // double speed
-        monomeLedBuffer[29] = l;
-        monomeLedBuffer[44] = l;
-        monomeLedBuffer[46] = l;
+        monomeLedBuffer[rune_offset + 29] = l;
+        monomeLedBuffer[rune_offset + 44] = l;
+        monomeLedBuffer[rune_offset + 46] = l;
 
         // half speed
-        monomeLedBuffer[76] = l;
-        monomeLedBuffer[78] = l;
-        monomeLedBuffer[93] = l;
+        monomeLedBuffer[rune_offset + 76] = l;
+        monomeLedBuffer[rune_offset + 78] = l;
+        monomeLedBuffer[rune_offset + 93] = l;
 
-        return;
+        if (es_runes) {
+            return;
+        }
     }
 
     if (es_edge) {
