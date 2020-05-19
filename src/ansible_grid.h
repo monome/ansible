@@ -98,7 +98,22 @@ typedef struct {
 	kria_data_t k[GRID_PRESETS];
 } kria_state_t;
 
+typedef enum {
+	mTr, mNote, mOct, mDur, mRpt, mAltNote, mGlide, mScale, mPattern
+} kria_modes_t;
 
+typedef enum {
+	modNone, modLoop, modTime, modProb
+} kria_mod_modes_t;
+
+typedef struct {
+	u8 track;
+	kria_modes_t mode;
+	kria_mod_modes_t mod_mode;
+	bool mode_is_alt;
+	u8* buffer;
+	softTimer_t* altBlinkTimer;
+} kria_view_t;
 
 
 typedef struct {
@@ -219,15 +234,16 @@ void handler_KriaKey(s32 data);
 void handler_KriaTr(s32 data);
 void handler_KriaTrNormal(s32 data);
 void refresh_kria(void);
-bool refresh_kria_mod(void);
-void refresh_kria_tr(void);
-void refresh_kria_note(bool isAlt);
-void refresh_kria_oct(void);
-void refresh_kria_dur(void);
-void refresh_kria_rpt(void);
-void refresh_kria_glide(void);
-void refresh_kria_scale(void);
-void refresh_kria_pattern(void);
+void refresh_kria_view(kria_view_t* view);
+bool refresh_kria_mod(kria_view_t* view);
+void refresh_kria_tr(kria_view_t* view);
+void refresh_kria_note(kria_view_t* view);
+void refresh_kria_oct(kria_view_t* view);
+void refresh_kria_dur(kria_view_t* view);
+void refresh_kria_rpt(kria_view_t* view);
+void refresh_kria_glide(kria_view_t* view);
+void refresh_kria_scale(kria_view_t* view);
+void refresh_kria_pattern(kria_view_t* view);
 void refresh_kria_config(void);
 
 void default_mp(void);

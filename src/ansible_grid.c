@@ -24,6 +24,7 @@
 #define L0 4
 
 #define GRID_KEY_HOLD_TIME 15
+#define MAX_KEYS 256
 #define MAX_HELD_KEYS 32
 
 #define ES_CHORD_THRESHOLD 30
@@ -40,7 +41,7 @@ bool kriaAltModeBlink; // flag gets flipped for the blinking
 u8 grid_varibrightness = 16;
 u8 key_count = 0;
 u8 held_keys[MAX_HELD_KEYS];
-u8 key_times[128];
+u8 key_times[MAX_KEYS];
 
 bool clock_external;
 bool view_clock;
@@ -80,19 +81,10 @@ void ii_grid(uint8_t* data, uint8_t len);
 
 // KRIA
 kria_data_t k;
+kria_view_t k_views[2]; 
 kria_sync_mode_t kria_sync_mode;
 uint8_t tmul[4][KRIA_NUM_PARAMS];
 
-typedef enum {
-	mTr, mNote, mOct, mDur, mRpt, mAltNote, mGlide, mScale, mPattern
-} kria_modes_t;
-
-typedef enum {
-	modNone, modLoop, modTime, modProb
-} kria_mod_modes_t;
-
-kria_modes_t k_mode;
-kria_mod_modes_t k_mod_mode;
 
 u8 kria_track_indices[4] = {
 	0, 1, 2, 3
@@ -250,7 +242,7 @@ void handler_GridFrontLong(s32 data) {
 void refresh_preset(void) {
 	u8 i1, i2;//, i3;
 
-	memset(monomeLedBuffer,0,128);
+	memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
 
 	if (!follower_select) {
 		monomeLedBuffer[preset * 16] = 11;
@@ -306,10 +298,14 @@ void refresh_preset(void) {
 
 	monome_set_quadrant_flag(0);
 	monome_set_quadrant_flag(1);
+	if (monome_size_y() == 16) {
+		monome_set_quadrant_flag(2);
+		monome_set_quadrant_flag(3);
+	}
 }
 
 void refresh_grid_tuning(void) {
-	memset(monomeLedBuffer,0,128);
+	memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
 
 	for (uint8_t i = 0; i < 4; i++) {
 		monomeLedBuffer[i*16] = tuning_note_on[i] ? L1 : L0;
@@ -568,7 +564,7 @@ static void kria_off(void* o);
 static void kria_blink_off(void* o);
 static void kria_rpt_off(void* o);
 static void kria_alt_mode_blink(void* o);
-static void kria_set_alt_blink_timer(kria_modes_t mode);
+static void kria_set_alt_blink_timer(kria_view_t* views);
 softTimer_t altBlinkTimer = { .next = NULL, .prev = NULL };
 bool k_mode_is_alt = false;
 
@@ -645,9 +641,18 @@ void default_kria() {
 }
 
 void init_kria() {
-	track = 0;
-	k_mode = mTr;
-	k_mod_mode = modNone;
+
+	k_views[0].track = 0;
+	k_views[0].mode = mTr;
+	k_views[0].mod_mode = modNone;
+	k_views[0].mode_is_alt = false;
+	k_views[0].buffer = monomeLedBuffer;
+
+	k_views[1].track = 0;
+	k_views[1].mode = mNote;
+	k_views[1].mod_mode = modNone;
+	k_views[1].mode_is_alt = false;
+	k_views[1].buffer = monomeLedBuffer + 128;
 
 	note_sync = f.kria_state.note_sync;
 	loop_sync = f.kria_state.loop_sync;
@@ -704,6 +709,8 @@ void resume_kria() {
 }
 
 void grid_keytimer_kria(uint8_t held_key) {
+	u8 k_mode = k_views[held_key < 128 ? 0 : 1].mode;
+	held_key = held_key % 128;
 	switch (k_mode) {
 	case mPattern:
 		if(held_key < 16) {
@@ -1432,15 +1439,15 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				if (next_mode < 0) {
 					break;
 				}
-				k_mode = next_mode;
-				if (k_mode == mPattern) {
+				k_views[0].mode = next_mode;
+				if (k_views[0].mode == mPattern) {
 					cue = true;
 				}
-				kria_set_alt_blink_timer(k_mode);
+				kria_set_alt_blink_timer(k_views);
 			}
 			break;
 		case II_KR_PAGE + II_GET:
-			ii_tx_queue(ii_kr_cmd_for_mode(k_mode));
+			ii_tx_queue(ii_kr_cmd_for_mode(k_views[0].mode));
 			break;
 		case II_KR_CUE:
 			if (!meta && l >= 2) {
@@ -1522,15 +1529,17 @@ static uint8_t ii_kr_cmd_for_mode(kria_modes_t mode) {
 	}
 }
 
-static void kria_set_alt_blink_timer(kria_modes_t mode) {
-	if ( k_mode == mRpt || k_mode == mAltNote || k_mode == mGlide ) {
-		timer_remove( &altBlinkTimer );
-		timer_add( &altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
-		k_mode_is_alt = true;
+static void kria_set_alt_blink_timer(kria_view_t* views) {
+	bool any_view_is_alt = false;
+	for (int i = 0; i < 2; i++) {
+		if ( views[i].mode == mRpt || views[i].mode == mAltNote || views[i].mode == mGlide ) {
+			any_view_is_alt = true;
+			views[i].mode_is_alt = true;
+		}
 	}
-	else {
-		timer_remove( &altBlinkTimer );
-		k_mode_is_alt = false;
+	timer_remove( &altBlinkTimer );	
+	if (any_view_is_alt) {
+		timer_add( &altBlinkTimer, 100, &kria_alt_mode_blink, NULL);
 	}
 }
 
@@ -1709,19 +1718,17 @@ void handler_KriaGridKey(s32 data) {
 					}
 				}
 			}
-			else if(k_mode == mPattern) {
-				if(y == 0) {
-					if(!meta) {
-						if(cue) {
-							cue_pat_next = x+1;
-						}
-						else {
-							change_pattern(x);
-						}
+			else if ((k_views[0].mode == mPattern && y == 0 ) || (k_views[1].mode == mPattern && y == 8)) {
+				if(!meta) {
+					if(cue) {
+						cue_pat_next = x+1;
 					}
 					else {
-						k.meta_pat[meta_edit] = x;
+						change_pattern(x);
 					}
+				}
+				else {
+					k.meta_pat[meta_edit] = x;
 				}
 			}
 			else if(view_tuning) {
@@ -2000,6 +2007,14 @@ void handler_KriaGridKey(s32 data) {
 	}
 	// NORMAL
 	else {
+
+		kria_view_t* view = &k_views[0];
+		if (y >= 8) {
+			// lower half of a 256
+			view = &k_views[1];
+			y = y - 8;
+		}
+
 		// bottom row
 		if(y == 7) {
 			if(z) {
@@ -2008,55 +2023,55 @@ void handler_KriaGridKey(s32 data) {
 				case 1:
 				case 2:
 				case 3:
-					if ( k_mod_mode == modLoop )
+					if ( view->mod_mode == modLoop )
 						kria_mutes[x] = !kria_mutes[x];
 					else
-						track = x;
+						view->track = x;
 					break;
 				case 5:
-					if ( k_mode == mTr )
-						k_mode = mRpt;
+					if ( view->mode == mTr )
+						view->mode = mRpt;
 					else
-						k_mode = mTr;
+						view->mode = mTr;
 					break;
 				case 6:
-					if ( k_mode == mNote )
-						k_mode = mAltNote;
+					if ( view->mode == mNote )
+						view->mode = mAltNote;
 					else
-						k_mode = mNote;
+						view->mode = mNote;
 					break;
 				case 7:
-					if ( k_mode == mOct )
-						k_mode = mGlide;
+					if ( view->mode == mOct )
+						view->mode = mGlide;
 					else
-						k_mode = mOct;
+						view->mode = mOct;
 					break;
 				case 8:
-					k_mode = mDur; break;
+					view->mode = mDur; break;
 				case 10:
-					k_mod_mode = modLoop;
+					view->mod_mode = modLoop;
 					loop_count = 0;
 					break;
 				case 11:
-					k_mod_mode = modTime; break;
+					view->mod_mode = modTime; break;
 				case 12:
-					k_mod_mode = modProb; break;
+					view->mod_mode = modProb; break;
 				case 14:
-					k_mode = mScale; break;
+					view->mode = mScale; break;
 				case 15:
-					k_mode = mPattern;
+					view->mode = mPattern;
 					cue = true;
 					break;
 				default: break;
 				}
-				kria_set_alt_blink_timer(k_mode);
+				kria_set_alt_blink_timer(k_views);
 			}
 			else {
 				switch(x) {
 				case 10:
 				case 11:
 				case 12:
-					k_mod_mode = modNone;
+					view->mod_mode = modNone;
 					break;
 				case 15:
 					cue = false;
@@ -2068,6 +2083,11 @@ void handler_KriaGridKey(s32 data) {
 			monomeFrameDirty++;
 		}
 		else {
+
+			const u8 track = view->track;
+			const kria_modes_t k_mode = view->mode;
+			const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 			switch(k_mode) {
 			case mTr:
 				switch(k_mod_mode) {
@@ -2775,6 +2795,10 @@ void handler_KriaRefresh(s32 data) {
 
 		monome_set_quadrant_flag(0);
 		monome_set_quadrant_flag(1);
+		if (monome_size_y() == 16) {
+			monome_set_quadrant_flag(2);
+			monome_set_quadrant_flag(3);
+		}
 		(*monome_refresh)();
 	}
 }
@@ -2868,8 +2892,21 @@ void handler_KriaTrNormal(s32 data) {
 }
 
 void refresh_kria(void) {
+	refresh_kria_view(&k_views[0]);
+	if (monome_size_y() == 16) {
+		refresh_kria_view(&k_views[1]);
+	}
+}
 
-	memset(monomeLedBuffer,0,128);
+void refresh_kria_view(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	const u8 track = view->track;
+	const bool k_mode_is_alt = view->mode_is_alt;
+	const kria_modes_t k_mode = view->mode;
+	//const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
+	memset(monomeLedBuffer, 0, 128);
 
 	// bottom strip
 	memset(monomeLedBuffer + R7 + 5, L0, 4);
@@ -2915,39 +2952,46 @@ void refresh_kria(void) {
 	monomeLedBuffer[activeModeIndex] = (k_mode_is_alt && kriaAltModeBlink) ? L1 : L2;
 
 
-	if (refresh_kria_mod()) return;
+	if (refresh_kria_mod(view)) return;
 
 	// modes
 	switch(k_mode) {
 	case mTr:
-		refresh_kria_tr();
+		refresh_kria_tr(view);
 		break;
 	case mNote:
 	case mAltNote:
-		refresh_kria_note(k_mode==mAltNote);
+		refresh_kria_note(view);
 		break;
 	case mOct:
-		refresh_kria_oct();
+		refresh_kria_oct(view);
 		break;
 	case mDur:
-		refresh_kria_dur();
+		refresh_kria_dur(view);
 		break;
 	case mRpt:
-		refresh_kria_rpt();
+		refresh_kria_rpt(view);
 		break;
 	case mGlide:
-		refresh_kria_glide();
+		refresh_kria_glide(view);
 		break;
 	case mScale:
-		refresh_kria_scale();
+		refresh_kria_scale(view);
 		break;
 	case mPattern:
-		refresh_kria_pattern();
+		refresh_kria_pattern(view);
 	default: break;
 	}
 }
 
-bool refresh_kria_mod(void) {
+bool refresh_kria_mod(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	switch (k_mod_mode) {
 	case modLoop:
 		monomeLedBuffer[R7 + 10] = L1;
@@ -2971,7 +3015,14 @@ bool refresh_kria_mod(void) {
 	}
 }
 
-void refresh_kria_tr(void) {
+void refresh_kria_tr(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	//const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	//const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	// steps
 	for(uint8_t i=0;i<4;i++) {
 		for(uint8_t j=0;j<16;j++) {
@@ -2996,11 +3047,19 @@ void refresh_kria_tr(void) {
 	}
 }
 
-void refresh_kria_note(bool isAlt) {
-	kria_modes_t noteMode = isAlt ? mAltNote : mNote;
-	u8 (*notesArray)[16] = isAlt ? &k.p[k.pattern].t[track].alt_note : &k.p[k.pattern].t[track].note;
+void refresh_kria_note(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
-	if(!isAlt && note_sync) {
+	const kria_modes_t noteMode = k_mode;
+	
+	u8 (*notesArray)[16] = k_mode == mAltNote ? &k.p[k.pattern].t[track].alt_note : &k.p[k.pattern].t[track].note;
+
+	if(!(k_mode == mAltNote) && note_sync) {
 		for(uint8_t i=0;i<16;i++)
 			monomeLedBuffer[i + (6 - (*notesArray)[i] ) * 16] =
 				k.p[k.pattern].t[track].tr[i] * 3;
@@ -3025,7 +3084,14 @@ void refresh_kria_note(bool isAlt) {
 	}
 }
 
-void refresh_kria_oct(void) {
+void refresh_kria_oct(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	//const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	memset(monomeLedBuffer, 2, 6);
 	monomeLedBuffer[R0+k.p[k.pattern].t[track].octshift] = L1;
 
@@ -3066,7 +3132,14 @@ void refresh_kria_oct(void) {
 	}
 }
 
-void refresh_kria_dur(void) {
+void refresh_kria_dur(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	//const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	monomeLedBuffer[k.p[k.pattern].t[track].dur_mul - 1] = L1;
 
 	for(uint8_t i=0;i<16;i++) {
@@ -3095,7 +3168,14 @@ void refresh_kria_dur(void) {
 	}
 }
 
-void refresh_kria_rpt(void) {
+void refresh_kria_rpt(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	//const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	for ( uint8_t i=0; i<16; i++ ) {
 		uint8_t rptBits = k.p[k.pattern].t[track].rptBits[i];
 		for ( uint8_t j=0; j<5; j++) {
@@ -3134,7 +3214,14 @@ void refresh_kria_rpt(void) {
 	}
 }
 
-void refresh_kria_glide(void) {
+void refresh_kria_glide(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	//const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	for(uint8_t i=0;i<16;i++) {
 		for(uint8_t j=0;j<=k.p[k.pattern].t[track].glide[i];j++){
 			monomeLedBuffer[R6-16*j+i] = L1 - (k.p[k.pattern].t[track].glide[i]-j);
@@ -3163,7 +3250,14 @@ void refresh_kria_glide(void) {
 	}
 }
 
-void refresh_kria_scale(void) {
+void refresh_kria_scale(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	//const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	//const kria_modes_t k_mode = view->mode;
+	//const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	for ( uint8_t y=0; y<4; y++ ) {
 		// highlight TT clock enables and trigger steps
 		monomeLedBuffer[0+16*y] = k.p[k.pattern].t[y].tt_clocked ? L1 : L0;
@@ -3200,7 +3294,14 @@ void refresh_kria_scale(void) {
 	}
 }
 
-void refresh_kria_pattern(void) {
+void refresh_kria_pattern(kria_view_t* view)
+{
+	u8* monomeLedBuffer = view->buffer;
+	//const u8 track = view->track;
+	//const bool k_mode_is_alt = view->mode_is_alt;
+	//const kria_modes_t k_mode = view->mode;
+	const kria_mod_modes_t k_mod_mode = view->mod_mode;
+
 	if(!meta) {
 		memset(monomeLedBuffer, 3, 16);
 		monomeLedBuffer[k.pattern] = L1;
@@ -3242,9 +3343,10 @@ void refresh_kria_pattern(void) {
 	}
 }
 
-void refresh_kria_config(void) {
+void refresh_kria_config(void)
+{
 	// clear grid
-	memset(monomeLedBuffer,0,128);
+	memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
 
 	memset(monomeLedBuffer,4, 3);
 	monomeLedBuffer[R0 + (grid_varibrightness == 1 ? 0 :
@@ -4082,6 +4184,10 @@ void handler_MPRefresh(s32 data) {
 
 		monome_set_quadrant_flag(0);
 		monome_set_quadrant_flag(1);
+		if (monome_size_y() == 16) {
+			monome_set_quadrant_flag(2);
+			monome_set_quadrant_flag(3);
+		}
 		(*monome_refresh)();
 	}
 }
@@ -4171,7 +4277,7 @@ void handler_MPTrNormal(s32 data) {
 
 void refresh_clock(void) {
 	// clear grid
-	memset(monomeLedBuffer,0,128);
+	memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
 
 	monomeLedBuffer[clock_count & 0xf] = L0;
 
@@ -4227,7 +4333,7 @@ void refresh_mp_config(void) {
 	u8 c;
 
 	// clear grid
-	memset(monomeLedBuffer,0,128);
+	memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
 
 	// voice mode + sound
 	c = L0;
@@ -4283,7 +4389,7 @@ void refresh_mp(void) {
 	u8 i1, i2, i3;
 
 	// clear grid
-	memset(monomeLedBuffer,0,128);
+	memset(monomeLedBuffer, 0, MONOME_MAX_LED_BYTES);
 
 	// SHOW POSITIONS
 	if(mode == 0) {
@@ -4875,8 +4981,12 @@ static void es_load_preset(void) {
 void handler_ESRefresh(s32 data) {
     if(monomeFrameDirty) {
         grid_refresh();
-        monome_set_quadrant_flag(0);
-        monome_set_quadrant_flag(1);
+		monome_set_quadrant_flag(0);
+		monome_set_quadrant_flag(1);
+		if (monome_size_y() == 16) {
+			monome_set_quadrant_flag(2);
+			monome_set_quadrant_flag(3);
+		}
         (*monome_refresh)();
     }
 }
