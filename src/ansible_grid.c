@@ -4915,8 +4915,8 @@ void default_es(void) {
         e.p_select = 0;
         e.voices = 0b1111;
         e.octave = 0;
-        for (u8 j = 0; j < 128; j++)
-            e.keymap[i] = 0;
+        for (int k = 0; k < MAX_KEYS; k++)
+            e.keymap[k] = 0;
         e.scale = 16;
         for (u8 j = 0; j < 16; j++) {
             e.p[i].interval_ind = 0;
@@ -5444,16 +5444,20 @@ void refresh_es(void) {
     s16 index, x, y;
     if (es_view == es_main) {
         if (e.scale == 16) {
-            for (u8 i = 0; i < 128; i++)
-                if (e.keymap[i]) monomeLedBuffer[i] = e.keymap[i] << 1;
+            for (x = 1; x < 16; x++) {
+                for (y = es_mode == es_playing ? 1 : 0; y < monome_size_y(); y++) {
+                    u8 i = (y << 4) + x;
+                    if (e.keymap[i]) monomeLedBuffer[i] = e.keymap[i] << 1;
+                }
+            }
         } else {
             u8 in_scale;
             for (x = 1; x < 16; x++)
-                for (y = es_mode == es_playing ? 1 : 0; y < 8; y++) {
-                    index = x + (7 - y) * 5 - 1;
+                for (y = es_mode == es_playing ? 1 : 0; y < monome_size_y(); y++) {
+                    index = x + (monome_size_y() - 1 - y) * 5 - 1;
                     in_scale = 0;
                     for (u8 sc = 0; sc < 8; sc++) {
-                        for (u8 oct = 0; oct < 5; oct++) {
+                        for (u8 oct = 0; oct < 9; oct++) {
                             if (index == cur_scale[sc] + oct * 12) {
                                 monomeLedBuffer[(y << 4) + x] = sc == 0 ? 4 : 2;
                                 in_scale = 1;
