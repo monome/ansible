@@ -914,10 +914,17 @@ static inline int sum_clip(int l, int r, int clip) {
 
 void clock_kria_note(kria_track* track, uint8_t trackNum) {
 	if(kria_next_step(trackNum, mDur)) {
+		u16 curr_dur = track->dur[pos[trackNum][mDur]] + 1;
 		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)384.0;
-		f32 unscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
-		dur[trackNum] = (u16)(unscaled * clock_scale);
-		aux_param[0][trackNum] = (int)unscaled;
+		if (curr_dur < 6) {
+			f32 unscaled = curr_dur * (track->dur_mul<<2);
+			dur[trackNum] = (u16)(unscaled * clock_scale);
+			aux_param[0][trackNum] = (int)unscaled;
+		}
+		else {
+			dur[trackNum] = (u16)(384 * clock_scale);
+			aux_param[0][trackNum] = 384;
+		}
 	}
 	if(kria_next_step(trackNum, mOct)) {
 		oct[trackNum] = sum_clip(track->octshift, track->oct[pos[trackNum][mOct]], 5);
