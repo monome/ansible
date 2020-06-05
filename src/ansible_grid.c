@@ -914,17 +914,9 @@ static inline int sum_clip(int l, int r, int clip) {
 
 void clock_kria_note(kria_track* track, uint8_t trackNum) {
 	if(kria_next_step(trackNum, mDur)) {
-		u16 curr_dur = track->dur[pos[trackNum][mDur]] + 1;
-		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)384.0;
-		if (curr_dur < 6) {
-			f32 unscaled = curr_dur * (track->dur_mul<<2);
-			dur[trackNum] = (u16)(unscaled * clock_scale);
-			aux_param[0][trackNum] = (int)unscaled;
-		}
-		else {
-			dur[trackNum] = (u16)(384 * clock_scale);
-			aux_param[0][trackNum] = 384;
-		}
+		f32 clock_scale = (clock_deltas[trackNum] * track->tmul[mTr]) / (f32)380.0;
+		f32 uncscaled = (track->dur[pos[trackNum][mDur]]+1) * (track->dur_mul<<2);
+		dur[trackNum] = (u16)(uncscaled * clock_scale);
 	}
 	if(kria_next_step(trackNum, mOct)) {
 		oct[trackNum] = sum_clip(track->octshift, track->oct[pos[trackNum][mOct]], 5);
@@ -1007,6 +999,9 @@ void clock_kria_track( uint8_t trackNum ) {
 static void kria_off(void* o) {
 	int index = *(u8*)o;
 	timer_remove( &auxTimer[index] );
+
+	if (k.p[k.pattern].t[index].dur[pos[index][mDur]] == 5 && repeats[index] <= 0) return;
+
 	clr_tr(TR1 + index);
 	tr[index] = 0;
 }
