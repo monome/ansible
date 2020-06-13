@@ -940,7 +940,8 @@ static void kria_set_note(uint8_t trackNum) {
 		trackNum,
 		(int)cur_scale[noteInScale] +
 		scale_adj[noteInScale] +
-		(int)((oct[trackNum]+octaveBump) * 12));
+		(int)((oct[trackNum]+octaveBump) * 12),
+		0);
 }
 
 void clock_kria_track( uint8_t trackNum ) {
@@ -3636,7 +3637,7 @@ void mp_note_on(uint8_t n) {
 		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
-			set_cv_note(0, (int)cur_scale[7-n] + scale_adj[7-n]);
+			set_cv_note(0, (int)cur_scale[7-n] + scale_adj[7-n], 0);
 			set_tr(TR1);
 		}
 		break;
@@ -3645,7 +3646,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(2);
 			note_now[w] = n;
-			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n], 0);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3654,7 +3655,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(4);
 			note_now[w] = n;
-			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n], 0);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -4470,7 +4471,7 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
         note_index = 0;
     else if (note_index > 119)
         note_index = 119;
-    set_cv_note(note, note_index);
+    set_cv_note(note, note_index, 0);
     dac_update_now();
     set_tr(TR1 + note);
 

@@ -65,7 +65,7 @@ typedef enum {
 static void write_midi_standard(void);
 static void write_midi_arp(void);
 
-static uint16_t pitch_cv(u8 num, s16 offset);
+static void midi_pitch(uint8_t n, uint16_t note, int16_t bend);
 static uint16_t velocity_cv(u8 vel);
 static uint16_t cc_cv(u8 value);
 
@@ -227,6 +227,7 @@ static arp_player_t player[4];
 
 // shared state
 static s16 pitch_offset[4];
+static s16 pitch_shift[4];
 static midi_clock_t midi_clock;
 static key_state_t key_state;
 static clock_source sync_source;
@@ -351,8 +352,8 @@ void handler_MidiFrontLong(s32 data) {
 ////////////////////////////////////////////////////////////////////////////////
 ///// common cv utilities
 
-inline static uint16_t pitch_cv(u8 num, s16 offset) {
-	return SEMI14[num] + offset;
+inline static void midi_pitch(uint8_t n, uint16_t note, int16_t bend) {
+    set_cv_note(n, note, bend + pitch_shift[n]);
 }
 
 inline static uint16_t velocity_cv(u8 vel) {
@@ -480,18 +481,18 @@ static void set_voice_tune(voicing_mode v, s16 shift) {
 	case eVoicePoly:
 	case eVoiceMulti:
 		for (i = 0; i < 4; i++) {
-			dac_set_off(i, shift);
+			pitch_shift[i] = shift;
 		}
 		break;
 	case eVoiceMono:
-		dac_set_off(0, shift);  // pitch
-		dac_set_off(1, 0);      // velocity
-		dac_set_off(2, 0);      // channel pressure
-		dac_set_off(3, 0);      // mod
+		pitch_shift[0] = shift;  // pitch
+		pitch_shift[1] = 0;      // velocity
+		pitch_shift[2] = 0;      // channel pressure
+		pitch_shift[3] = 0;      // mod
 		break;
 	default:
 		for (i = 0; i < 4; i++) {
-			dac_set_off(i, 0);
+			pitch_shift[i] = 0;
 		}
 		break;
 	}
@@ -691,8 +692,7 @@ static void poly_pitch_bend(u8 ch, u16 bend) {
 
 	for (u8 i = 0; i < voice_state.count; i++) {
 		if (voice_slot_active(&voice_state, i)) {
-			dac_set_value(i, pitch_cv(voice_slot_num(&voice_state, i),
-																pitch_offset[0]));
+			midi_pitch(i, voice_slot_num(&voice_state, i), pitch_offset[0]);
 		}
 	}
 	dac_update_now();
@@ -737,7 +737,7 @@ static void mono_note_on(u8 ch, u8 num, u8 vel) {
 
 	// keep track of held notes for legato and pitch bend
 	notes_hold(&notes[0], num, vel);
-	dac_set_value(MONO_PITCH_CV, pitch_cv(num, pitch_offset[0]));
+	midi_pitch(MONO_PITCH_CV, num, pitch_offset[0]);
 	dac_set_value_noslew(MONO_VELOCITY_CV, velocity_cv(vel));
 	dac_update_now();
 	set_tr(TR1);
@@ -753,7 +753,7 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 		notes_release(&notes[0], num);
 		prior = notes_get(&notes[0], kNotePriorityLast);
 		if (prior) {
-			dac_set_value(MONO_PITCH_CV, pitch_cv(prior->num, pitch_offset[0]));
+			midi_pitch(MONO_PITCH_CV, prior->num, pitch_offset[0]);
 			dac_set_value(MONO_VELOCITY_CV, velocity_cv(prior->vel));
 			dac_update_now();
 		}
@@ -780,7 +780,7 @@ static void mono_pitch_bend(u8 ch, u16 bend) {
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[0]), kNotePriorityLast);
 	if (active) {
-		dac_set_value(MONO_PITCH_CV, pitch_cv(active->num, pitch_offset[0]));
+		midi_pitch(MONO_PITCH_CV, active->num, pitch_offset[0]);
 		dac_update_now();
 	}
 }
@@ -921,7 +921,7 @@ static void multi_note_on(u8 ch, u8 num, u8 vel) {
 		return;
 
 	notes_hold(&notes[ch], num, vel);
-	dac_set_value(ch, pitch_cv(num, pitch_offset[ch]));
+	midi_pitch(ch, num, pitch_offset[ch]);
 	dac_update_now();
 	multi_tr_set(ch);
 }
@@ -937,7 +937,7 @@ static void multi_note_off(u8 ch, u8 num, u8 vel) {
 		if (flags[ch].legato) {
 			prior = notes_get(&notes[ch], kNotePriorityLast);
 			if (prior) {
-				dac_set_value(ch, pitch_cv(prior->num, pitch_offset[ch]));
+				midi_pitch(ch, prior->num, pitch_offset[ch]);
 				dac_update_now();
 			}
 			else {
@@ -971,7 +971,7 @@ static void multi_pitch_bend(u8 ch, u16 bend) {
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[ch]), kNotePriorityLast);
 	if (active) {
-		dac_set_value(ch, pitch_cv(active->num, pitch_offset[ch]));
+		midi_pitch(ch, active->num, pitch_offset[ch]);
 		dac_update_now();
 	}
 }
@@ -1462,10 +1462,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
-					dac_set_off(i, s);
+					pitch_shift[i] = s;
 			}
 			else {
-				dac_set_off(v-1, s);
+				pitch_shift[v-1] = s;
 			}
 			break;
 
@@ -1605,7 +1605,7 @@ void restore_midi_arp(void) {
 		arp_player_set_offset(p, arp_state.p[i].offset);
 		arp_player_set_fill(p, arp_state.p[i].fill);
 
-		dac_set_off(i, arp_state.p[i].shift);
+		pitch_shift[i] = arp_state.p[i].shift;
 		dac_set_slew(i, arp_state.p[i].slew);
 	}
 
@@ -1797,7 +1797,7 @@ static void player_note_on(u8 ch, u8 num, u8 vel) {
 	}
 	*/
 
-	dac_set_value(ch, SEMI14[num]);
+	midi_pitch(ch, SEMI14[num], 0);
 	multi_tr_set(ch);
 }
 
