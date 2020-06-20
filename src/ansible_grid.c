@@ -2790,6 +2790,15 @@ void handler_KriaKey(s32 data) {
 		view_clock = false;
 		break;
 	case 1:
+		if (view_tuning) {
+			view_tuning = false;
+			view_config = false;
+			view_clock = false;
+			restore_grid_tuning();
+			resume_kria();
+			break;
+		}
+
 		grid_refresh = &refresh_clock;
 		// print_dbg("\r\ntime: ");
 		// print_dbg_ulong(time_fine);
