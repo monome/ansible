@@ -432,7 +432,7 @@ void grid_keytimer(void) {
 						// reload factory default, don't immediately save it
 						for (uint8_t i = 0; i < 4; i++) {
 							for (uint8_t j = 0; j < 120; j ++) {
-								tuning_table[i][j] = ET[j] << 2;
+								tuning_table[i][j] = ET[j];
 							}
 						}
 						restore_grid_tuning();
