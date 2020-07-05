@@ -343,7 +343,7 @@ inline static int clamp(int n, int lower, int upper) {
 }
 
 inline static void midi_pitch(uint8_t n, uint16_t note, int16_t bend) {
-    set_cv_note(n, clamp((int)note - 24, 0, 120), bend);
+    set_cv_note(n, clamp((int)note + pitch_shift[n], 0, 120), bend);
 }
 
 inline static uint16_t velocity_cv(u8 vel) {
@@ -467,7 +467,7 @@ static void set_voice_slew(voicing_mode v, s16 slew) {
 static int ticks_to_semitones(int16_t shift) {
 	uint16_t mag = abs(shift);
 	for (int i = 0; i < 120; i++) {
-		if (mag > ET[i]) {
+		if (mag <= ET[i]) {
 			return shift < 0 ? -i : i;
 		}
 	}
