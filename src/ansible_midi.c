@@ -14,6 +14,7 @@
 #include "i2c.h"
 #include "gpio.h"
 #include "dac.h"
+#include "music.h"
 
 #include "init_common.h"
 #include "conf_tc_irq.h"
@@ -136,23 +137,6 @@ static void player_note_off(u8 ch, u8 num, u8 vel);
 
 //-----------------------------
 //----- globals
-
-// step = 16384.0 / (10 octave * 12.0 semitones per octave)
-// [int(n * step) for n in xrange(0,128)]
-const u16 SEMI14[128] = {
-	0, 136, 273, 409, 546, 682, 819, 955, 1092, 1228, 1365, 1501, 1638,
-	1774, 1911, 2048, 2184, 2321, 2457, 2594, 2730, 2867, 3003, 3140,
-	3276, 3413, 3549, 3686, 3822, 3959, 4096, 4232, 4369, 4505, 4642,
-	4778, 4915, 5051, 5188, 5324, 5461, 5597, 5734, 5870, 6007, 6144,
-	6280, 6417, 6553, 6690, 6826, 6963, 7099, 7236, 7372, 7509, 7645,
-	7782, 7918, 8055, 8192, 8328, 8465, 8601, 8738, 8874, 9011, 9147,
-	9284, 9420, 9557, 9693, 9830, 9966, 10103, 10240, 10376, 10513, 10649,
-	10786, 10922, 11059, 11195, 11332, 11468, 11605, 11741, 11878, 12014,
-	12151, 12288, 12424, 12561, 12697, 12834, 12970, 13107, 13243, 13380,
-	13516, 13653, 13789, 13926, 14062, 14199, 14336, 14472, 14609, 14745,
-	14882, 15018, 15155, 15291, 15428, 15564, 15701, 15837, 15974, 16110,
-	16247, 16384, 16520, 16657, 16793, 16930, 17066, 17203, 17339
-};
 
 // step = 16384.0 / (10 octave * 12.0 semitones per octave)
 // semi_per_octave = step * 12
@@ -352,8 +336,14 @@ void handler_MidiFrontLong(s32 data) {
 ////////////////////////////////////////////////////////////////////////////////
 ///// common cv utilities
 
+inline static int clamp(int n, int lower, int upper) {
+	if (n < lower) return lower;
+	if (n > upper) return upper;
+	return n;
+}
+
 inline static void midi_pitch(uint8_t n, uint16_t note, int16_t bend) {
-    set_cv_note(n, note, bend + pitch_shift[n]);
+    set_cv_note(n, clamp((int)note - 24, 0, 120), bend);
 }
 
 inline static uint16_t velocity_cv(u8 vel) {
@@ -474,6 +464,16 @@ static void set_voice_slew(voicing_mode v, s16 slew) {
 	}
 }
 
+static int ticks_to_semitones(int16_t shift) {
+	uint16_t mag = abs(shift);
+	for (int i = 0; i < 120; i++) {
+		if (mag > ET[i]) {
+			return shift < 0 ? -i : i;
+		}
+	}
+	return 0;
+}
+
 static void set_voice_tune(voicing_mode v, s16 shift) {
 	u8 i;
 
@@ -481,11 +481,11 @@ static void set_voice_tune(voicing_mode v, s16 shift) {
 	case eVoicePoly:
 	case eVoiceMulti:
 		for (i = 0; i < 4; i++) {
-			pitch_shift[i] = shift;
+			pitch_shift[i] = ticks_to_semitones(shift);
 		}
 		break;
 	case eVoiceMono:
-		pitch_shift[0] = shift;  // pitch
+		pitch_shift[0] = ticks_to_semitones(shift);  // pitch
 		pitch_shift[1] = 0;      // velocity
 		pitch_shift[2] = 0;      // channel pressure
 		pitch_shift[3] = 0;      // mod
@@ -1462,10 +1462,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
-					pitch_shift[i] = s;
+					pitch_shift[i] = ticks_to_semitones(s);
 			}
 			else {
-				pitch_shift[v-1] = s;
+				pitch_shift[v-1] = ticks_to_semitones(s);
 			}
 			break;
 
@@ -1605,7 +1605,7 @@ void restore_midi_arp(void) {
 		arp_player_set_offset(p, arp_state.p[i].offset);
 		arp_player_set_fill(p, arp_state.p[i].fill);
 
-		pitch_shift[i] = arp_state.p[i].shift;
+		pitch_shift[i] = ticks_to_semitones(arp_state.p[i].shift);
 		dac_set_slew(i, arp_state.p[i].slew);
 	}
 
@@ -1797,7 +1797,7 @@ static void player_note_on(u8 ch, u8 num, u8 vel) {
 	}
 	*/
 
-	midi_pitch(ch, SEMI14[num], 0);
+	midi_pitch(ch, num, 0);
 	multi_tr_set(ch);
 }
 
