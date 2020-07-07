@@ -10,6 +10,13 @@ static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 
 	if (!state)
 	{
+		// set velocity to max to restore normal functionality
+		d[0] = JF_VTR;
+		d[1] = 0;
+		d[2] = 16384 >> 8;
+		d[3] = 16834 & 0xFF;
+		i2c_master_tx(follower->addr, d, 3);
+
 		// clear all triggers to avoid hanging notes in SUSTAIN
 		d[0] = JF_TR;
 		d[1] = 0;
