@@ -15,6 +15,7 @@
 #include "gpio.h"
 #include "dac.h"
 #include "music.h"
+#include "util.h"
 
 #include "init_common.h"
 #include "conf_tc_irq.h"
@@ -335,15 +336,8 @@ void handler_MidiFrontLong(s32 data) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///// common cv utilities
-
-inline static int clamp(int n, int lower, int upper) {
-	if (n < lower) return lower;
-	if (n > upper) return upper;
-	return n;
-}
-
 inline static void midi_pitch(uint8_t n, uint16_t note, int16_t bend) {
-    set_cv_note(n, clamp((int)note + pitch_shift[n], 0, 120), bend);
+    set_cv_note(n, sclip((int)note + pitch_shift[n], 0, 120), bend);
 }
 
 inline static uint16_t velocity_cv(u8 vel) {
