@@ -95,7 +95,7 @@ void set_mode(ansible_mode_t m);
 void update_leds(uint8_t m);
 void set_tr(uint8_t n);
 void clr_tr(uint8_t n);
-void set_cv_note(uint8_t n, uint16_t cv);
+void set_cv_note(uint8_t n, uint16_t cv, int16_t bend);
 void set_cv_slew(uint8_t n, uint16_t s);
 void reset_outputs(void);
 void toggle_follower(uint8_t n);
