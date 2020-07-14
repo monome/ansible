@@ -460,7 +460,7 @@ void flash_read(void) {
 void default_tuning(void) {
 	for (uint8_t i = 0; i < 4; i++) {
 		for (uint8_t j = 0; j < 120; j++) {
-			tuning_table[i][j] = ET[j] << 2;
+			tuning_table[i][j] = ET[j];
 		}
 	}
 	flashc_memcpy((void *)f.tuning_table, tuning_table, sizeof(tuning_table), true);
@@ -476,7 +476,7 @@ void fit_tuning(int mode) {
 			for (uint8_t i = 0; i < 4; i++) {
 				uint16_t offset = tuning_table[i][0];
 				for (uint8_t j = 0; j < 120; j++) {
-					tuning_table[i][j] = (ET[j] << 2) + offset;
+					tuning_table[i][j] = ET[j] + offset;
 				}
 			}
 			break;
@@ -549,13 +549,13 @@ uint8_t get_tr(uint8_t n) {
 	return gpio_get_pin_value(n);
 }
 
-void set_cv_note(uint8_t n, uint16_t note) {
-	dac_set_value(n, tuning_table[n][note]);
+void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
+	dac_set_value(n, (int16_t)tuning_table[n][note] + bend);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			uint16_t cv_transposed = ET[note] << 2;
+			uint16_t cv_transposed = (int16_t)ET[note] + bend;
 			followers[i].cv(&followers[i], n, cv_transposed);
 		}
 	}

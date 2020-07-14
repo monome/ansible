@@ -10,6 +10,13 @@ static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 
 	if (!state)
 	{
+		// set velocity to max to restore normal functionality
+		d[0] = JF_VTR;
+		d[1] = 0;
+		d[2] = 16384 >> 8;
+		d[3] = 16834 & 0xFF;
+		i2c_master_tx(follower->addr, d, 3);
+
 		// clear all triggers to avoid hanging notes in SUSTAIN
 		d[0] = JF_TR;
 		d[1] = 0;
@@ -122,10 +129,10 @@ static void ii_mode_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 static void ii_octave_jf(i2c_follower_t* follower, uint8_t track, int8_t octave) {
 	int16_t shift;
 	if (octave > 0) {
-		shift = ET[12*octave] << 2;
+		shift = ET[12*octave];
 	}
 	else if (octave < 0) {
-		shift = -(ET[12*(-octave)] << 2);
+		shift = -(ET[12*(-octave)]);
 	}
 	else {
 		shift = 0;
@@ -218,10 +225,10 @@ static void ii_octave_txo(i2c_follower_t* follower, uint8_t track, int8_t octave
 		}
 		case 1: { // gate / cv
 			if (octave > 0) {
-				shift = ET[12*octave] << 2;
+				shift = ET[12*octave];
 			}
 			else if (octave < 0) {
-				shift = -(ET[12*(-octave)] << 2);
+				shift = -ET[12*(-octave)];
 			}
 			else {
 				shift = 0;
@@ -277,7 +284,7 @@ static void ii_cv_txo(i2c_follower_t* follower, uint8_t track, uint16_t dac_valu
 
 	switch (follower->active_mode) {
 		case 0: { // enveloped oscillator
-			dac_value = (int)dac_value + (ET[12*(4+follower->oct)] << 2);
+			dac_value = (int)dac_value + (int)ET[12*(4+follower->oct)];
 			d[0] = 0x40; // TO_OSC
 			d[1] = track;
 			d[2] = dac_value >> 8;
