@@ -6,7 +6,7 @@
 #include "music.h"
 
 static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
-	uint8_t d[3] = { 0 };
+	uint8_t d[4] = { 0 };
 
 	if (!state)
 	{
@@ -15,18 +15,18 @@ static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		d[1] = 0;
 		d[2] = 16384 >> 8;
 		d[3] = 16834 & 0xFF;
-		i2c_master_tx(follower->addr, d, 3);
+		i2c_leader_tx(follower->addr, d, 3);
 
 		// clear all triggers to avoid hanging notes in SUSTAIN
 		d[0] = JF_TR;
 		d[1] = 0;
 		d[2] = 0;
-		i2c_master_tx(follower->addr, d, 3);
+		i2c_leader_tx(follower->addr, d, 3);
 	}
 
 	d[0] = JF_MODE;
 	d[1] = state;
-	i2c_master_tx(follower->addr, d, 2);
+	i2c_leader_tx(follower->addr, d, 2);
 }
 
 static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
@@ -87,7 +87,7 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		}
 	}
 	if (l > 0) {
-		i2c_master_tx(follower->addr, d, l);
+		i2c_leader_tx(follower->addr, d, l);
 	}
 }
 
@@ -98,7 +98,7 @@ static void ii_mute_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 	d[0] = JF_TR;
 	d[1] = 0;
 	d[2] = 0;
-	i2c_master_tx(follower->addr, d, 3);
+	i2c_leader_tx(follower->addr, d, 3);
 }
 
 static void ii_mode_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
@@ -109,20 +109,20 @@ static void ii_mode_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 	if (mode == 2) {
 		d[0] = JF_MODE;
 		d[1] = 0;
-		i2c_master_tx(follower->addr, d, 2);
+		i2c_leader_tx(follower->addr, d, 2);
 
 		// clear all triggers to avoid hanging notes in SUSTAIN
 		d[0] = JF_TR;
 		d[1] = 0;
 		d[2] = 0;
 		d[3] = 0;
-		i2c_master_tx(follower->addr, d, 3);
+		i2c_leader_tx(follower->addr, d, 3);
 	}
 	else
 	{
 		d[0] = JF_MODE;
 		d[1] = 1;
-		i2c_master_tx(follower->addr, d, 2);
+		i2c_leader_tx(follower->addr, d, 2);
 	}
 }
 
@@ -139,7 +139,7 @@ static void ii_octave_jf(i2c_follower_t* follower, uint8_t track, int8_t octave)
 	}
 
 	uint8_t d[] = { JF_SHIFT, shift >> 8, shift & 0xFF };
-	i2c_master_tx(follower->addr, d, 3);
+	i2c_leader_tx(follower->addr, d, 3);
 }
 
 static void ii_init_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
@@ -150,19 +150,19 @@ static void ii_init_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) 
 		d[1] = track;
 		d[2] = 0;
 		d[3] = 0;
-		i2c_master_tx(follower->addr, d, 4);
+		i2c_leader_tx(follower->addr, d, 4);
 
 		d[0] = 0x40; // TO_OSC
 		d[1] = track;
 		d[2] = 0;
 		d[3] = 0;
-		i2c_master_tx(follower->addr, d, 4);
+		i2c_leader_tx(follower->addr, d, 4);
 
 		d[0] = 0x10; // TO_CV
 		d[1] = track;
 		d[2] = 0;
 		d[3] = 0;
-		i2c_master_tx(follower->addr, d, 4);
+		i2c_leader_tx(follower->addr, d, 4);
 	}
 }
 
@@ -178,19 +178,19 @@ static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 			d[1] = track;
 			d[2] = 0;
 			d[3] = 1;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 
 			d[0] = 0x15; // TO_CV_OFF
 			d[1] = track;
 			d[2] = 0;
 			d[3] = 0;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 
 			d[0] = 0x10; // TO_CV
 			d[1] = track;
 			d[2] = 8192 >> 8;
 			d[3] = 8192 & 0xFF;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		case 1: { // gate/cv
@@ -198,19 +198,19 @@ static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 			d[1] = track;
 			d[2] = 0;
 			d[3] = 0;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 
 			d[0] = 0x40; // TO_OSC
 			d[1] = track;
 			d[2] = 0;
 			d[3] = 0;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 
 			d[0] = 0x10; // TO_CV
 			d[1] = track;
 			d[2] = 0;
 			d[3] = 0;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		default: return;
@@ -241,7 +241,7 @@ static void ii_octave_txo(i2c_follower_t* follower, uint8_t track, int8_t octave
 			};
 			for (uint8_t i = 0; i < 4; i++) {
 				d[1] = i;
-				i2c_master_tx(follower->addr, d, 4);
+				i2c_leader_tx(follower->addr, d, 4);
 			}
 			break;
 		}
@@ -258,7 +258,7 @@ static void ii_tr_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 			d[1] = track;
 			d[2] = 0;
 			d[3] = state;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		case 1: { // gate/cv
@@ -266,7 +266,7 @@ static void ii_tr_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 			d[1] = track;
 			d[2] = 0;
 			d[3] = state;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		default: return;
@@ -289,7 +289,7 @@ static void ii_cv_txo(i2c_follower_t* follower, uint8_t track, uint16_t dac_valu
 			d[1] = track;
 			d[2] = dac_value >> 8;
 			d[3] = dac_value & 0xFF;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		case 1: { // gate/cv
@@ -297,7 +297,7 @@ static void ii_cv_txo(i2c_follower_t* follower, uint8_t track, uint16_t dac_valu
 			d[1] = track;
 			d[2] = dac_value >> 8;
 			d[3] = dac_value & 0xFF;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		default: return;
@@ -313,7 +313,7 @@ static void ii_slew_txo(i2c_follower_t* follower, uint8_t track, uint16_t slew) 
 			d[1] = track;
 			d[2] = slew >> 8;
 			d[3] = slew & 0xFF;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		case 1: { // gate/cv
@@ -321,7 +321,7 @@ static void ii_slew_txo(i2c_follower_t* follower, uint8_t track, uint16_t slew) 
 			d[1] = track;
 			d[2] = slew >> 8;
 			d[3] = slew & 0xFF;
-			i2c_master_tx(follower->addr, d, 4);
+			i2c_leader_tx(follower->addr, d, 4);
 			break;
 		}
 		default: return;

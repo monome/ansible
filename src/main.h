@@ -90,6 +90,8 @@ void fit_tuning(int mode);
 extern void handler_None(s32 data);
 extern void clock_null(u8 phase);
 extern void ii_null(uint8_t *d, uint8_t l);
+extern void ii_follower_pause(void);
+extern void ii_follower_resume(void);
 
 void set_mode(ansible_mode_t m);
 void update_leds(uint8_t m);
