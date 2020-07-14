@@ -393,6 +393,7 @@ static bool usb_disk_load_flash(FS_STRING fname) {
 		print_dbg("\r\n!! could not open JSON file for read");
 		return false;
 	}
+	ii_follower_pause();
 	json_read_result_t result = json_read(
 		gets_chunks,
 		copy_chunks,
@@ -400,6 +401,7 @@ static bool usb_disk_load_flash(FS_STRING fname) {
 		ansible_usb_disk_textbuf, ANSIBLE_USBDISK_TXTBUF_LEN,
 		ansible_usb_disk_tokbuf, ANSIBLE_USBDISK_TOKBUF_LEN);
 	file_close();
+	ii_follower_resume();
 
 	switch (result) {
 	case JSON_READ_OK:

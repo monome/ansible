@@ -22,7 +22,7 @@ void set_mode_tt(void) {
 	app_event_handlers[kEventTrNormal] = &handler_TTTrNormal;
 	clock = &clock_tt;
 	clock_set(f.tt_state.clock_period);
-	if (!leader_mode) init_i2c_slave(f.state.i2c_addr);
+	if (!leader_mode) init_i2c_follower(f.state.i2c_addr);
 	process_ii = &ii_tt;
 	update_leds(0);
 
