@@ -328,7 +328,92 @@ static void ii_slew_txo(i2c_follower_t* follower, uint8_t track, uint16_t slew) 
 	}
 }
 
+static void ii_mode_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	if (mode > follower->mode_ct) return;
+	follower->active_mode = mode;
+}
+
+static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+	uint8_t d[4] = { 0 };
+
+	uint16_t dac_value = dac_get_value(track);
+	s32 note = (((s32)dac_value * 240) / 16384);
+	note = note / 2 + (note & 1) + 72 + 12 * follower->oct;
+	if ((follower->active_mode == 1 || follower->active_mode == 2) && (note < 0 || note > 127)) return;
+
+	switch (follower->active_mode) {
+		case 0: // SD Multisample / SD Triggers
+			if (state) {
+				d[0] = 0x52;
+				d[1] = track;
+				d[2] = 0x20;
+				d[3] = 0;
+				i2c_leader_tx(follower->addr, d, 4);
+			} else {
+				d[0] = 0x53;
+				d[1] = track;
+				i2c_leader_tx(follower->addr, d, 2);
+			}
+			break;
+		case 1: // MIDI channel 1
+			if (state) {
+				d[0] = 0x4F;
+				d[1] = 0x90;
+				d[2] = note;
+				d[3] = 80;
+				i2c_leader_tx(follower->addr, d, 4);
+			} else {
+				d[0] = 0x4F;
+				d[1] = 0x80;
+				d[2] = note;
+				d[3] = 0;
+				i2c_leader_tx(follower->addr, d, 4);
+			}
+			break;
+		case 2: // MIDI channels 1-4
+			if (state) {
+				d[0] = 0x4F;
+				d[1] = 0x90 + track;
+				d[2] = note;
+				d[3] = 80;
+				i2c_leader_tx(follower->addr, d, 4);
+			} else {
+				d[0] = 0x4F;
+				d[1] = 0x80 + track;
+				d[2] = note;
+				d[3] = 0;
+				i2c_leader_tx(follower->addr, d, 4);
+			}
+			break;
+		default: return;
+	}
+}
+
+static void ii_mute_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	for (uint8_t i = 0; i < 4; i++) {
+		ii_tr_disting_ex(follower, i, 0);
+	}
+}
+
+static void ii_cv_disting_ex(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
+	uint8_t d[4] = { 0 };
+
+	if (follower->active_mode == 0) {
+		s8 octave = ET[12*abs(follower->oct - 1)];
+		if (follower->oct - 1 < 0) octave = -octave;
+		dac_value = (int)dac_value + octave;
+		d[0] = 0x51;
+		d[1] = track;
+		d[2] = dac_value >> 8;
+		d[3] = dac_value;
+		i2c_leader_tx(follower->addr, d, 4);
+	}
+}
+
 static void ii_u8_nop(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+}
+
+static void ii_s8_nop(i2c_follower_t* follower, uint8_t track, int8_t state) {
 }
 
 static void ii_u16_nop(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
@@ -385,6 +470,23 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 
 		.mode_ct = 1,
 		.active_mode = 1, // always gate/cv
+	},
+	{
+		.addr = DISTING_EX_1,
+		.active = false,
+		.track_en = 0xF,
+		.oct = 0,
+
+		.init = ii_u8_nop,
+		.mode = ii_mode_disting_ex,
+		.tr = ii_tr_disting_ex,
+		.mute = ii_mute_disting_ex,
+		.cv = ii_cv_disting_ex,
+		.octave = ii_s8_nop,
+		.slew = ii_u16_nop,
+
+		.mode_ct = 3,
+		.active_mode = 0,
 	},
 };
 

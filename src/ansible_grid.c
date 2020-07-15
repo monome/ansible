@@ -1646,7 +1646,7 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 					follower_change_mode(&followers[follower], x - 13);
 				}
 			}
-			if (y >= 2 && y <= 5) {
+			if (y >= 2 && y <= 6) {
 				if (x == 5) {
 					follower = y - 2;
 				}
@@ -1661,7 +1661,7 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 			if (x > 7) {
 				glyph[y] ^= 1<<(x-8);
 			}
-			if (x == 5 && y >= 2 && y <= 5) {
+			if (x == 5 && y >= 2 && y <= 6) {
 				if (mod_follower) {
 					follower = y - 2;
 					follower_select = true;
