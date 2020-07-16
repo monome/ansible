@@ -227,7 +227,7 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
 		restore_midi_standard();
-		if (!leader_mode) init_i2c_slave(II_MID_ADDR);
+		if (!leader_mode) init_i2c_follower(II_MID_ADDR);
 		process_ii = &ii_midi_standard;
 		update_leds(1);
 		break;
@@ -241,7 +241,7 @@ void set_mode_midi(void) {
 		restore_midi_arp();
 		clock = &clock_midi_arp;
 		clock_set(arp_state.clock_period);
-		if (!leader_mode) init_i2c_slave(II_ARP_ADDR);
+		if (!leader_mode) init_i2c_follower(II_ARP_ADDR);
 		process_ii = &ii_midi_arp;
 		update_leds(2);
 		break;
@@ -525,6 +525,8 @@ void default_midi_standard(void) {
 }
 
 void write_midi_standard(void) {
+	ii_follower_pause();
+
 	flashc_memset32((void*)&(f.midi_standard_state.clock_period),
 									standard_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_standard_state.voicing),
@@ -537,6 +539,7 @@ void write_midi_standard(void) {
 	flashc_memset16((void*)&(f.midi_standard_state.slew),
 									standard_state.slew, 2, true);
 
+	ii_follower_resume();
 }
 
 void clock_midi_standard(uint8_t phase) {
@@ -1169,6 +1172,8 @@ void default_midi_arp() {
 void write_midi_arp(void) {
 	arp_player_t *p;
 
+	ii_follower_pause();
+
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period),
 									arp_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style),
@@ -1197,6 +1202,8 @@ void write_midi_arp(void) {
 		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift),
 										dac_get_off(i), 2, true);
 	}
+
+	ii_follower_resume();
 }
 
 static void arp_next_style(void) {
