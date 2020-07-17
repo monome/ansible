@@ -333,20 +333,39 @@ static void ii_mode_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t 
 	follower->active_mode = mode;
 }
 
+static s16 calculate_note(s16 dac_value, s8 octave) {
+	s32 note = (dac_value * 240) / 16384;
+	note = note / 2 + (note & 1) + 36 + octave * 12;
+	return note;
+}
+
 static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[4] = { 0 };
-
-	uint16_t dac_value = dac_get_value(track);
-	s32 note = (((s32)dac_value * 240) / 16384);
-	note = note / 2 + (note & 1) + 72 + 12 * follower->oct;
-	if ((follower->active_mode == 1 || follower->active_mode == 2) && (note < 0 || note > 127)) return;
+	s16 note = calculate_note(dac_get_value(track), follower->oct);
 
 	switch (follower->active_mode) {
-		case 0: // SD Multisample / SD Triggers
+		case 0: // SD Multisample / SD Triggers allocated voices
+            if (note < 0) note = 0; else if (note > 127) note = 127;
+			if (state) {
+				d[0] = 0x56;
+				d[1] = note;
+				i2c_leader_tx(follower->addr, d, 2);
+				d[0] = 0x55;
+				d[2] = 0x40;
+				d[3] = 0;
+				i2c_leader_tx(follower->addr, d, 4);
+			} else {
+				d[0] = 0x56;
+				d[1] = note;
+				i2c_leader_tx(follower->addr, d, 2);
+			}
+			break;
+			
+		case 1: // SD Multisample / SD Triggers fixed voices
 			if (state) {
 				d[0] = 0x52;
 				d[1] = track;
-				d[2] = 0x20;
+				d[2] = 0x40;
 				d[3] = 0;
 				i2c_leader_tx(follower->addr, d, 4);
 			} else {
@@ -355,7 +374,9 @@ static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t st
 				i2c_leader_tx(follower->addr, d, 2);
 			}
 			break;
-		case 1: // MIDI channel 1
+			
+		case 2: // MIDI channel 1
+			if (note < 0 || note > 127) return;
 			if (state) {
 				d[0] = 0x4F;
 				d[1] = 0x90;
@@ -370,7 +391,8 @@ static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t st
 				i2c_leader_tx(follower->addr, d, 4);
 			}
 			break;
-		case 2: // MIDI channels 1-4
+		case 3: // MIDI channels 1-4
+			if (note < 0 || note > 127) return;
 			if (state) {
 				d[0] = 0x4F;
 				d[1] = 0x90 + track;
@@ -398,14 +420,27 @@ static void ii_mute_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t 
 static void ii_cv_disting_ex(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
 	uint8_t d[4] = { 0 };
 
+	s16 pitch = dac_value;
+	s16 note = calculate_note(pitch, follower->oct);
+    if (note < 0) note = 0; else if (note > 127) note = 127;
+	
+	s8 octave = follower->oct * 12;
+	if (octave > 0)
+		pitch += ET[octave];
+	else
+		pitch -= ET[-octave];
+	
+	d[2] = pitch >> 8;
+	d[3] = pitch;
+
 	if (follower->active_mode == 0) {
-		s8 octave = ET[12*abs(follower->oct - 1)];
-		if (follower->oct - 1 < 0) octave = -octave;
-		dac_value = (int)dac_value + octave;
+		if (note < 0 || note > 127) return;
+		d[0] = 0x54;
+		d[1] = note;
+		i2c_leader_tx(follower->addr, d, 4);
+	} else if (follower->active_mode == 1) {
 		d[0] = 0x51;
 		d[1] = track;
-		d[2] = dac_value >> 8;
-		d[3] = dac_value;
 		i2c_leader_tx(follower->addr, d, 4);
 	}
 }
@@ -485,7 +520,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.octave = ii_s8_nop,
 		.slew = ii_u16_nop,
 
-		.mode_ct = 3,
+		.mode_ct = 4,
 		.active_mode = 0,
 	},
 };
