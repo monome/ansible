@@ -345,7 +345,7 @@ static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t st
 
 	switch (follower->active_mode) {
 		case 0: // SD Multisample / SD Triggers allocated voices
-            if (note < 0) note = 0; else if (note > 127) note = 127;
+			if (note < 0) note = 0; else if (note > 127) note = 127;
 			if (state) {
 				d[0] = 0x56;
 				d[1] = note;
@@ -422,7 +422,7 @@ static void ii_cv_disting_ex(i2c_follower_t* follower, uint8_t track, uint16_t d
 
 	s16 pitch = dac_value;
 	s16 note = calculate_note(pitch, follower->oct);
-    if (note < 0) note = 0; else if (note > 127) note = 127;
+	if (note < 0) note = 0; else if (note > 127) note = 127;
 	
 	s8 octave = follower->oct * 12;
 	if (octave > 0)
