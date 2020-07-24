@@ -328,7 +328,7 @@ static void handler_FrontLong(s32 data) {
 	print_dbg("\r\n+ i2c address: ");
 	print_dbg_hex(f.state.i2c_addr);
 	// TEST
-	if (!leader_mode) init_i2c_slave(f.state.i2c_addr);
+	if (!leader_mode) init_i2c_follower(f.state.i2c_addr);
 }
 
 static void handler_SaveFlash(s32 data) {
@@ -460,7 +460,7 @@ void flash_read(void) {
 void default_tuning(void) {
 	for (uint8_t i = 0; i < 4; i++) {
 		for (uint8_t j = 0; j < 120; j++) {
-			tuning_table[i][j] = ET[j] << 2;
+			tuning_table[i][j] = ET[j];
 		}
 	}
 	flashc_memcpy((void *)f.tuning_table, tuning_table, sizeof(tuning_table), true);
@@ -476,7 +476,7 @@ void fit_tuning(int mode) {
 			for (uint8_t i = 0; i < 4; i++) {
 				uint16_t offset = tuning_table[i][0];
 				for (uint8_t j = 0; j < 120; j++) {
-					tuning_table[i][j] = (ET[j] << 2) + offset;
+					tuning_table[i][j] = ET[j] + offset;
 				}
 			}
 			break;
@@ -549,13 +549,13 @@ uint8_t get_tr(uint8_t n) {
 	return gpio_get_pin_value(n);
 }
 
-void set_cv_note(uint8_t n, uint16_t note) {
-	dac_set_value(n, tuning_table[n][note]);
+void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
+	dac_set_value(n, (int16_t)tuning_table[n][note] + bend);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			uint16_t cv_transposed = ET[note] << 2;
+			uint16_t cv_transposed = (int16_t)ET[note] + bend;
 			followers[i].cv(&followers[i], n, cv_transposed);
 		}
 	}
@@ -611,7 +611,7 @@ void toggle_follower(uint8_t n) {
 		}
 		print_dbg("\r\n> enter i2c leader mode");
 		leader_mode = true;
-		init_i2c_master();
+		init_i2c_leader();
 		follower_on(n);
 	}
 	else {
@@ -623,30 +623,44 @@ void toggle_follower(uint8_t n) {
 		}
 		print_dbg("\r\n> exit i2c leader mode");
 		leader_mode = false;
+		ii_follower_resume();
+	}
+}
+
+void ii_follower_pause(void) {
+	if (!leader_mode) {
+		// 0x03 is a reserved address 'for future use' in the i2c spec
+		// used to effectively stop listening for i2c
+		init_i2c_follower(0x03);
+	}
+}
+
+void ii_follower_resume(void) {
+	if (!leader_mode) {
 		switch (ansible_mode) {
 		case mArcLevels:
-			init_i2c_slave(II_LV_ADDR);
+			init_i2c_follower(II_LV_ADDR);
 			break;
 		case mArcCycles:
-			init_i2c_slave(II_CY_ADDR);
+			init_i2c_follower(II_CY_ADDR);
 			break;
 		case mGridKria:
-			init_i2c_slave(II_KR_ADDR);
+			init_i2c_follower(II_KR_ADDR);
 			break;
 		case mGridMP:
-			init_i2c_slave(II_MP_ADDR);
+			init_i2c_follower(II_MP_ADDR);
 			break;
 		case mGridES:
-			init_i2c_slave(ES);
+			init_i2c_follower(ES);
 			break;
 		case mMidiStandard:
-			init_i2c_slave(II_MID_ADDR);
+			init_i2c_follower(II_MID_ADDR);
 			break;
 		case mMidiArp:
-			init_i2c_slave(II_ARP_ADDR);
+			init_i2c_follower(II_ARP_ADDR);
 			break;
 		case mTT:
-			init_i2c_slave(f.state.i2c_addr);
+			init_i2c_follower(f.state.i2c_addr);
 			break;
 	        default:
 			break;
@@ -684,13 +698,13 @@ void load_flash_state(void) {
 		if (followers[i].active) {
 			if (!leader_mode) {
 				leader_mode = true;
-				init_i2c_master();
+				init_i2c_leader();
 			}
 			follower_on(i);
 		}
 	}
 	if (!leader_mode) {
-		init_i2c_slave(f.state.i2c_addr);
+		init_i2c_follower(f.state.i2c_addr);
 	}
 }
 

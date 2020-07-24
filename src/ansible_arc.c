@@ -79,7 +79,7 @@ void set_mode_arc(void) {
 		clock = &clock_null;
 		// clock = &clock_levels;
 		// clock_set(f.levels_state.clock_period);
-		if (!leader_mode) init_i2c_slave(II_LV_ADDR);
+		if (!leader_mode) init_i2c_follower(II_LV_ADDR);
 		process_ii = &ii_levels;
 		resume_levels();
 		update_leds(1);
@@ -94,7 +94,7 @@ void set_mode_arc(void) {
 		clock = &clock_cycles;
 		// 24
 		clock_set(DAC_RATE_CV << 3);
-		if (!leader_mode) init_i2c_slave(II_CY_ADDR);
+		if (!leader_mode) init_i2c_follower(II_CY_ADDR);
 		process_ii = &ii_cycles;
 		resume_cycles();
 		update_leds(2);
@@ -108,8 +108,10 @@ void set_mode_arc(void) {
 	// 	app_event_handlers[kEventFrontLong] = &handler_ArcFrontLong;
 	// }
 
+	ii_follower_pause();
 	flashc_memset32((void*)&(f.state.none_mode), ansible_mode, 4, true);
 	flashc_memset32((void*)&(f.state.arc_mode), ansible_mode, 4, true);
+	ii_follower_resume();
 }
 
 
@@ -303,14 +305,18 @@ void handler_ArcPresetKey(s32 data) {
 		// print_dbg_ulong(arc_preset);
 		switch(ansible_mode) {
 		case mArcLevels:
+			ii_follower_pause();
 			flashc_memcpy((void *)&f.levels_state.l[arc_preset], &l, sizeof(l), true);
 			flashc_memset8((void*)&(f.levels_state.preset), arc_preset, 1, true);
+			ii_follower_resume();
 			arc_leave_preset();
 			resume_levels();
 			break;
 		case mArcCycles:
+			ii_follower_pause();
 			flashc_memcpy((void *)&f.cycles_state.c[arc_preset], &c, sizeof(c), true);
 			flashc_memset8((void*)&(f.cycles_state.preset), arc_preset, 1, true);
+			ii_follower_resume();
 			arc_leave_preset();
 			resume_cycles();
 			break;
