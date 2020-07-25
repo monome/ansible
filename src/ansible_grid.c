@@ -5433,80 +5433,79 @@ void refresh_es(void) {
     monomeLedBuffer[16*(15-(e.p_select % 8))] = 7;
 
     u8 l;
-    if (es_runes || (es_view == es_patterns && monome_size_y() == 16)) {
-        u8 rune_offset = (es_view == es_patterns) ? 128 : 0; // on 256, show runes on bottom half of pattern hold view 
+	u8 offset = (monome_size_y() == 16) ? 128 : 0; // on 256, show runes on bottom half of grid
+    if (es_runes) {
+        
         l = e.p[e.p_select].linearize ? 15 : 7;
 
         // linearize
-        monomeLedBuffer[rune_offset + 34] = l;
-        monomeLedBuffer[rune_offset + 36] = l;
-        monomeLedBuffer[rune_offset + 66] = l;
-        monomeLedBuffer[rune_offset + 68] = l;
+        monomeLedBuffer[offset + 34] = l;
+        monomeLedBuffer[offset + 36] = l;
+        monomeLedBuffer[offset + 66] = l;
+        monomeLedBuffer[offset + 68] = l;
 
         l = e.p[e.p_select].dir ? 15 : 7;
         // reverse
-        monomeLedBuffer[rune_offset + 39] = l;
-        monomeLedBuffer[rune_offset + 54] = l;
-        monomeLedBuffer[rune_offset + 71] = l;
+        monomeLedBuffer[offset + 39] = l;
+        monomeLedBuffer[offset + 54] = l;
+        monomeLedBuffer[offset + 71] = l;
 
         l = e.p[e.p_select].dir ? 7 : 15;
         // forward
-        monomeLedBuffer[rune_offset + 41] = l;
-        monomeLedBuffer[rune_offset + 58] = l;
-        monomeLedBuffer[rune_offset + 73] = l;
+        monomeLedBuffer[offset + 41] = l;
+        monomeLedBuffer[offset + 58] = l;
+        monomeLedBuffer[offset + 73] = l;
 
         l = 8;
         // double speed
-        monomeLedBuffer[rune_offset + 29] = l;
-        monomeLedBuffer[rune_offset + 44] = l;
-        monomeLedBuffer[rune_offset + 46] = l;
+        monomeLedBuffer[offset + 29] = l;
+        monomeLedBuffer[offset + 44] = l;
+        monomeLedBuffer[offset + 46] = l;
 
         // half speed
-        monomeLedBuffer[rune_offset + 76] = l;
-        monomeLedBuffer[rune_offset + 78] = l;
-        monomeLedBuffer[rune_offset + 93] = l;
+        monomeLedBuffer[offset + 76] = l;
+        monomeLedBuffer[offset + 78] = l;
+        monomeLedBuffer[offset + 93] = l;
 
-        if (es_runes) {
-            return;
-        }
+		return;
     }
 
     if (es_edge) {
         l = e.p[e.p_select].edge == ES_EDGE_PATTERN ? 15 : 7;
-        monomeLedBuffer[34] = l;
-        monomeLedBuffer[35] = l;
-        monomeLedBuffer[36] = l;
-        monomeLedBuffer[50] = l;
-        monomeLedBuffer[52] = l;
-        monomeLedBuffer[66] = l;
-        monomeLedBuffer[68] = l;
-        monomeLedBuffer[82] = l;
-        monomeLedBuffer[84] = l;
-        monomeLedBuffer[85] = l;
+        monomeLedBuffer[offset + 34] = l;
+        monomeLedBuffer[offset + 35] = l;
+        monomeLedBuffer[offset + 36] = l;
+        monomeLedBuffer[offset + 50] = l;
+        monomeLedBuffer[offset + 52] = l;
+        monomeLedBuffer[offset + 66] = l;
+        monomeLedBuffer[offset + 68] = l;
+        monomeLedBuffer[offset + 82] = l;
+        monomeLedBuffer[offset + 84] = l;
+        monomeLedBuffer[offset + 85] = l;
 
         l = e.p[e.p_select].edge == ES_EDGE_FIXED ? 15 : 7;
-        monomeLedBuffer[39] = l;
-        monomeLedBuffer[40] = l;
-        monomeLedBuffer[41] = l;
-        monomeLedBuffer[42] = l;
-        monomeLedBuffer[55] = l;
-        monomeLedBuffer[58] = l;
-        monomeLedBuffer[71] = l;
-        monomeLedBuffer[74] = l;
-        monomeLedBuffer[87] = l;
-        monomeLedBuffer[90] = l;
+        monomeLedBuffer[offset + 39] = l;
+        monomeLedBuffer[offset + 40] = l;
+        monomeLedBuffer[offset + 41] = l;
+        monomeLedBuffer[offset + 42] = l;
+        monomeLedBuffer[offset + 55] = l;
+        monomeLedBuffer[offset + 58] = l;
+        monomeLedBuffer[offset + 71] = l;
+        monomeLedBuffer[offset + 74] = l;
+        monomeLedBuffer[offset + 87] = l;
+        monomeLedBuffer[offset + 90] = l;
 
         l = e.p[e.p_select].edge == ES_EDGE_DRONE ? 15 : 7;
-        monomeLedBuffer[44] = l;
-        monomeLedBuffer[45] = l;
-        monomeLedBuffer[46] = l;
-        monomeLedBuffer[47] = l;
+        monomeLedBuffer[offset + 44] = l;
+        monomeLedBuffer[offset + 45] = l;
+        monomeLedBuffer[offset + 46] = l;
+        monomeLedBuffer[offset + 47] = l;
 
 		if (e.p[e.p_select].edge == ES_EDGE_FIXED) {
 			for (u8 i = 0; i < 16; i++)
-				monomeLedBuffer[112 + i] = 4;
+				monomeLedBuffer[offset + 112 + i] = 4;
             u8 edge_index = 111 + (e.p[e.p_select].edge_time >> 4);
-			if (edge_index <= 127) monomeLedBuffer[edge_index] = 11;
+			if (edge_index <= 127) monomeLedBuffer[offset + edge_index] = 11;
 		}
 
         return;
@@ -5514,11 +5513,11 @@ void refresh_es(void) {
 
     if (es_voices) {
         for (u8 i = 0; i < 4; i++) {
-            monomeLedBuffer[35 + (i << 4)] = e.voices & (1 << i) ? 15 : 4;
-            monomeLedBuffer[34 + (i << 4)] = e.p[e.p_select].voices & (1 << i) ? 15 : 4;
+            monomeLedBuffer[offset + 35 + (i << 4)] = e.voices & (1 << i) ? 15 : 4;
+            monomeLedBuffer[offset + 34 + (i << 4)] = e.p[e.p_select].voices & (1 << i) ? 15 : 4;
         }
 
-        monomeLedBuffer[e.octave ? 115 : 114] = 10 + e.octave;
+        monomeLedBuffer[offset + (e.octave ? 115 : 114)] = 10 + e.octave;
         return;
     }
 
