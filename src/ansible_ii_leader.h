@@ -1,6 +1,6 @@
 #pragma once
 
-#define I2C_FOLLOWER_COUNT 3
+#define I2C_FOLLOWER_COUNT 4
 
 struct i2c_follower_t;
 
