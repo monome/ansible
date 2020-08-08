@@ -71,6 +71,8 @@ uint8_t cue_steps;
 uint8_t meta;
 bool meta_reset_all;
 
+bool dur_tie_mode;
+
 uint8_t scale_data[16][8];
 
 u8 cur_scale[8];
@@ -401,6 +403,7 @@ void grid_keytimer(void) {
 						flashc_memset8((void*)&(f.kria_state.cue_steps), cue_steps, 1, true);
 						flashc_memset8((void*)&(f.kria_state.meta), meta, 1, true);
 						flashc_memset8((void*)&(f.kria_state.meta_reset_all), meta_reset_all, 1, true);
+						flashc_memset8((void*)&(f.kria_state.dur_tie_mode), dur_tie_mode, 1, true);
 						flashc_memcpy((void *)&f.kria_state.k[preset], &k, sizeof(k), true);
 
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
@@ -620,6 +623,7 @@ void default_kria() {
 	flashc_memset8((void*)&(f.kria_state.cue_steps), 3, 1, true);
 	flashc_memset8((void*)&(f.kria_state.meta), 0, 1, true);
 	flashc_memset8((void*)&(f.kria_state.meta_reset_all), false, 1, true);
+	flashc_memset8((void*)&(f.kria_state.dur_tie_mode), false, 1, true);
 
 	for(i1=0;i1<8;i1++)
 		k.glyph[i1] = 0;
@@ -678,6 +682,7 @@ void init_kria() {
 	cue_div = f.kria_state.cue_div;
 	cue_steps = f.kria_state.cue_steps;
 	meta_reset_all = f.kria_state.meta_reset_all;
+	dur_tie_mode = f.kria_state.dur_tie_mode;
 
 	preset = f.kria_state.preset;
 
@@ -1035,7 +1040,9 @@ static void kria_off(void* o) {
 	int index = *(u8*)o;
 	timer_remove( &auxTimer[index] );
 
-	if (k.p[k.pattern].t[index].dur[pos[index][mDur]] == 5 && repeats[index] <= 0) return;
+	if (dur_tie_mode
+	    && k.p[k.pattern].t[index].dur[pos[index][mDur]] == 5
+	    && repeats[index] <= 0) return;
 
 	clr_tr(TR1 + index);
 	tr[index] = 0;
@@ -1905,6 +1912,10 @@ void handler_KriaGridKey(s32 data) {
 				else loop_sync = 2;
 
 				flashc_memset8((void*)&(f.kria_state.loop_sync), loop_sync, 1, true);
+			}
+			else if (y == 7 && x == 8) {
+				dur_tie_mode = !dur_tie_mode;
+				flashc_memset8((void*)&(f.kria_state.dur_tie_mode), dur_tie_mode, 1, true);
 			}
 			else if (y == 7 && x == 14) {
 				view_config = false;
@@ -3378,6 +3389,7 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R5 + 12] = i;
 	monomeLedBuffer[R5 + 13] = i;
 
+	monomeLedBuffer[R7 + 8]  = dur_tie_mode ? L1 : L0;
 	monomeLedBuffer[R7 + 14] = L0;
 	monomeLedBuffer[R7 + 15] = meta_reset_all ? L1 : L0;
 }
