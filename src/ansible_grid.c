@@ -279,8 +279,8 @@ void refresh_preset(void) {
 		monomeLedBuffer[followers[follower].oct + 3] = L1;
 
 		if (followers[follower].mode_ct > 1) {
-			memset(monomeLedBuffer + 13, L0, followers[follower].mode_ct);
-			monomeLedBuffer[13 + followers[follower].active_mode] = L1;
+			memset(monomeLedBuffer + 12, L0, followers[follower].mode_ct);
+			monomeLedBuffer[12 + followers[follower].active_mode] = L1;
 		}
 	}
 	else {
@@ -1644,12 +1644,12 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 					follower_change_octave(&followers[follower], followers[follower].oct);
 				}
 				if (followers[follower].mode_ct > 1
-				 && x >= 13
-				 && x <= (13 + followers[follower].mode_ct)) {
-					follower_change_mode(&followers[follower], x - 13);
+				 && x >= 12
+				 && x <= (12 + followers[follower].mode_ct)) {
+					follower_change_mode(&followers[follower], x - 12);
 				}
 			}
-			if (y >= 2 && y <= 5) {
+			if (y >= 2 && y <= 6) {
 				if (x == 5) {
 					follower = y - 2;
 				}
@@ -1664,7 +1664,7 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 			if (x > 7) {
 				glyph[y] ^= 1<<(x-8);
 			}
-			if (x == 5 && y >= 2 && y <= 5) {
+			if (x == 5 && y >= 2 && y <= 6) {
 				if (mod_follower) {
 					follower = y - 2;
 					follower_select = true;
