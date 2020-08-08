@@ -147,7 +147,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_KriaRefresh;
 		clock = &clock_kria;
 		clock_set(clock_period);
-		if (!leader_mode) init_i2c_slave(II_KR_ADDR);
+		if (!leader_mode) init_i2c_follower(II_KR_ADDR);
 		process_ii = &ii_kria;
 		resume_kria();
 		update_leds(1);
@@ -161,7 +161,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_MPRefresh;
 		clock = &clock_mp;
 		clock_set(clock_period);
-		if (!leader_mode) init_i2c_slave(II_MP_ADDR);
+		if (!leader_mode) init_i2c_follower(II_MP_ADDR);
 		process_ii = &ii_mp;
 		resume_mp();
 		update_leds(2);
@@ -175,7 +175,7 @@ void set_mode_grid() {
 		app_event_handlers[kEventMonomeRefresh] = &handler_ESRefresh;
 		clock = &clock_null;
 		clock_set(clock_period);
-		if (!leader_mode) init_i2c_slave(ES);
+		if (!leader_mode) init_i2c_follower(ES);
 		process_ii = &ii_es;
 		resume_es();
 		update_leds(3);
@@ -189,8 +189,10 @@ void set_mode_grid() {
 	// 	app_event_handlers[kEventFrontLong] = &handler_GridFrontLong;
 	// }
 
+	ii_follower_pause();
 	flashc_memset32((void*)&(f.state.none_mode), ansible_mode, 4, true);
 	flashc_memset32((void*)&(f.state.grid_mode), ansible_mode, 4, true);
+	ii_follower_resume();
 }
 
 static void preset_mode_exit(void) {
@@ -278,8 +280,8 @@ void refresh_preset(void) {
 		monomeLedBuffer[followers[follower].oct + 3] = L1;
 
 		if (followers[follower].mode_ct > 1) {
-			memset(monomeLedBuffer + 13, L0, followers[follower].mode_ct);
-			monomeLedBuffer[13 + followers[follower].active_mode] = L1;
+			memset(monomeLedBuffer + 12, L0, followers[follower].mode_ct);
+			monomeLedBuffer[12 + followers[follower].active_mode] = L1;
 		}
 	}
 	else {
@@ -378,6 +380,8 @@ void grid_keytimer(void) {
 
 					// WRITE PRESET
 
+					ii_follower_pause();
+
 					switch (ansible_mode) {
 					case mGridMP:
 						flashc_memset8((void*)&(f.mp_state.preset), preset, 1, true);
@@ -421,6 +425,8 @@ void grid_keytimer(void) {
 					flashc_memset32((void*)&(f.kria_state.clock_period), clock_period, 4, true);
 					flashc_memset32((void*)&(f.kria_state.sync_mode), kria_sync_mode, sizeof(kria_sync_mode), true);
 
+					ii_follower_resume();
+
 					monomeFrameDirty++;
 				}
 			}
@@ -434,7 +440,7 @@ void grid_keytimer(void) {
 						// reload factory default, don't immediately save it
 						for (uint8_t i = 0; i < 4; i++) {
 							for (uint8_t j = 0; j < 120; j ++) {
-								tuning_table[i][j] = ET[j] << 2;
+								tuning_table[i][j] = ET[j];
 							}
 						}
 						restore_grid_tuning();
@@ -442,18 +448,24 @@ void grid_keytimer(void) {
 					if (x == 13) {
 						// apply fixed offset and save
 						fit_tuning(0);
+						ii_follower_pause();
 						flashc_memcpy((void*)f.tuning_table, tuning_table, sizeof(tuning_table), true);
+						ii_follower_resume();
 						restore_grid_tuning();
 					}
 					if (x == 14) {
 						// interpolate octaves and save
 						fit_tuning(1);
+						ii_follower_pause();
 						flashc_memcpy((void*)f.tuning_table, tuning_table, sizeof(tuning_table), true);
+						ii_follower_resume();
 						restore_grid_tuning();
 					}
 					if (x == 15) {
 						// save all tuning entries as-is
+						ii_follower_pause();
 						flashc_memcpy((void *)f.tuning_table, tuning_table, sizeof(tuning_table), true);
+						ii_follower_resume();
 						restore_grid_tuning();
 					}
 				}
@@ -961,7 +973,8 @@ static void kria_set_note(uint8_t trackNum) {
 		trackNum,
 		(int)cur_scale[noteInScale] +
 		scale_adj[noteInScale] +
-		(int)((oct[trackNum]+octaveBump) * 12));
+		(int)((oct[trackNum]+octaveBump) * 12),
+		0);
 }
 
 void clock_kria_track( uint8_t trackNum ) {
@@ -1641,12 +1654,12 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 					follower_change_octave(&followers[follower], followers[follower].oct);
 				}
 				if (followers[follower].mode_ct > 1
-				 && x >= 13
-				 && x <= (13 + followers[follower].mode_ct)) {
-					follower_change_mode(&followers[follower], x - 13);
+				 && x >= 12
+				 && x <= (12 + followers[follower].mode_ct)) {
+					follower_change_mode(&followers[follower], x - 12);
 				}
 			}
-			if (y >= 2 && y <= 5) {
+			if (y >= 2 && y <= 6) {
 				if (x == 5) {
 					follower = y - 2;
 				}
@@ -1661,7 +1674,7 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 			if (x > 7) {
 				glyph[y] ^= 1<<(x-8);
 			}
-			if (x == 5 && y >= 2 && y <= 5) {
+			if (x == 5 && y >= 2 && y <= 6) {
 				if (mod_follower) {
 					follower = y - 2;
 					follower_select = true;
@@ -2842,6 +2855,15 @@ void handler_KriaKey(s32 data) {
 		view_clock = false;
 		break;
 	case 1:
+		if (view_tuning) {
+			view_tuning = false;
+			view_config = false;
+			view_clock = false;
+			restore_grid_tuning();
+			resume_kria();
+			break;
+		}
+
 		grid_refresh = &refresh_clock;
 		// print_dbg("\r\ntime: ");
 		// print_dbg_ulong(time_fine);
@@ -3713,7 +3735,7 @@ void mp_note_on(uint8_t n) {
 		if(mp_clock_count < 1) {
 			mp_clock_count++;
 			note_now[0] = n;
-			set_cv_note(0, (int)cur_scale[7-n] + scale_adj[7-n]);
+			set_cv_note(0, (int)cur_scale[7-n] + scale_adj[7-n], 0);
 			set_tr(TR1);
 		}
 		break;
@@ -3722,7 +3744,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(2);
 			note_now[w] = n;
-			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n], 0);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -3731,7 +3753,7 @@ void mp_note_on(uint8_t n) {
 			mp_clock_count++;
 			w = get_note_slot(4);
 			note_now[w] = n;
-			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n]);
+			set_cv_note(w, (int)cur_scale[7-n] + scale_adj[7-n], 0);
 			set_tr(TR1 + w);
 		}
 		break;
@@ -4547,7 +4569,7 @@ static void es_note_on(s8 x, s8 y, u8 from_pattern, u16 timer, u8 voices) {
         note_index = 0;
     else if (note_index > 119)
         note_index = 119;
-    set_cv_note(note, note_index);
+    set_cv_note(note, note_index, 0);
     dac_update_now();
     set_tr(TR1 + note);
 

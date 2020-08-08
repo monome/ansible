@@ -14,6 +14,8 @@
 #include "i2c.h"
 #include "gpio.h"
 #include "dac.h"
+#include "music.h"
+#include "util.h"
 
 #include "init_common.h"
 #include "conf_tc_irq.h"
@@ -65,7 +67,7 @@ typedef enum {
 static void write_midi_standard(void);
 static void write_midi_arp(void);
 
-static uint16_t pitch_cv(u8 num, s16 offset);
+static void midi_pitch(uint8_t n, uint16_t note, int16_t bend);
 static uint16_t velocity_cv(u8 vel);
 static uint16_t cc_cv(u8 value);
 
@@ -136,23 +138,6 @@ static void player_note_off(u8 ch, u8 num, u8 vel);
 
 //-----------------------------
 //----- globals
-
-// step = 16384.0 / (10 octave * 12.0 semitones per octave)
-// [int(n * step) for n in xrange(0,128)]
-const u16 SEMI14[128] = {
-	0, 136, 273, 409, 546, 682, 819, 955, 1092, 1228, 1365, 1501, 1638,
-	1774, 1911, 2048, 2184, 2321, 2457, 2594, 2730, 2867, 3003, 3140,
-	3276, 3413, 3549, 3686, 3822, 3959, 4096, 4232, 4369, 4505, 4642,
-	4778, 4915, 5051, 5188, 5324, 5461, 5597, 5734, 5870, 6007, 6144,
-	6280, 6417, 6553, 6690, 6826, 6963, 7099, 7236, 7372, 7509, 7645,
-	7782, 7918, 8055, 8192, 8328, 8465, 8601, 8738, 8874, 9011, 9147,
-	9284, 9420, 9557, 9693, 9830, 9966, 10103, 10240, 10376, 10513, 10649,
-	10786, 10922, 11059, 11195, 11332, 11468, 11605, 11741, 11878, 12014,
-	12151, 12288, 12424, 12561, 12697, 12834, 12970, 13107, 13243, 13380,
-	13516, 13653, 13789, 13926, 14062, 14199, 14336, 14472, 14609, 14745,
-	14882, 15018, 15155, 15291, 15428, 15564, 15701, 15837, 15974, 16110,
-	16247, 16384, 16520, 16657, 16793, 16930, 17066, 17203, 17339
-};
 
 // step = 16384.0 / (10 octave * 12.0 semitones per octave)
 // semi_per_octave = step * 12
@@ -227,6 +212,7 @@ static arp_player_t player[4];
 
 // shared state
 static s16 pitch_offset[4];
+static s16 pitch_shift[4];
 static midi_clock_t midi_clock;
 static key_state_t key_state;
 static clock_source sync_source;
@@ -241,7 +227,7 @@ void set_mode_midi(void) {
 		app_event_handlers[kEventTrNormal] = &handler_StandardTrNormal;
 		app_event_handlers[kEventMidiPacket] = &handler_StandardMidiPacket;
 		restore_midi_standard();
-		if (!leader_mode) init_i2c_slave(II_MID_ADDR);
+		if (!leader_mode) init_i2c_follower(II_MID_ADDR);
 		process_ii = &ii_midi_standard;
 		update_leds(1);
 		break;
@@ -255,7 +241,7 @@ void set_mode_midi(void) {
 		restore_midi_arp();
 		clock = &clock_midi_arp;
 		clock_set(arp_state.clock_period);
-		if (!leader_mode) init_i2c_slave(II_ARP_ADDR);
+		if (!leader_mode) init_i2c_follower(II_ARP_ADDR);
 		process_ii = &ii_midi_arp;
 		update_leds(2);
 		break;
@@ -350,9 +336,8 @@ void handler_MidiFrontLong(s32 data) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///// common cv utilities
-
-inline static uint16_t pitch_cv(u8 num, s16 offset) {
-	return SEMI14[num] + offset;
+inline static void midi_pitch(uint8_t n, uint16_t note, int16_t bend) {
+    set_cv_note(n, sclip((int)note + pitch_shift[n], 0, 120), bend);
 }
 
 inline static uint16_t velocity_cv(u8 vel) {
@@ -473,6 +458,16 @@ static void set_voice_slew(voicing_mode v, s16 slew) {
 	}
 }
 
+static int ticks_to_semitones(int16_t shift) {
+	uint16_t mag = abs(shift);
+	for (int i = 0; i < 120; i++) {
+		if (mag <= ET[i]) {
+			return shift < 0 ? -i : i;
+		}
+	}
+	return 0;
+}
+
 static void set_voice_tune(voicing_mode v, s16 shift) {
 	u8 i;
 
@@ -480,18 +475,18 @@ static void set_voice_tune(voicing_mode v, s16 shift) {
 	case eVoicePoly:
 	case eVoiceMulti:
 		for (i = 0; i < 4; i++) {
-			dac_set_off(i, shift);
+			pitch_shift[i] = ticks_to_semitones(shift);
 		}
 		break;
 	case eVoiceMono:
-		dac_set_off(0, shift);  // pitch
-		dac_set_off(1, 0);      // velocity
-		dac_set_off(2, 0);      // channel pressure
-		dac_set_off(3, 0);      // mod
+		pitch_shift[0] = ticks_to_semitones(shift);  // pitch
+		pitch_shift[1] = 0;      // velocity
+		pitch_shift[2] = 0;      // channel pressure
+		pitch_shift[3] = 0;      // mod
 		break;
 	default:
 		for (i = 0; i < 4; i++) {
-			dac_set_off(i, 0);
+			pitch_shift[i] = 0;
 		}
 		break;
 	}
@@ -530,6 +525,8 @@ void default_midi_standard(void) {
 }
 
 void write_midi_standard(void) {
+	ii_follower_pause();
+
 	flashc_memset32((void*)&(f.midi_standard_state.clock_period),
 									standard_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_standard_state.voicing),
@@ -542,6 +539,7 @@ void write_midi_standard(void) {
 	flashc_memset16((void*)&(f.midi_standard_state.slew),
 									standard_state.slew, 2, true);
 
+	ii_follower_resume();
 }
 
 void clock_midi_standard(uint8_t phase) {
@@ -691,8 +689,7 @@ static void poly_pitch_bend(u8 ch, u16 bend) {
 
 	for (u8 i = 0; i < voice_state.count; i++) {
 		if (voice_slot_active(&voice_state, i)) {
-			dac_set_value(i, pitch_cv(voice_slot_num(&voice_state, i),
-																pitch_offset[0]));
+			midi_pitch(i, voice_slot_num(&voice_state, i), pitch_offset[0]);
 		}
 	}
 	dac_update_now();
@@ -737,7 +734,7 @@ static void mono_note_on(u8 ch, u8 num, u8 vel) {
 
 	// keep track of held notes for legato and pitch bend
 	notes_hold(&notes[0], num, vel);
-	dac_set_value(MONO_PITCH_CV, pitch_cv(num, pitch_offset[0]));
+	midi_pitch(MONO_PITCH_CV, num, pitch_offset[0]);
 	dac_set_value_noslew(MONO_VELOCITY_CV, velocity_cv(vel));
 	dac_update_now();
 	set_tr(TR1);
@@ -753,7 +750,7 @@ static void mono_note_off(u8 ch, u8 num, u8 vel) {
 		notes_release(&notes[0], num);
 		prior = notes_get(&notes[0], kNotePriorityLast);
 		if (prior) {
-			dac_set_value(MONO_PITCH_CV, pitch_cv(prior->num, pitch_offset[0]));
+			midi_pitch(MONO_PITCH_CV, prior->num, pitch_offset[0]);
 			dac_set_value(MONO_VELOCITY_CV, velocity_cv(prior->vel));
 			dac_update_now();
 		}
@@ -780,7 +777,7 @@ static void mono_pitch_bend(u8 ch, u16 bend) {
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[0]), kNotePriorityLast);
 	if (active) {
-		dac_set_value(MONO_PITCH_CV, pitch_cv(active->num, pitch_offset[0]));
+		midi_pitch(MONO_PITCH_CV, active->num, pitch_offset[0]);
 		dac_update_now();
 	}
 }
@@ -921,7 +918,7 @@ static void multi_note_on(u8 ch, u8 num, u8 vel) {
 		return;
 
 	notes_hold(&notes[ch], num, vel);
-	dac_set_value(ch, pitch_cv(num, pitch_offset[ch]));
+	midi_pitch(ch, num, pitch_offset[ch]);
 	dac_update_now();
 	multi_tr_set(ch);
 }
@@ -937,7 +934,7 @@ static void multi_note_off(u8 ch, u8 num, u8 vel) {
 		if (flags[ch].legato) {
 			prior = notes_get(&notes[ch], kNotePriorityLast);
 			if (prior) {
-				dac_set_value(ch, pitch_cv(prior->num, pitch_offset[ch]));
+				midi_pitch(ch, prior->num, pitch_offset[ch]);
 				dac_update_now();
 			}
 			else {
@@ -971,7 +968,7 @@ static void multi_pitch_bend(u8 ch, u16 bend) {
 	// re-set pitch to pick up changed offset
 	const held_note_t *active = notes_get(&(notes[ch]), kNotePriorityLast);
 	if (active) {
-		dac_set_value(ch, pitch_cv(active->num, pitch_offset[ch]));
+		midi_pitch(ch, active->num, pitch_offset[ch]);
 		dac_update_now();
 	}
 }
@@ -1175,6 +1172,8 @@ void default_midi_arp() {
 void write_midi_arp(void) {
 	arp_player_t *p;
 
+	ii_follower_pause();
+
 	flashc_memset32((void*)&(f.midi_arp_state.clock_period),
 									arp_state.clock_period, 4, true);
 	flashc_memset8((void*)&(f.midi_arp_state.style),
@@ -1203,6 +1202,8 @@ void write_midi_arp(void) {
 		flashc_memset16((void*)&(f.midi_arp_state.p[i].shift),
 										dac_get_off(i), 2, true);
 	}
+
+	ii_follower_resume();
 }
 
 static void arp_next_style(void) {
@@ -1462,10 +1463,10 @@ void ii_midi_arp(uint8_t *d, uint8_t l) {
 
 			if (v == 0) {
 				for (i = 0; i < 4; i++)
-					dac_set_off(i, s);
+					pitch_shift[i] = ticks_to_semitones(s);
 			}
 			else {
-				dac_set_off(v-1, s);
+				pitch_shift[v-1] = ticks_to_semitones(s);
 			}
 			break;
 
@@ -1605,7 +1606,7 @@ void restore_midi_arp(void) {
 		arp_player_set_offset(p, arp_state.p[i].offset);
 		arp_player_set_fill(p, arp_state.p[i].fill);
 
-		dac_set_off(i, arp_state.p[i].shift);
+		pitch_shift[i] = ticks_to_semitones(arp_state.p[i].shift);
 		dac_set_slew(i, arp_state.p[i].slew);
 	}
 
@@ -1797,7 +1798,7 @@ static void player_note_on(u8 ch, u8 num, u8 vel) {
 	}
 	*/
 
-	dac_set_value(ch, SEMI14[num]);
+	midi_pitch(ch, num, 0);
 	multi_tr_set(ch);
 }
 
