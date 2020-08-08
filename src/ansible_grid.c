@@ -69,6 +69,7 @@ uint8_t cue_div;
 uint8_t cue_steps;
 
 uint8_t meta;
+bool meta_reset_all;
 
 uint8_t scale_data[16][8];
 
@@ -399,6 +400,7 @@ void grid_keytimer(void) {
 						flashc_memset8((void*)&(f.kria_state.cue_div), cue_div, 1, true);
 						flashc_memset8((void*)&(f.kria_state.cue_steps), cue_steps, 1, true);
 						flashc_memset8((void*)&(f.kria_state.meta), meta, 1, true);
+						flashc_memset8((void*)&(f.kria_state.meta_reset_all), meta_reset_all, 1, true);
 						flashc_memcpy((void *)&f.kria_state.k[preset], &k, sizeof(k), true);
 
 						flashc_memcpy((void *)&f.scale, &scale_data, sizeof(scale_data), true);
@@ -554,6 +556,7 @@ uint8_t div_sync;
 u8 pos[4][KRIA_NUM_PARAMS];
 u8 pos_mul[4][KRIA_NUM_PARAMS];
 bool pos_reset;
+bool meta_reset;
 u8 tr[4];
 u8 note[4];
 u8 oct[4];
@@ -616,6 +619,7 @@ void default_kria() {
 	flashc_memset8((void*)&(f.kria_state.cue_div), 0, 1, true);
 	flashc_memset8((void*)&(f.kria_state.cue_steps), 3, 1, true);
 	flashc_memset8((void*)&(f.kria_state.meta), 0, 1, true);
+	flashc_memset8((void*)&(f.kria_state.meta_reset_all), false, 1, true);
 
 	for(i1=0;i1<8;i1++)
 		k.glyph[i1] = 0;
@@ -673,6 +677,7 @@ void init_kria() {
 	div_sync = f.kria_state.div_sync;
 	cue_div = f.kria_state.cue_div;
 	cue_steps = f.kria_state.cue_steps;
+	meta_reset_all = f.kria_state.meta_reset_all;
 
 	preset = f.kria_state.preset;
 
@@ -899,6 +904,14 @@ void clock_kria(uint8_t phase) {
 					cue_pat_next = 0;
 				}
 			}
+		}
+
+		if (meta && meta_reset) {
+			meta_pos = k.meta_start;
+			change_pattern(k.meta_pat[meta_pos]);
+			meta_next = 0;
+			meta_count = 0;
+			meta_reset = false;
 		}
 
 		if(pos_reset) {
@@ -1900,6 +1913,9 @@ void handler_KriaGridKey(s32 data) {
 
 				grid_refresh = &refresh_grid_tuning;
 				restore_grid_tuning();
+			}
+			else if (y == 7 && x == 15) {
+				meta_reset_all = !meta_reset_all;
 			}
 			monomeFrameDirty++;
 		}
@@ -2907,6 +2923,7 @@ void handler_KriaTr(s32 data) {
 		break;
 	case 3:
 		pos_reset = true;
+		if (meta && meta_reset_all) meta_reset = true;
 		break;
 	default:
 		break;
@@ -3362,6 +3379,7 @@ void refresh_kria_config(void) {
 	monomeLedBuffer[R5 + 13] = i;
 
 	monomeLedBuffer[R7 + 14] = L0;
+	monomeLedBuffer[R7 + 15] = meta_reset_all ? L1 : L0;
 }
 
 
