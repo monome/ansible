@@ -1927,6 +1927,7 @@ void handler_KriaGridKey(s32 data) {
 			}
 			else if (y == 7 && x == 15) {
 				meta_reset_all = !meta_reset_all;
+				flashc_memset8((void*)&(f.kria_state.meta_reset_all), meta_reset_all, 1, true);
 			}
 			monomeFrameDirty++;
 		}
