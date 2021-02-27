@@ -128,6 +128,8 @@ softTimer_t auxTimer[4] = {
 
 uint16_t tuning_table[4][120];
 
+ansible_output_t outputs[4];
+
 static uint8_t clock_phase;
 
 void handler_None(s32 data) { ;; }
@@ -524,6 +526,7 @@ void update_leds(uint8_t m) {
 void set_tr(uint8_t n) {
 	gpio_set_gpio_pin(n);
 	uint8_t tr = n - TR1;
+	outputs[tr].tr = true;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
@@ -536,6 +539,7 @@ void set_tr(uint8_t n) {
 void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
 	uint8_t tr = n - TR1;
+	outputs[tr].tr = false;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
@@ -550,7 +554,10 @@ uint8_t get_tr(uint8_t n) {
 }
 
 void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
-	dac_set_value(n, (int16_t)tuning_table[n][note] + bend);
+	outputs[n].semitones = note;
+	outputs[n].bend = bend;
+	outputs[n].dac_target = (int16_t)tuning_table[n][note] + bend;
+	dac_set_value(n, outputs[n].dac_target);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
@@ -562,7 +569,8 @@ void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
 }
 
 void set_cv_slew(uint8_t n, uint16_t s) {
-	dac_set_slew(n, s);
+	outputs[n].slew = s;
+	dac_set_slew(n, outputs[n].slew);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
@@ -574,7 +582,9 @@ void set_cv_slew(uint8_t n, uint16_t s) {
 
 void reset_outputs(void) {
 	for (uint8_t n = 0; n < 4; n++) {
+		outputs[n].slew = 0;
 		dac_set_slew(n, 0);
+		outputs[n].tr = false;
 		gpio_clr_gpio_pin(n + TR1);
 		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 			bool play_follower = followers[i].active

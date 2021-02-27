@@ -74,13 +74,21 @@ typedef const struct {
 	uint16_t tuning_table[4][120];
 } nvram_data_t;
 
+typedef struct {
+	bool tr;
+	uint16_t semitones;
+	int16_t bend;
+	uint16_t slew;
+	uint16_t dac_target;
+} ansible_output_t;
+
 extern nvram_data_t f;
 extern ansible_mode_t ansible_mode;
 extern i2c_follower_t followers[I2C_FOLLOWER_COUNT];
 
 extern softTimer_t auxTimer[4];
 extern uint16_t tuning_table[4][120];
-
+extern ansible_output_t outputs[4];
 
 void (*clock)(u8 phase);
 void init_tuning(void);

@@ -37,15 +37,15 @@ static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[6] = { 0 };
 	uint8_t l = 0;
-	uint16_t dac_value = dac_get_value(track);
+	uint16_t pitch = ET[outputs[track].semitones];
 	if (state) {
 		// map from 1-320 range of duration param to V 2 - V 5 for velocity control
 		uint16_t vel = aux_to_vel(aux_param[0][track]);
 		switch (follower->active_mode) {
 			case 0: { // polyphonically allocated
 				d[0] = JF_NOTE;
-				d[1] = dac_value >> 8;
-				d[2] = dac_value & 0xFF;
+				d[1] = pitch >> 8;
+				d[2] = pitch & 0xFF;
 				d[3] = vel >> 8;
 				d[4] = vel & 0xFF;
 				l = 5;
@@ -54,8 +54,8 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 			case 1: { // tracks to first 4 voices
 				d[0] = JF_VOX;
 				d[1] = track + 1;
-				d[2] = dac_value >> 8;
-				d[3] = dac_value & 0xFF;
+				d[2] = pitch >> 8;
+				d[3] = pitch & 0xFF;
 				d[4] = vel >> 8;
 				d[5] = vel & 0xFF;
 				l = 6;
@@ -77,8 +77,8 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	else {
 		if (follower->active_mode == 0) {
 			d[0] = JF_NOTE;
-			d[1] = dac_value >> 8;
-			d[2] = dac_value & 0xFF;
+			d[1] = pitch >> 8;
+			d[2] = pitch & 0xFF;
 			d[3] = 0;
 			d[4] = 0;
 			l = 5;
@@ -338,15 +338,9 @@ static void ii_mode_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t 
 	follower->active_mode = mode;
 }
 
-static s16 calculate_note(s16 dac_value, s8 octave) {
-	s32 note = (dac_value * 240) / 16384;
-	note = note / 2 + (note & 1) + 36 + octave * 12;
-	return note;
-}
-
 static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[4] = { 0 };
-	s16 note = calculate_note(dac_get_value(track), follower->oct);
+	s16 note = outputs[track].semitones + (4 + follower->oct) * 12;
 
 	switch (follower->active_mode) {
 		case 0: // SD Multisample / SD Triggers allocated voices
@@ -426,7 +420,7 @@ static void ii_cv_disting_ex(i2c_follower_t* follower, uint8_t track, uint16_t d
 	uint8_t d[4] = { 0 };
 
 	s16 pitch = dac_value;
-	s16 note = calculate_note(pitch, follower->oct);
+	s16 note = outputs[track].semitones + (4 + follower->oct) * 12;
 	if (note < 0) note = 0; else if (note > 127) note = 127;
 
 	s8 octave = follower->oct * 12;
@@ -473,14 +467,14 @@ static void ii_init_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t state)
 static void ii_tr_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[6] = { 0 };
 	uint8_t l = 0;
-	uint16_t dac_value = dac_get_value(track);
+	uint16_t pitch = ET[outputs[track].semitones + (3 + follower->oct) * 12];
 	if (state) {
 		uint16_t vel = aux_to_vel(aux_param[0][track]);
 		switch (follower->active_mode) {
 			case 0: { // polyphonically allocated
 				d[0] = WS_S_NOTE;
-				d[1] = dac_value >> 8;
-				d[2] = dac_value & 0xFF;
+				d[1] = pitch >> 8;
+				d[2] = pitch & 0xFF;
 				d[3] = vel >> 8;
 				d[4] = vel & 0xFF;
 				l = 5;
@@ -489,8 +483,8 @@ static void ii_tr_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 			case 1: { // tracks to first 4 voices
 				d[0] = WS_S_VOX;
 				d[1] = track + 1;
-				d[2] = dac_value >> 8;
-				d[3] = dac_value & 0xFF;
+				d[2] = pitch >> 8;
+				d[3] = pitch & 0xFF;
 				d[4] = vel >> 8;
 				d[5] = vel & 0xFF;
 				l = 6;
@@ -505,8 +499,8 @@ static void ii_tr_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 		switch (follower->active_mode) {
 			case 0: {
 				d[0] = WS_S_NOTE;
-				d[1] = dac_value >> 8;
-				d[2] = dac_value & 0xFF;
+				d[1] = pitch >> 8;
+				d[2] = pitch & 0xFF;
 				d[3] = 0;
 				d[4] = 0;
 				l = 5;
@@ -515,8 +509,8 @@ static void ii_tr_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 			case 1: {
 				d[0] = WS_S_VOX;
 				d[1] = track + 1;
-				d[2] = dac_value >> 8;
-				d[3] = dac_value & 0xFF;
+				d[2] = pitch >> 8;
+				d[3] = pitch & 0xFF;
 				d[4] = 0;
 				d[5] = 0;
 				l = 6;
@@ -563,14 +557,14 @@ static void ii_mode_crow(i2c_follower_t* follower, uint8_t track, uint8_t mode) 
 
 static void ii_tr_crow(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[7];
-	uint16_t dac_value = dac_get_value(track);
+	uint16_t pitch = ET[outputs[track].semitones];
 	uint16_t vel = state && aux_to_vel(aux_param[0][track]);
 
 	d[0] = 6; // call3
 	d[1] = 0;
 	d[2] = track + 1;
-	d[3] = dac_value >> 8;
-	d[4] = dac_value & 0xFF;
+	d[3] = pitch >> 8;
+	d[4] = pitch & 0xFF;
 	d[5] = vel >> 8;
 	d[6] = vel & 0xFF;
 	i2c_leader_tx(follower->addr, d, 7);
@@ -662,7 +656,7 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.addr = WS_S_ADDR,
 		.active = false,
 		.track_en = 0xF,
-		.oct = 0,
+		.oct = -2,
 		.active_mode = 0,
 
 		.ops = &(i2c_ops_t){
