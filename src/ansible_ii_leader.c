@@ -5,6 +5,11 @@
 #include "main.h"
 #include "music.h"
 
+static uint16_t aux_to_vel(uint16_t aux) {
+	// map from 1-320 range of duration param to V 2 - V 5 for velocity control
+	return aux * 41 + 3264;
+}
+
 static void ii_init_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[4] = { 0 };
 
@@ -35,7 +40,7 @@ static void ii_tr_jf(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint16_t dac_value = dac_get_value(track);
 	if (state) {
 		// map from 1-320 range of duration param to V 2 - V 5 for velocity control
-		uint16_t vel = aux_param[0][track] * 41 + 3264;
+		uint16_t vel = aux_to_vel(aux_param[0][track]);
 		switch (follower->active_mode) {
 			case 0: { // polyphonically allocated
 				d[0] = JF_NOTE;
@@ -104,7 +109,7 @@ static void ii_mute_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 static void ii_mode_jf(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 	uint8_t d[4] = { 0 };
 
-	if (mode > follower->mode_ct) return;
+	if (mode > follower->ops->mode_ct) return;
 	follower->active_mode = mode;
 	if (mode == 2) {
 		d[0] = JF_MODE;
@@ -169,7 +174,7 @@ static void ii_init_txo(i2c_follower_t* follower, uint8_t track, uint8_t state) 
 static void ii_mode_txo(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
 	uint8_t d[4] = { 0 };
 
-	if (mode > follower->mode_ct) return;
+	if (mode > follower->ops->mode_ct) return;
 	follower->active_mode = mode;
 
 	switch (mode) {
@@ -329,7 +334,7 @@ static void ii_slew_txo(i2c_follower_t* follower, uint8_t track, uint16_t slew) 
 }
 
 static void ii_mode_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
-	if (mode > follower->mode_ct) return;
+	if (mode > follower->ops->mode_ct) return;
 	follower->active_mode = mode;
 }
 
@@ -360,7 +365,7 @@ static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t st
 				i2c_leader_tx(follower->addr, d, 2);
 			}
 			break;
-			
+
 		case 1: // SD Multisample / SD Triggers fixed voices
 			if (state) {
 				d[0] = 0x52;
@@ -374,7 +379,7 @@ static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t st
 				i2c_leader_tx(follower->addr, d, 2);
 			}
 			break;
-			
+
 		case 2: // MIDI channel 1
 			if (note < 0 || note > 127) return;
 			if (state) {
@@ -423,13 +428,13 @@ static void ii_cv_disting_ex(i2c_follower_t* follower, uint8_t track, uint16_t d
 	s16 pitch = dac_value;
 	s16 note = calculate_note(pitch, follower->oct);
 	if (note < 0) note = 0; else if (note > 127) note = 127;
-	
+
 	s8 octave = follower->oct * 12;
 	if (octave > 0)
 		pitch += ET[octave];
 	else
 		pitch -= ET[-octave];
-	
+
 	d[2] = pitch >> 8;
 	d[3] = pitch;
 
@@ -443,6 +448,132 @@ static void ii_cv_disting_ex(i2c_follower_t* follower, uint8_t track, uint16_t d
 		d[1] = track;
 		i2c_leader_tx(follower->addr, d, 4);
 	}
+}
+
+static void ii_init_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+	uint8_t d[4] = { 0 };
+
+	if (!state)
+	{
+		// clear all triggers to avoid hanging notes in SUSTAIN
+		d[0] = WS_S_VEL;
+		d[1] = 0;
+		d[2] = 0;
+		d[3] = 0;
+		i2c_leader_tx(follower->addr, d, 4);
+	}
+	else
+	{
+		d[0] = WS_S_AR_MODE;
+		d[1] = 0;
+		i2c_leader_tx(follower->addr, d, 2);
+	}
+}
+
+static void ii_tr_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+	uint8_t d[6] = { 0 };
+	uint8_t l = 0;
+	uint16_t dac_value = dac_get_value(track);
+	if (state) {
+		uint16_t vel = aux_to_vel(aux_param[0][track]);
+		switch (follower->active_mode) {
+			case 0: { // polyphonically allocated
+				d[0] = WS_S_NOTE;
+				d[1] = dac_value >> 8;
+				d[2] = dac_value & 0xFF;
+				d[3] = vel >> 8;
+				d[4] = vel & 0xFF;
+				l = 5;
+				break;
+			}
+			case 1: { // tracks to first 4 voices
+				d[0] = WS_S_VOX;
+				d[1] = track + 1;
+				d[2] = dac_value >> 8;
+				d[3] = dac_value & 0xFF;
+				d[4] = vel >> 8;
+				d[5] = vel & 0xFF;
+				l = 6;
+				break;
+			}
+			default: {
+				return;
+			}
+		}
+	}
+	else {
+		switch (follower->active_mode) {
+			case 0: {
+				d[0] = WS_S_NOTE;
+				d[1] = dac_value >> 8;
+				d[2] = dac_value & 0xFF;
+				d[3] = 0;
+				d[4] = 0;
+				l = 5;
+				break;
+			}
+			case 1: {
+				d[0] = WS_S_VOX;
+				d[1] = track + 1;
+				d[2] = dac_value >> 8;
+				d[3] = dac_value & 0xFF;
+				d[4] = 0;
+				d[5] = 0;
+				l = 6;
+				break;
+			}
+		}
+	}
+	if (l > 0) {
+		i2c_leader_tx(follower->addr, d, l);
+	}
+}
+
+static void ii_mode_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	if (mode > follower->ops->mode_ct) return;
+	follower->active_mode = mode;
+}
+
+static void ii_mute_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	uint8_t d[6] = { 0 };
+
+	// clear all triggers to avoid hanging notes in SUSTAIN
+	d[0] = WS_S_VOX;
+	d[1] = 0;
+	d[2] = 0;
+	d[3] = 0;
+	d[4] = 0;
+	d[5] = 0;
+	i2c_leader_tx(follower->addr, d, 6);
+}
+
+static void ii_cv_wsyn(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
+	uint8_t d[4] = { 0 };
+	d[0] = WS_S_PITCH;
+	d[1] = track;
+	d[2] = dac_value >> 8;
+	d[3] = dac_value & 0xFF;
+	i2c_leader_tx(follower->addr, d, 4);
+}
+
+static void ii_mode_crow(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
+	if (mode > follower->ops->mode_ct) return;
+	follower->active_mode = mode;
+}
+
+static void ii_tr_crow(i2c_follower_t* follower, uint8_t track, uint8_t state) {
+	uint8_t d[7];
+	uint16_t dac_value = dac_get_value(track);
+	uint16_t vel = state && aux_to_vel(aux_param[0][track]);
+
+	d[0] = 6; // call3
+	d[1] = 0;
+	d[2] = track + 1;
+	d[3] = dac_value >> 8;
+	d[4] = dac_value & 0xFF;
+	d[5] = vel >> 8;
+	d[6] = vel & 0xFF;
+	i2c_leader_tx(follower->addr, d, 7);
 }
 
 static void ii_u8_nop(i2c_follower_t* follower, uint8_t track, uint8_t state) {
@@ -460,75 +591,117 @@ i2c_follower_t followers[I2C_FOLLOWER_COUNT] = {
 		.active = false,
 		.track_en = 0xF,
 		.oct = 0,
-
-		.init = ii_init_jf,
-		.mode = ii_mode_jf,
-		.tr = ii_tr_jf,
-		.mute = ii_mute_jf,
-		.cv = ii_u16_nop,
-		.octave = ii_octave_jf,
-		.slew = ii_u16_nop,
-
-		.mode_ct = 3,
 		.active_mode = 0,
+
+		.ops = &(i2c_ops_t){
+			.init = ii_init_jf,
+			.mode = ii_mode_jf,
+			.tr = ii_tr_jf,
+			.mute = ii_mute_jf,
+			.cv = ii_u16_nop,
+			.octave = ii_octave_jf,
+			.slew = ii_u16_nop,
+			.mode_ct = 3,
+		},
 	},
 	{
 		.addr = TELEXO_0,
 		.active = false,
 		.track_en = 0xF,
 		.oct = 0,
-
-		.init = ii_init_txo,
-		.mode = ii_mode_txo,
-		.tr = ii_tr_txo,
-		.mute = ii_mute_txo,
-		.cv = ii_cv_txo,
-		.octave = ii_octave_txo,
-		.slew = ii_slew_txo,
-
-		.mode_ct = 2,
 		.active_mode = 0,
+
+		.ops = &(i2c_ops_t){
+			.init = ii_init_txo,
+			.mode = ii_mode_txo,
+			.tr = ii_tr_txo,
+			.mute = ii_mute_txo,
+			.cv = ii_cv_txo,
+			.octave = ii_octave_txo,
+			.slew = ii_slew_txo,
+			.mode_ct = 2,
+		},
 	},
 	{
 		.addr = ER301_1,
 		.active = false,
 		.track_en = 0xF,
 		.oct = 0,
-
-		.init = ii_u8_nop,
-		.mode = ii_u8_nop,
-		.tr = ii_tr_txo,
-		.mute = ii_mute_txo,
-		.cv = ii_cv_txo,
-		.octave = ii_octave_txo,
-		.slew = ii_slew_txo,
-
-		.mode_ct = 1,
 		.active_mode = 1, // always gate/cv
+
+		.ops = &(i2c_ops_t){
+			.init = ii_u8_nop,
+			.mode = ii_u8_nop,
+			.tr = ii_tr_txo,
+			.mute = ii_mute_txo,
+			.cv = ii_cv_txo,
+			.octave = ii_octave_txo,
+			.slew = ii_slew_txo,
+			.mode_ct = 1,
+		},
 	},
 	{
 		.addr = DISTING_EX_1,
 		.active = false,
 		.track_en = 0xF,
 		.oct = 0,
-
-		.init = ii_u8_nop,
-		.mode = ii_mode_disting_ex,
-		.tr = ii_tr_disting_ex,
-		.mute = ii_mute_disting_ex,
-		.cv = ii_cv_disting_ex,
-		.octave = ii_s8_nop,
-		.slew = ii_u16_nop,
-
-		.mode_ct = 4,
 		.active_mode = 0,
+
+		.ops = &(i2c_ops_t){
+			.init = ii_u8_nop,
+			.mode = ii_mode_disting_ex,
+			.tr = ii_tr_disting_ex,
+			.mute = ii_mute_disting_ex,
+			.cv = ii_cv_disting_ex,
+			.octave = ii_s8_nop,
+			.slew = ii_u16_nop,
+			.mode_ct = 4,
+		},
+	},
+	{
+		.addr = WS_S_ADDR,
+		.active = false,
+		.track_en = 0xF,
+		.oct = 0,
+		.active_mode = 0,
+
+		.ops = &(i2c_ops_t){
+			.init = ii_init_wsyn,
+			.mode = ii_mode_wsyn,
+			.tr = ii_tr_wsyn,
+			.mute = ii_mute_wsyn,
+			.cv = ii_cv_wsyn,
+			.octave = ii_s8_nop,
+			.slew = ii_u16_nop,
+
+			.mode_ct = 2,
+		},
+	},
+	{
+		.addr = CROW,
+		.active = false,
+		.track_en = 0xF,
+		.oct = 0,
+		.active_mode = 0,
+
+		.ops = &(i2c_ops_t){
+			.init = ii_u8_nop,
+			.mode = ii_mode_crow,
+			.tr = ii_tr_crow,
+			.mute = ii_u8_nop,
+			.cv = ii_u16_nop,
+			.octave = ii_s8_nop,
+			.slew = ii_u16_nop,
+
+			.mode_ct = 1,
+		},
 	},
 };
 
 void follower_change_mode(i2c_follower_t* follower, uint8_t param) {
 	for (int i = 0; i < 4; i++) {
 		if (follower->track_en & (1 << i)) {
-			follower->mode(follower, i, param);
+			follower->ops->mode(follower, i, param);
 		}
 	}
 }
@@ -536,7 +709,7 @@ void follower_change_mode(i2c_follower_t* follower, uint8_t param) {
 void follower_change_octave(i2c_follower_t* follower, int8_t param) {
 	for (int i = 0; i < 4; i++) {
 		if (follower->track_en & (1 << i)) {
-			follower->octave(follower, i, param);
+			follower->ops->octave(follower, i, param);
 		}
 	}
 }

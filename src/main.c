@@ -528,7 +528,7 @@ void set_tr(uint8_t n) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(&followers[i], tr, 1);
+			followers[i].ops->tr(&followers[i], tr, 1);
 		}
 	}
 }
@@ -540,7 +540,7 @@ void clr_tr(uint8_t n) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(&followers[i], tr, 0);
+			followers[i].ops->tr(&followers[i], tr, 0);
 		}
 	}
 }
@@ -556,7 +556,7 @@ void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
 			uint16_t cv_transposed = (int16_t)ET[note] + bend;
-			followers[i].cv(&followers[i], n, cv_transposed);
+			followers[i].ops->cv(&followers[i], n, cv_transposed);
 		}
 	}
 }
@@ -567,7 +567,7 @@ void set_cv_slew(uint8_t n, uint16_t s) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			followers[i].slew(&followers[i], n, s);
+			followers[i].ops->slew(&followers[i], n, s);
 		}
 	}
 }
@@ -580,7 +580,7 @@ void reset_outputs(void) {
 			bool play_follower = followers[i].active
 			  && followers[i].track_en & (1 << n);
 			if (play_follower) {
-				followers[i].mute(&followers[n], 0, 0);
+				followers[i].ops->mute(&followers[n], 0, 0);
 			}
 		}
 	}
@@ -588,15 +588,15 @@ void reset_outputs(void) {
 
 static void follower_on(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		followers[n].init(&followers[n], i, 1);
-		followers[n].mode(&followers[n], i, followers[n].active_mode);
-		followers[n].octave(&followers[n], 0, followers[n].oct);
+		followers[n].ops->init(&followers[n], i, 1);
+		followers[n].ops->mode(&followers[n], i, followers[n].active_mode);
+		followers[n].ops->octave(&followers[n], 0, followers[n].oct);
 	}
 }
 
 static void follower_off(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		followers[n].init(&followers[n], i, 0);
+		followers[n].ops->init(&followers[n], i, 0);
 	}
 }
 
