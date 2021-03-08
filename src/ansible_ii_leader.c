@@ -340,7 +340,7 @@ static void ii_mode_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t 
 
 static void ii_tr_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t state) {
 	uint8_t d[4] = { 0 };
-	s16 note = outputs[track].semitones + (4 + follower->oct) * 12;
+	u16 note = outputs[track].semitones + 12 * (4 + follower->oct);
 
 	switch (follower->active_mode) {
 		case 0: // SD Multisample / SD Triggers allocated voices
@@ -414,26 +414,22 @@ static void ii_mute_disting_ex(i2c_follower_t* follower, uint8_t track, uint8_t 
 	for (uint8_t i = 0; i < 4; i++) {
 		ii_tr_disting_ex(follower, i, 0);
 	}
+    
+    uint8_t d[1] = { 0x57 };
+    i2c_leader_tx(follower->addr, d, 1);
 }
 
 static void ii_cv_disting_ex(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
 	uint8_t d[4] = { 0 };
 
-	s16 pitch = dac_value;
-	s16 note = outputs[track].semitones + (4 + follower->oct) * 12;
-	if (note < 0) note = 0; else if (note > 127) note = 127;
-
-	s8 octave = follower->oct * 12;
-	if (octave > 0)
-		pitch += ET[octave];
-	else
-		pitch -= ET[-octave];
-
+    u16 note = outputs[track].semitones + 12 * (4 + follower->oct);
+    u16 pitch = ET[note] - ET[36];
+    
 	d[2] = pitch >> 8;
 	d[3] = pitch;
 
 	if (follower->active_mode == 0) {
-		if (note < 0 || note > 127) return;
+		if (note < 0) note = 0; else if (note > 127) note = 127;
 		d[0] = 0x54;
 		d[1] = note;
 		i2c_leader_tx(follower->addr, d, 4);
