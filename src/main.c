@@ -128,6 +128,8 @@ softTimer_t auxTimer[4] = {
 
 uint16_t tuning_table[4][120];
 
+ansible_output_t outputs[4];
+
 static uint8_t clock_phase;
 
 void handler_None(s32 data) { ;; }
@@ -524,11 +526,12 @@ void update_leds(uint8_t m) {
 void set_tr(uint8_t n) {
 	gpio_set_gpio_pin(n);
 	uint8_t tr = n - TR1;
+	outputs[tr].tr = true;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(&followers[i], tr, 1);
+			followers[i].ops->tr(&followers[i], tr, 1);
 		}
 	}
 }
@@ -536,11 +539,12 @@ void set_tr(uint8_t n) {
 void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
 	uint8_t tr = n - TR1;
+	outputs[tr].tr = false;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(&followers[i], tr, 0);
+			followers[i].ops->tr(&followers[i], tr, 0);
 		}
 	}
 }
@@ -550,37 +554,43 @@ uint8_t get_tr(uint8_t n) {
 }
 
 void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
-	dac_set_value(n, (int16_t)tuning_table[n][note] + bend);
+	outputs[n].semitones = note;
+	outputs[n].bend = bend;
+	outputs[n].dac_target = (int16_t)tuning_table[n][note] + bend;
+	dac_set_value(n, outputs[n].dac_target);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
 			uint16_t cv_transposed = (int16_t)ET[note] + bend;
-			followers[i].cv(&followers[i], n, cv_transposed);
+			followers[i].ops->cv(&followers[i], n, cv_transposed);
 		}
 	}
 }
 
 void set_cv_slew(uint8_t n, uint16_t s) {
-	dac_set_slew(n, s);
+	outputs[n].slew = s;
+	dac_set_slew(n, outputs[n].slew);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			followers[i].slew(&followers[i], n, s);
+			followers[i].ops->slew(&followers[i], n, s);
 		}
 	}
 }
 
 void reset_outputs(void) {
 	for (uint8_t n = 0; n < 4; n++) {
+		outputs[n].slew = 0;
 		dac_set_slew(n, 0);
+		outputs[n].tr = false;
 		gpio_clr_gpio_pin(n + TR1);
 		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 			bool play_follower = followers[i].active
 			  && followers[i].track_en & (1 << n);
 			if (play_follower) {
-				followers[i].mute(&followers[n], 0, 0);
+				followers[i].ops->mute(&followers[n], 0, 0);
 			}
 		}
 	}
@@ -588,15 +598,15 @@ void reset_outputs(void) {
 
 static void follower_on(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		followers[n].init(&followers[n], i, 1);
-		followers[n].mode(&followers[n], i, followers[n].active_mode);
-		followers[n].octave(&followers[n], 0, followers[n].oct);
+		followers[n].ops->init(&followers[n], i, 1);
+		followers[n].ops->mode(&followers[n], i, followers[n].active_mode);
+		followers[n].ops->octave(&followers[n], 0, followers[n].oct);
 	}
 }
 
 static void follower_off(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		followers[n].init(&followers[n], i, 0);
+		followers[n].ops->init(&followers[n], i, 0);
 	}
 }
 

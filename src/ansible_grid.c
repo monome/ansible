@@ -267,12 +267,13 @@ void refresh_preset(void) {
 			monomeLedBuffer[R7 + i] = (followers[follower].track_en & (1 << i)) ? L1 : L0;
 		}
 	}
+	// draw 4 toggles per column
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		if (follower_select) {
-			monomeLedBuffer[5 + (2 + i)*16] = i == follower ? L1 : L0;
+			monomeLedBuffer[5 + (i / 4) + (2 + i % 4)*16] = i == follower ? L1 : L0;
 		}
 		else {
-			monomeLedBuffer[5 + (2 + i)*16] = followers[i].active ? L1 : L0;
+			monomeLedBuffer[5 + (i / 4) + (2 + i % 4)*16] = followers[i].active ? L1 : L0;
 		}
 	}
 	monomeLedBuffer[5 + R7] = mod_follower ? L1 : L0;
@@ -281,8 +282,8 @@ void refresh_preset(void) {
 		memset(monomeLedBuffer, L0, 7);
 		monomeLedBuffer[followers[follower].oct + 3] = L1;
 
-		if (followers[follower].mode_ct > 1) {
-			memset(monomeLedBuffer + 12, L0, followers[follower].mode_ct);
+		if (followers[follower].ops->mode_ct > 1) {
+			memset(monomeLedBuffer + 12, L0, followers[follower].ops->mode_ct);
 			monomeLedBuffer[12 + followers[follower].active_mode] = L1;
 		}
 	}
@@ -1663,15 +1664,22 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 					followers[follower].oct = x - 3;
 					follower_change_octave(&followers[follower], followers[follower].oct);
 				}
-				if (followers[follower].mode_ct > 1
+				if (followers[follower].ops->mode_ct > 1
 				 && x >= 12
-				 && x <= (12 + followers[follower].mode_ct)) {
+				 && x <= (12 + followers[follower].ops->mode_ct)) {
 					follower_change_mode(&followers[follower], x - 12);
 				}
 			}
-			if (y >= 2 && y <= 6) {
+			if (x >= 5 && x <= 6 && y >= 2 && y <= 5) {
+				int f;
 				if (x == 5) {
-					follower = y - 2;
+				   f = y - 2;
+				}
+				if (x == 6) {
+				   f = y - 2 + 4;
+				}
+				if (f < I2C_FOLLOWER_COUNT) {
+					follower = f;
 				}
 			}
 			if (y == 7) {
@@ -1684,13 +1692,22 @@ static void preset_mode_handle_key(u8 x, u8 y, u8 z, u8* glyph) {
 			if (x > 7) {
 				glyph[y] ^= 1<<(x-8);
 			}
-			if (x == 5 && y >= 2 && y <= 6) {
-				if (mod_follower) {
-					follower = y - 2;
-					follower_select = true;
+			if (x >= 5 && x <= 6 && y >= 2 && y <= 5) {
+				int f;
+				if (x == 5) {
+				   f = y - 2;
 				}
-				else {
-					toggle_follower(y - 2);
+				if (x == 6) {
+				   f = y - 2 + 4;
+				}
+				if (f < I2C_FOLLOWER_COUNT) {
+					if (mod_follower) {
+						follower = f;
+						follower_select = true;
+					}
+					else {
+						toggle_follower(f);
+					}
 				}
 			}
 		}
