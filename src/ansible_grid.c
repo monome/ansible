@@ -1435,8 +1435,8 @@ void ii_kria(uint8_t *d, uint8_t l) {
 				ii_tx_queue(0);
 				break;
 			}
-			ii_tx_queue(dac_get_value(d[1]) >> 8);
-			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			ii_tx_queue(ET[outputs[d[1]].semitones] >> 8);
+			ii_tx_queue(ET[outputs[d[1]].semitones] & 0xff);
 			break;
 		case II_KR_MUTE:
 			if ( d[1] == 0 ) {
@@ -3904,8 +3904,8 @@ void ii_mp(uint8_t *d, uint8_t l) {
 				ii_tx_queue(0);
 				break;
 			}
-			ii_tx_queue(dac_get_value(d[1]) >> 8);
-			ii_tx_queue(dac_get_value(d[1]) & 0xff);
+			ii_tx_queue(ET[outputs[d[1]].semitones] >> 8);
+			ii_tx_queue(ET[outputs[d[1]].semitones] & 0xff);
 			break;
 		default:
 			ii_grid(d, l);
@@ -5636,6 +5636,15 @@ void ii_es(uint8_t *data, uint8_t l) {
             monomeFrameDirty++;
             break;
 
+	case ES_CV + II_GET:
+            if (data[1] < 0 || data[1] > 3) {
+                ii_tx_queue(0);
+                ii_tx_queue(0);
+                break;
+            }
+            ii_tx_queue(ET[outputs[data[1]].semitones] >> 8);
+            ii_tx_queue(ET[outputs[data[1]].semitones] & 0xff);
+            break;
         default:
 	    ii_grid(data, l);
 	    ii_ansible(data, l);
