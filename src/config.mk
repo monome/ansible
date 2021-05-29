@@ -64,7 +64,7 @@ TARGET = $(THIS).elf
 
 # List of C source files.
 CSRCS = \
-       ../src/main.c    \
+       ../src/main_test_cdc.c    \
        ../src/ansible_grid.c    \
        ../src/ansible_arc.c    \
        ../src/ansible_midi.c    \
