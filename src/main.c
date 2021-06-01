@@ -54,6 +54,7 @@ usb flash
 #include "ftdi.h"
 #include "ii.h"
 #include "dac.h"
+#include "cdc.h"
 
 
 #include "conf_board.h"
@@ -792,9 +793,10 @@ int main(void)
 	init_dbg_rs232(FMCK_HZ);
 
 	print_dbg("\r\n\n// ansible //////////////////////////////// ");
-	print_dbg("\r\n== FLASH struct size: ");
-	print_dbg_ulong(sizeof(f));
+	//print_dbg("\r\n== FLASH struct size: ");
+	//print_dbg_ulong(sizeof(f));
 
+  /*
 	if(flash_is_fresh()) {
 		// store flash defaults
 		print_dbg("\r\nfirst run.");
@@ -817,41 +819,44 @@ int main(void)
 
 		flash_unfresh();
 	}
+  */
 
-	init_gpio();
-	assign_main_event_handlers();
-	init_events();
+	//init_gpio();
+	//assign_main_event_handlers();
+	//init_events();
 	init_tc();
-	init_spi();
+	//init_spi();
 	// init_adc();
 
 	irq_initialize_vectors();
 	register_interrupts();
 	cpu_irq_enable();
 
-	load_flash_state();
-	process_ii = &ii_ansible;
+	//load_flash_state();
+	//process_ii = &ii_ansible;
 
-	clr_tr(TR1);
-	clr_tr(TR2);
-	clr_tr(TR3);
-	clr_tr(TR4);
+	//clr_tr(TR1);
+	//clr_tr(TR2);
+	//clr_tr(TR3);
+	//clr_tr(TR4);
 
-	clock = &clock_null;
+	//clock = &clock_null;
 
-	timer_add(&clockTimer,1000,&clockTimer_callback, NULL);
-	timer_add(&keyTimer,50,&keyTimer_callback, NULL);
-	timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
+	//timer_add(&clockTimer,1000,&clockTimer_callback, NULL);
+	//timer_add(&keyTimer,50,&keyTimer_callback, NULL);
+	//timer_add(&cvTimer,DAC_RATE_CV,&cvTimer_callback, NULL);
 
-	init_dacs();
+	//init_dacs();
 
-	connected = conNONE;
-	set_mode(f.state.none_mode);
+	//connected = conNONE;
+	//set_mode(f.state.none_mode);
 
 	init_usb_host();
 	init_monome();
 
 	while (true) {
-		check_events();
+    if(cdc_connected())
+      cdc_read();
+		//check_events();
 	}
 }

@@ -103,6 +103,7 @@ CSRCS = \
        ../libavr32/src/usb/midi/midi.c \
        ../libavr32/src/usb/msc/msc.c \
        ../libavr32/src/usb/cdc/cdc.c \
+       ../libavr32/src/usb/cdc/uhi_cdc.c \
        ../libavr32/asf/common/services/storage/ctrl_access/ctrl_access.c \
        avr32/drivers/adc/adc.c                            \
        avr32/drivers/flashc/flashc.c                      \
@@ -121,7 +122,6 @@ CSRCS = \
        avr32/services/fs/fat/file.c                       \
        avr32/services/fs/fat/navigation.c                 \
        avr32/utils/debug/print_funcs.c                    \
-       common/services/usb/class/cdc/host/uhi_cdc.c       \
        common/services/usb/class/msc/host/uhi_msc.c       \
        common/services/usb/class/msc/host/uhi_msc_mem.c   \
        common/services/spi/uc3_spi/spi_master.c           \
@@ -139,11 +139,11 @@ INC_PATH = \
        ../../src                                          \
        ../src                                             \
        ../src/usb                                         \
+       ../src/usb/cdc                                     \
        ../src/usb/ftdi                                    \
        ../src/usb/hid                                     \
        ../src/usb/midi                                    \
        ../src/usb/msc                                     \
-       ../src/usb/cdc                                     \
        ../conf                                            \
        ../conf/trilogy                                    \
        ../libavr32/src                                    \
@@ -169,8 +169,6 @@ INC_PATH = \
        common/services/delay                              \
        common/services/usb/                               \
        common/services/usb/uhc                            \
-       common/services/usb/class/cdc                      \
-       common/services/usb/class/cdc/host                 \
        common/services/usb/class/msc                      \
        common/services/usb/class/msc/host                 \
        common/services/usb/class/hid                      \
