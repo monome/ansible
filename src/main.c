@@ -859,16 +859,7 @@ int main(void)
 	init_usb_host();
 	init_monome();
 
-  //uint8_t led_all[4] = {0x18,0,0,0};
-
   while (true) {
-    /*delay_ms(10);
-    if(cdc_connected()) {
-      cdc_read();
-      led_all[3]++;
-      led_all[3] %=16;
-      cdc_write(led_all, 2);
-    }*/
     check_events();
   }
 }
