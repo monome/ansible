@@ -222,6 +222,11 @@ static void handler_FtdiConnect(s32 data) {
 	ftdi_setup();
 }
 
+static void handler_SerialConnect(s32 data) {
+  print_dbg("\r\n>>> handler_SerialConnect");
+  monome_setup_mext();
+}
+
 static void handler_FtdiDisconnect(s32 data) {
 	timers_unset_monome();
 	app_event_handlers[ kEventFrontShort ]	= &handler_FrontShort;
@@ -415,6 +420,8 @@ static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventMidiConnect ]	    = &handler_MidiConnect ;
 	app_event_handlers[ kEventMidiDisconnect ]  = &handler_MidiDisconnect ;
 	app_event_handlers[ kEventMidiPacket ]      = &handler_None;
+	app_event_handlers[ kEventSerialConnect ]	= &handler_SerialConnect ;
+	app_event_handlers[ kEventSerialDisconnect ]	= &handler_FtdiDisconnect ;
 }
 
 // app event loop
