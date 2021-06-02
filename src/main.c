@@ -154,7 +154,7 @@ static void cvTimer_callback(void* o) {
 }
 
 static void monome_poll_timer_callback(void* obj) {
-	ftdi_read();
+	serial_read();
 }
 
 static void monome_refresh_timer_callback(void* obj) {
@@ -223,7 +223,6 @@ static void handler_FtdiConnect(s32 data) {
 }
 
 static void handler_SerialConnect(s32 data) {
-  print_dbg("\r\n>>> handler_SerialConnect");
   monome_setup_mext();
 }
 
