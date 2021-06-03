@@ -1,3 +1,8 @@
+## v3.1.1
+
+- **NEW**: latest grid support
+
+
 ## v3.1.0
 - **FIX**: tuning customization behavior in midi modes
 - **FIX**: send original rather than customized pitch table values to ii followers
