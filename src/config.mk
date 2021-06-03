@@ -102,6 +102,8 @@ CSRCS = \
        ../libavr32/src/usb/midi/uhi_midi.c \
        ../libavr32/src/usb/midi/midi.c \
        ../libavr32/src/usb/msc/msc.c \
+       ../libavr32/src/usb/cdc/cdc.c \
+       ../libavr32/src/usb/cdc/uhi_cdc.c \
        ../libavr32/asf/common/services/storage/ctrl_access/ctrl_access.c \
        avr32/drivers/adc/adc.c                            \
        avr32/drivers/flashc/flashc.c                      \
@@ -137,6 +139,7 @@ INC_PATH = \
        ../../src                                          \
        ../src                                             \
        ../src/usb                                         \
+       ../src/usb/cdc                                     \
        ../src/usb/ftdi                                    \
        ../src/usb/hid                                     \
        ../src/usb/midi                                    \

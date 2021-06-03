@@ -54,6 +54,7 @@ usb flash
 #include "ftdi.h"
 #include "ii.h"
 #include "dac.h"
+#include "cdc.h"
 
 
 #include "conf_board.h"
@@ -153,7 +154,7 @@ static void cvTimer_callback(void* o) {
 }
 
 static void monome_poll_timer_callback(void* obj) {
-	ftdi_read();
+	serial_read();
 }
 
 static void monome_refresh_timer_callback(void* obj) {
@@ -219,6 +220,10 @@ void set_mode(ansible_mode_t m) {
 
 static void handler_FtdiConnect(s32 data) {
 	ftdi_setup();
+}
+
+static void handler_SerialConnect(s32 data) {
+  monome_setup_mext();
 }
 
 static void handler_FtdiDisconnect(s32 data) {
@@ -414,6 +419,8 @@ static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventMidiConnect ]	    = &handler_MidiConnect ;
 	app_event_handlers[ kEventMidiDisconnect ]  = &handler_MidiDisconnect ;
 	app_event_handlers[ kEventMidiPacket ]      = &handler_None;
+	app_event_handlers[ kEventSerialConnect ]	= &handler_SerialConnect ;
+	app_event_handlers[ kEventSerialDisconnect ]	= &handler_FtdiDisconnect ;
 }
 
 // app event loop
@@ -795,6 +802,7 @@ int main(void)
 	print_dbg("\r\n== FLASH struct size: ");
 	print_dbg_ulong(sizeof(f));
 
+  
 	if(flash_is_fresh()) {
 		// store flash defaults
 		print_dbg("\r\nfirst run.");
@@ -851,7 +859,7 @@ int main(void)
 	init_usb_host();
 	init_monome();
 
-	while (true) {
-		check_events();
-	}
+  while (true) {
+    check_events();
+  }
 }
