@@ -2116,7 +2116,10 @@ void handler_KriaGridKey(s32 data) {
 				case 11:
 					k_mod_mode = modTime; break;
 				case 12:
-					k_mod_mode = modProb; break;
+					if (k_mode < KRIA_NUM_PARAMS) {
+						k_mod_mode = modProb;
+					}
+					break;
 				case 14:
 					k_mode = mScale; break;
 				case 15:
@@ -2983,7 +2986,9 @@ void refresh_kria(void) {
 	memset(monomeLedBuffer + R7 + 5, L0, 4);
 	monomeLedBuffer[R7 + 10] = L0;
 	monomeLedBuffer[R7 + 11] = L0;
-	monomeLedBuffer[R7 + 12] = L0;
+	if (k_mode < KRIA_NUM_PARAMS) {
+		monomeLedBuffer[R7 + 12] = L0;
+	}
 	monomeLedBuffer[R7 + 14] = L0;
 	monomeLedBuffer[R7 + 15] = (meta && meta_lock && kriaMetaLockBlink) ? L1 : L0;
 
@@ -3068,15 +3073,22 @@ bool refresh_kria_mod(void) {
 	case modTime:
 		monomeLedBuffer[R7 + 11] = L1;
 		memset(monomeLedBuffer + R1, 3, 16);
-		monomeLedBuffer[R1 + k.p[edit_pattern].t[track].tmul[k_mode] - 1] = L1;
+		if (k_mode < KRIA_NUM_PARAMS) {
+			monomeLedBuffer[R1 + k.p[edit_pattern].t[track].tmul[k_mode] - 1] = L1;
+		}
+		else if (k_mode == mPattern) {
+			monomeLedBuffer[R1 + cue_div] = L1;
+		}
 		return true;
 	case modProb:
 		monomeLedBuffer[R7 + 12] = L1;
 		memset(monomeLedBuffer + R5, 3, 16);
-		for(uint8_t i=0;i<16;i++) {
-			if(k.p[edit_pattern].t[track].p[k_mode][i]) {
-				monomeLedBuffer[(5 - k.p[edit_pattern].t[track].p[k_mode][i]) * 16 + i] =
-					(edit_pattern == k.pattern && i == pos[track][k_mode]) ? 10 : 6;
+		if (k_mode < KRIA_NUM_PARAMS) {
+			for(uint8_t i=0;i<16;i++) {
+				if(k.p[edit_pattern].t[track].p[k_mode][i]) {
+					monomeLedBuffer[(5 - k.p[edit_pattern].t[track].p[k_mode][i]) * 16 + i] =
+						(edit_pattern == k.pattern && i == pos[track][k_mode]) ? 10 : 6;
+				}
 			}
 		}
 		return true;
