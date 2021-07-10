@@ -560,11 +560,15 @@ uint8_t get_tr(uint8_t n) {
 	return gpio_get_pin_value(n);
 }
 
-void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
+void set_cv_note_noii(uint8_t n, uint16_t note, int16_t bend) {
 	outputs[n].semitones = note;
 	outputs[n].bend = bend;
 	outputs[n].dac_target = (int16_t)tuning_table[n][note] + bend;
 	dac_set_value(n, outputs[n].dac_target);
+}
+
+void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
+	set_cv_note_noii(n, note, bend);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
@@ -802,7 +806,7 @@ int main(void)
 	print_dbg("\r\n== FLASH struct size: ");
 	print_dbg_ulong(sizeof(f));
 
-  
+
 	if(flash_is_fresh()) {
 		// store flash defaults
 		print_dbg("\r\nfirst run.");
