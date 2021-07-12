@@ -3363,7 +3363,7 @@ void refresh_kria_pattern(void) {
 		monomeLedBuffer[32 + meta_edit] = L2;
 		if(meta_next) {
 			monomeLedBuffer[32 + meta_next - 1] = L2;
-			monomeLedBuffer[k.meta_pat[meta_next] - 1] = L2;
+			monomeLedBuffer[k.meta_pat[meta_next]] = L2;
 		}
 	}
 	if(cue_pat_next) {

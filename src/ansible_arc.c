@@ -1471,10 +1471,18 @@ void clock_cycles(uint8_t phase) {
 		c.speed[i1] = (c.speed[i1] * (friction)) / 256;
 		// c.speed[i1] = (c.speed[i1] * (friction)) >> 8;
 
-		if(c.pos[i1] & div_map[c.div[i1]])
-			set_tr(TR1 + i1);
-		else
-			clr_tr(TR1 + i1);
+		if(c.pos[i1] & div_map[c.div[i1]]) {
+			if (!tr_state[i1]) {
+				set_tr(TR1 + i1);
+			}
+			tr_state[i1] = 1;
+		}
+		else {
+			if (tr_state[i1]) {
+				clr_tr(TR1 + i1);
+			}
+			tr_state[i1] = 0;
+		}
 
 		if(c.shape)
 			dac_set_value(i1, (c.pos[i1] * c.range[i1]) >> 6);
@@ -2005,10 +2013,13 @@ static void generate_scales(uint8_t n) {
 static void levels_dac_refresh(void) {
 	for (uint8_t i = 0; i < 4; i++) {
 		if (l.mode[i]) {
+			// use '_noii' to only set the active note, a ii message will not
+			// be sent until the next trigger. don't want to send ii for every
+			// arc or timer tick.
 			if (l.scale[i]) {
-				dac_set_value(i, tuning_table[i][ levels_scales[i][ l.note[i][play] ] + l.octave[i]*12 ]);
+				set_cv_note_noii(i, levels_scales[i][ l.note[i][play] ] + l.octave[i]*12, 0);
 			} else {
-				dac_set_value(i, tuning_table[i][ l.note[i][play] + l.octave[i]*12 ]);
+				set_cv_note_noii(i, l.note[i][play] + l.octave[i]*12, 0);
 			}
 		} else {
 			dac_set_value(i, (l.pattern[i][play] + l.offset[i]) << (2 + l.range[i]));
