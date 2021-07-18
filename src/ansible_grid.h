@@ -114,7 +114,6 @@ typedef struct {
 	kria_mod_modes_t mod_mode;
 	bool mode_is_alt;
 	u8* buffer;
-	softTimer_t* altBlinkTimer;
 } kria_view_t;
 
 

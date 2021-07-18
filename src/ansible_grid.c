@@ -3105,7 +3105,6 @@ bool refresh_kria_mod(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
 	const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
 	const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
@@ -3143,9 +3142,6 @@ bool refresh_kria_mod(kria_view_t* view)
 void refresh_kria_tr(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
-	//const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
-	//const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	// steps
@@ -3178,7 +3174,6 @@ void refresh_kria_note(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
 	const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
 	const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
@@ -3217,8 +3212,6 @@ void refresh_kria_oct(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
 	const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
-	//const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	memset(monomeLedBuffer, 2, 6);
@@ -3268,8 +3261,6 @@ void refresh_kria_dur(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
 	const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
-	//const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	monomeLedBuffer[k.p[edit_pattern].t[track].dur_mul - 1] = L1;
@@ -3306,8 +3297,6 @@ void refresh_kria_rpt(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
 	const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
-	//const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	for ( uint8_t i=0; i<16; i++ ) {
@@ -3354,8 +3343,6 @@ void refresh_kria_glide(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
 	const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
-	//const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	for(uint8_t i=0;i<16;i++) {
@@ -3391,10 +3378,6 @@ void refresh_kria_glide(kria_view_t* view)
 void refresh_kria_scale(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
-	//const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
-	//const kria_modes_t k_mode = view->mode;
-	//const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	for ( uint8_t y=0; y<4; y++ ) {
 		// highlight TT clock enables and trigger steps
@@ -3435,9 +3418,6 @@ void refresh_kria_scale(kria_view_t* view)
 void refresh_kria_pattern(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
-	//const u8 track = view->track;
-	//const bool k_mode_is_alt = view->mode_is_alt;
-	//const kria_modes_t k_mode = view->mode;
 	const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	if(!meta) {
