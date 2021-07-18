@@ -54,6 +54,7 @@ usb flash
 #include "ftdi.h"
 #include "ii.h"
 #include "dac.h"
+#include "cdc.h"
 
 
 #include "conf_board.h"
@@ -128,6 +129,8 @@ softTimer_t auxTimer[4] = {
 
 uint16_t tuning_table[4][120];
 
+ansible_output_t outputs[4];
+
 static uint8_t clock_phase;
 
 void handler_None(s32 data) { ;; }
@@ -151,7 +154,7 @@ static void cvTimer_callback(void* o) {
 }
 
 static void monome_poll_timer_callback(void* obj) {
-	ftdi_read();
+	serial_read();
 }
 
 static void monome_refresh_timer_callback(void* obj) {
@@ -217,6 +220,10 @@ void set_mode(ansible_mode_t m) {
 
 static void handler_FtdiConnect(s32 data) {
 	ftdi_setup();
+}
+
+static void handler_SerialConnect(s32 data) {
+  monome_setup_mext();
 }
 
 static void handler_FtdiDisconnect(s32 data) {
@@ -412,6 +419,8 @@ static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventMidiConnect ]	    = &handler_MidiConnect ;
 	app_event_handlers[ kEventMidiDisconnect ]  = &handler_MidiDisconnect ;
 	app_event_handlers[ kEventMidiPacket ]      = &handler_None;
+	app_event_handlers[ kEventSerialConnect ]	= &handler_SerialConnect ;
+	app_event_handlers[ kEventSerialDisconnect ]	= &handler_FtdiDisconnect ;
 }
 
 // app event loop
@@ -524,11 +533,12 @@ void update_leds(uint8_t m) {
 void set_tr(uint8_t n) {
 	gpio_set_gpio_pin(n);
 	uint8_t tr = n - TR1;
+	outputs[tr].tr = true;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(&followers[i], tr, 1);
+			followers[i].ops->tr(&followers[i], tr, 1);
 		}
 	}
 }
@@ -536,11 +546,12 @@ void set_tr(uint8_t n) {
 void clr_tr(uint8_t n) {
 	gpio_clr_gpio_pin(n);
 	uint8_t tr = n - TR1;
+	outputs[tr].tr = false;
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << tr);
 		if (play_follower) {
-			followers[i].tr(&followers[i], tr, 0);
+			followers[i].ops->tr(&followers[i], tr, 0);
 		}
 	}
 }
@@ -549,38 +560,48 @@ uint8_t get_tr(uint8_t n) {
 	return gpio_get_pin_value(n);
 }
 
+void set_cv_note_noii(uint8_t n, uint16_t note, int16_t bend) {
+	outputs[n].semitones = note;
+	outputs[n].bend = bend;
+	outputs[n].dac_target = (int16_t)tuning_table[n][note] + bend;
+	dac_set_value(n, outputs[n].dac_target);
+}
+
 void set_cv_note(uint8_t n, uint16_t note, int16_t bend) {
-	dac_set_value(n, (int16_t)tuning_table[n][note] + bend);
+	set_cv_note_noii(n, note, bend);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
 			uint16_t cv_transposed = (int16_t)ET[note] + bend;
-			followers[i].cv(&followers[i], n, cv_transposed);
+			followers[i].ops->cv(&followers[i], n, cv_transposed);
 		}
 	}
 }
 
 void set_cv_slew(uint8_t n, uint16_t s) {
-	dac_set_slew(n, s);
+	outputs[n].slew = s;
+	dac_set_slew(n, outputs[n].slew);
 	for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 		bool play_follower = followers[i].active
 				  && followers[i].track_en & (1 << n);
 		if (play_follower) {
-			followers[i].slew(&followers[i], n, s);
+			followers[i].ops->slew(&followers[i], n, s);
 		}
 	}
 }
 
 void reset_outputs(void) {
 	for (uint8_t n = 0; n < 4; n++) {
+		outputs[n].slew = 0;
 		dac_set_slew(n, 0);
+		outputs[n].tr = false;
 		gpio_clr_gpio_pin(n + TR1);
 		for (uint8_t i = 0; i < I2C_FOLLOWER_COUNT; i++) {
 			bool play_follower = followers[i].active
 			  && followers[i].track_en & (1 << n);
 			if (play_follower) {
-				followers[i].mute(&followers[n], 0, 0);
+				followers[i].ops->mute(&followers[n], 0, 0);
 			}
 		}
 	}
@@ -588,15 +609,15 @@ void reset_outputs(void) {
 
 static void follower_on(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		followers[n].init(&followers[n], i, 1);
-		followers[n].mode(&followers[n], i, followers[n].active_mode);
-		followers[n].octave(&followers[n], 0, followers[n].oct);
+		followers[n].ops->init(&followers[n], i, 1);
+		followers[n].ops->mode(&followers[n], i, followers[n].active_mode);
+		followers[n].ops->octave(&followers[n], 0, followers[n].oct);
 	}
 }
 
 static void follower_off(uint8_t n) {
 	for (uint8_t i = 0; i < 4; i++) {
-		followers[n].init(&followers[n], i, 0);
+		followers[n].ops->init(&followers[n], i, 0);
 	}
 }
 
@@ -785,6 +806,7 @@ int main(void)
 	print_dbg("\r\n== FLASH struct size: ");
 	print_dbg_ulong(sizeof(f));
 
+
 	if(flash_is_fresh()) {
 		// store flash defaults
 		print_dbg("\r\nfirst run.");
@@ -841,7 +863,7 @@ int main(void)
 	init_usb_host();
 	init_monome();
 
-	while (true) {
-		check_events();
-	}
+  while (true) {
+    check_events();
+  }
 }

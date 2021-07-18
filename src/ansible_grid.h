@@ -95,6 +95,8 @@ typedef struct {
 	uint8_t cue_div;
 	uint8_t cue_steps;
 	uint8_t meta;
+	bool meta_reset_all;
+	bool dur_tie_mode;
 	kria_data_t k[GRID_PRESETS];
 } kria_state_t;
 

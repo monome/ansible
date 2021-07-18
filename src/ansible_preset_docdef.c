@@ -45,14 +45,6 @@ DECLARE_STATIC_ALLOC(levels_data_t, l)
 
 json_docdef_t ansible_meta_docdefs[] = {
 	{
-		.name = "firmware",
-		.read = json_match_string,
-		.write = json_write_constant_string,
-		.params = &((json_match_string_params_t) {
-			.to_match = ANSIBLE_FIRMWARE_NAME,
-		}),
-	},
-	{
 		.name = "version",
 		.read = json_match_string,
 		.write = json_write_constant_string,
@@ -243,7 +235,7 @@ json_docdef_t ansible_app_docdefs[] = {
 		.write = json_write_object,
 		.state = &ansible_app_object_state[0],
 		.params = &((json_read_object_params_t) {
-			.docdef_ct = 11,
+			.docdef_ct = 13,
 			.docdefs = ((json_docdef_t[]) {
 				{
 					.name = "clock_period",
@@ -333,6 +325,24 @@ json_docdef_t ansible_app_docdefs[] = {
 					.params = &((json_read_scalar_params_t) {
 						.dst_size = sizeof_field(nvram_data_t, kria_state.meta),
 						.dst_offset = offsetof(nvram_data_t, kria_state.meta),
+					}),
+				},
+				{
+					.name = "meta_reset_all",
+					.read = json_read_scalar,
+					.write = json_write_bool,
+					.params = &((json_read_scalar_params_t) {
+						.dst_size = sizeof_field(nvram_data_t, kria_state.meta_reset_all),
+						.dst_offset = offsetof(nvram_data_t, kria_state.meta_reset_all),
+					}),
+				},
+				{
+					.name = "dur_tie_mode",
+					.read = json_read_scalar,
+					.write = json_write_bool,
+					.params = &((json_read_scalar_params_t) {
+						.dst_size = sizeof_field(nvram_data_t, kria_state.dur_tie_mode),
+						.dst_offset = offsetof(nvram_data_t, kria_state.dur_tie_mode),
 					}),
 				},
 				{
