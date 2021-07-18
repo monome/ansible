@@ -1586,6 +1586,8 @@ static void kria_set_alt_blink_timer(kria_view_t* views) {
 		if ( views[i].mode == mRpt || views[i].mode == mAltNote || views[i].mode == mGlide ) {
 			any_view_is_alt = true;
 			views[i].mode_is_alt = true;
+		} else {
+			views[i].mode_is_alt = false;
 		}
 	}
 	timer_remove( &altBlinkTimer );	
@@ -3012,9 +3014,7 @@ void refresh_kria_view(kria_view_t* view)
 {
 	u8* monomeLedBuffer = view->buffer;
 	const u8 track = view->track;
-	const bool k_mode_is_alt = view->mode_is_alt;
 	const kria_modes_t k_mode = view->mode;
-	//const kria_mod_modes_t k_mod_mode = view->mod_mode;
 
 	memset(monomeLedBuffer, 0, 128);
 
@@ -3065,7 +3065,7 @@ void refresh_kria_view(kria_view_t* view)
 		monomeLedBuffer[activeModeIndex] = (meta && meta_lock && kriaMetaLockBlink) ? L1 : L2;
 	}
 	else {
-		monomeLedBuffer[activeModeIndex] = (k_mode_is_alt && kriaAltModeBlink) ? L1 : L2;
+		monomeLedBuffer[activeModeIndex] = (view->mode_is_alt && kriaAltModeBlink) ? L1 : L2;
 	}
 
 
