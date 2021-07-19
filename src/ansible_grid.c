@@ -5292,7 +5292,7 @@ void handler_ESGridKey(s32 data) {
     if (es_runes || (monome_size_y() == 16 && y > 8 && !es_edge && !es_voices && (es_view == es_patterns || es_view == es_patterns_held))) {
         if (!z) return;
 
-        if (monome_size_y() == 16) { // show runes view on bottom half of 256 
+        if (monome_size_y() == 16) { // show runes view on bottom half of 256
             y = y - 8;
         }
 
@@ -5319,7 +5319,7 @@ void handler_ESGridKey(s32 data) {
     if (es_edge) {
         if (!z) return;
 
-        if (monome_size_y() == 16) { // show edges view on bottom half of 256 
+        if (monome_size_y() == 16) { // show edges view on bottom half of 256
             y = y - 8;
         }
 
@@ -5348,7 +5348,7 @@ void handler_ESGridKey(s32 data) {
     if (es_voices) {
         if (!z) return;
 
-        if (monome_size_y() == 16) { // show voices view on bottom half of 256 
+        if (monome_size_y() == 16) { // show voices view on bottom half of 256
             y = y - 8;
         }
 
@@ -5574,9 +5574,9 @@ void refresh_es(void) {
         }
 
         monomeLedBuffer[offset + (e.octave ? 115 : 114)] = 10 + e.octave;
-		
-		if (monome_size_y() < 16)
-			return;
+
+        if (monome_size_y() < 16)
+            return;
     }
 
     s16 index, x, y;
