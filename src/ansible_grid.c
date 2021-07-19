@@ -5285,16 +5285,14 @@ void handler_ESGridKey(s32 data) {
             e.p_select = (e.p_select & 0x8) + (15 - y);
         }
 
-        if (!es_edge) {
-            monomeFrameDirty++;
-            return;
-        }
+        monomeFrameDirty++;
+        return;
     }
 
-    if (es_runes || (es_view == es_patterns && y > 8)) {
+    if (es_runes || (monome_size_y() == 16 && y > 8 && !es_edge && !es_voices && (es_view == es_patterns || es_view == es_patterns_held))) {
         if (!z) return;
 
-        if (es_view == es_patterns) { // show runes view on bottom half of 256 in patterns mode
+        if (monome_size_y() == 16) { // show runes view on bottom half of 256 
             y = y - 8;
         }
 
@@ -5321,6 +5319,10 @@ void handler_ESGridKey(s32 data) {
     if (es_edge) {
         if (!z) return;
 
+        if (monome_size_y() == 16) { // show edges view on bottom half of 256 
+            y = y - 8;
+        }
+
         if (y == 7) {
             e.p[e.p_select].edge = ES_EDGE_FIXED;
             e.p[e.p_select].edge_time = (x + 1) << 4;
@@ -5345,6 +5347,10 @@ void handler_ESGridKey(s32 data) {
 
     if (es_voices) {
         if (!z) return;
+
+        if (monome_size_y() == 16) { // show voices view on bottom half of 256 
+            y = y - 8;
+        }
 
         u8 voice = 1 << (y - 2);
         if (x == 3 && y > 1 && y < 6) {
@@ -5475,8 +5481,14 @@ void refresh_es(void) {
     monomeLedBuffer[16*(15-(e.p_select % 8))] = 7;
 
     u8 l;
-	u8 offset = (monome_size_y() == 16) ? 128 : 0; // on 256, show runes on bottom half of grid
-    if (es_runes) {
+    bool show_patterns = es_view == es_patterns || es_view == es_patterns_held;
+    bool show_edge = es_edge && !es_runes;
+    bool show_voices = es_voices && !(es_runes || es_edge);
+    bool show_runes = es_runes || (monome_size_y() == 16 && show_patterns && !show_edge && !show_voices);
+    bool show_main = es_view == es_main && !(show_runes || show_edge || show_voices);
+
+    u8 offset = (monome_size_y() == 16) ? 128 : 0; // on 256, show runes/voices/edges on bottom half of grid
+    if (show_runes) {
         
         l = e.p[e.p_select].linearize ? 15 : 7;
 
@@ -5509,10 +5521,11 @@ void refresh_es(void) {
         monomeLedBuffer[offset + 78] = l;
         monomeLedBuffer[offset + 93] = l;
 
-		return;
+		if (monome_size_y() < 16)
+			return;
     }
 
-    if (es_edge) {
+    if (show_edge) {
         l = e.p[e.p_select].edge == ES_EDGE_PATTERN ? 15 : 7;
         monomeLedBuffer[offset + 34] = l;
         monomeLedBuffer[offset + 35] = l;
@@ -5547,24 +5560,27 @@ void refresh_es(void) {
 			for (u8 i = 0; i < 16; i++)
 				monomeLedBuffer[offset + 112 + i] = 4;
             u8 edge_index = 111 + (e.p[e.p_select].edge_time >> 4);
-			if (edge_index <= 127) monomeLedBuffer[offset + edge_index] = 11;
-		}
+            if (edge_index <= 127) monomeLedBuffer[offset + edge_index] = 11;
+        }
 
-        return;
+        if (monome_size_y() < 16)
+            return;
     }
 
-    if (es_voices) {
+    if (show_voices) {
         for (u8 i = 0; i < 4; i++) {
             monomeLedBuffer[offset + 35 + (i << 4)] = e.voices & (1 << i) ? 15 : 4;
             monomeLedBuffer[offset + 34 + (i << 4)] = e.p[e.p_select].voices & (1 << i) ? 15 : 4;
         }
 
         monomeLedBuffer[offset + (e.octave ? 115 : 114)] = 10 + e.octave;
-        return;
+		
+		if (monome_size_y() < 16)
+			return;
     }
 
     s16 index, x, y;
-    if (es_view == es_main) {
+    if (show_main) {
         if (e.scale == 16) {
             for (x = 1; x < 16; x++) {
                 for (y = es_mode == es_playing ? 1 : 0; y < monome_size_y(); y++) {
@@ -5591,9 +5607,11 @@ void refresh_es(void) {
                 }
         }
 
-        if (e.arp)
+        if (e.arp) {
             monomeLedBuffer[e.p[e.p_select].root_x + (e.p[e.p_select].root_y << 4)] = 7;
-        for (u8 i = 0; i < 4; i++)
+        }
+
+        for (u8 i = 0; i < 4; i++) {
             if (es_notes[i].active) {
                 x = es_notes[i].x;
                 y = es_notes[i].y;
@@ -5609,7 +5627,10 @@ void refresh_es(void) {
                 if (index >= 0 && index <= MONOME_MAX_LED_BYTES && (index & 15) != 0)
                     monomeLedBuffer[index] = 15;
             }
-    } else { // pattern view
+        }
+    }
+
+    if (show_patterns) { 
         for (u8 i = 0; i < 16; i++)
             monomeLedBuffer[(i & 3) + 34 + ((i >> 2) << 4)] = e.p[i].length ? 7 : 4;
         monomeLedBuffer[(e.p_select & 3) + 34 + ((e.p_select >> 2) << 4)] = 15;
