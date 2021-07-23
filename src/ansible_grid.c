@@ -1787,19 +1787,6 @@ void handler_KriaGridKey(s32 data) {
 					}
 				}
 			}
-			else if ((k_views[0].mode == mPattern && y == 0 ) || (k_views[1].mode == mPattern && y == 8)) {
-				if(!meta) {
-					if(cue) {
-						cue_pat_next = x+1;
-					}
-					else {
-						change_pattern(x);
-					}
-				}
-				else if(!cue) {
-					k.meta_pat[meta_edit] = x;
-				}
-			}
 			else if(view_tuning) {
 				if (y == 5) {
 					if (x == 11) {
@@ -1812,6 +1799,19 @@ void handler_KriaGridKey(s32 data) {
 						fit_tuning(1);
 						restore_grid_tuning();
 					}
+				}
+			}
+			else if ((k_views[0].mode == mPattern && y == 0 ) || (k_views[1].mode == mPattern && y == 8)) {
+				if(!meta) {
+					if(cue) {
+						cue_pat_next = x+1;
+					}
+					else {
+						change_pattern(x);
+					}
+				}
+				else if(!cue) {
+					k.meta_pat[meta_edit] = x;
 				}
 			}
 		}
@@ -5289,10 +5289,10 @@ void handler_ESGridKey(s32 data) {
         return;
     }
 
-    if (es_runes || (monome_size_y() == 16 && y > 8 && !es_edge && !es_voices && (es_view == es_patterns || es_view == es_patterns_held))) {
+    if (es_runes || (y > 8 && !es_edge && !es_voices && (es_view == es_patterns || es_view == es_patterns_held))) {
         if (!z) return;
 
-        if (monome_size_y() == 16) { // show runes view on bottom half of 256
+        if (y > 8) { // show runes view on bottom half of 256
             y = y - 8;
         }
 
