@@ -5292,7 +5292,7 @@ void handler_ESGridKey(s32 data) {
     if (es_runes || (y > 8 && !es_edge && !es_voices && (es_view == es_patterns || es_view == es_patterns_held))) {
         if (!z) return;
 
-        if (y > 8) { // show runes view on bottom half of 256
+        if (monome_size_y() > 8) { // show runes view on bottom half of 256
             y = y - 8;
         }
 
