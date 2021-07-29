@@ -203,7 +203,7 @@ typedef struct {
 	u8 voices;
 	u8 octave;
 	u8 scale;
-	u16 keymap[128];
+	u8 keymap[256];
 	es_pattern_t p[16];
 	u8 glyph[8];
 } es_data_t;
