@@ -719,6 +719,8 @@ void load_flash_state(void) {
 		if (followers[i].active) {
 			if (!leader_mode) {
 				leader_mode = true;
+				// wait to allow for any i2c devices to fully initalise
+				delay_ms(1500);
 				init_i2c_leader();
 			}
 			follower_on(i);
