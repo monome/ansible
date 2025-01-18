@@ -4018,6 +4018,10 @@ void handler_MPGridKey(s32 data) {
 	// print_dbg("; z: 0x");
 	// print_dbg_hex(z);
 
+	if (y > 7) {
+		return;
+	}
+
 	//// TRACK LONG PRESSES
 	index = y*16 + x;
 	if(z) {
