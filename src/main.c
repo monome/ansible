@@ -601,7 +601,7 @@ void reset_outputs(void) {
 			bool play_follower = followers[i].active
 			  && followers[i].track_en & (1 << n);
 			if (play_follower) {
-				followers[i].ops->mute(&followers[n], 0, 0);
+				followers[i].ops->mute(&followers[i], 0, 0);
 			}
 		}
 	}
