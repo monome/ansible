@@ -525,16 +525,14 @@ static void ii_mode_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t mode) 
 }
 
 static void ii_mute_wsyn(i2c_follower_t* follower, uint8_t track, uint8_t mode) {
-	uint8_t d[6] = { 0 };
+	uint8_t d[4] = { 0 };
 
 	// clear all triggers to avoid hanging notes in SUSTAIN
-	d[0] = WS_S_VOX;
+	d[0] = WS_S_VEL;
 	d[1] = 0;
 	d[2] = 0;
 	d[3] = 0;
-	d[4] = 0;
-	d[5] = 0;
-	i2c_leader_tx(follower->addr, d, 6);
+	i2c_leader_tx(follower->addr, d, 4);
 }
 
 static void ii_cv_wsyn(i2c_follower_t* follower, uint8_t track, uint16_t dac_value) {
