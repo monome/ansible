@@ -1770,6 +1770,7 @@ void handler_KriaGridKey(s32 data) {
 						for(i1=0;i1<8;i1++)
 							k.glyph[i1] = f.kria_state.k[preset].glyph[i1];
 
+						monomeFrameDirty++;
 						// print_dbg("\r\npreset select:");
 						// print_dbg_ulong(preset);
 					}
